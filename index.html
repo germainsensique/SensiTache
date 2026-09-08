@@ -510,7 +510,7 @@ function undo(){
   DATA = JSON.parse(undoStack.pop());
   saveData(); renderSidebar(); renderMain();
 }
-document.getElementById("btnUndo").addEventListener("click", undo);
+
 document.addEventListener("keydown", (e)=>{
   if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="z"){
     const inField = document.activeElement && (document.activeElement.tagName==="INPUT"||document.activeElement.tagName==="TEXTAREA"||document.activeElement.getAttribute("contenteditable")==="true");
@@ -2328,7 +2328,6 @@ function showDriveModal(){
   overlay.querySelector("#driveClose").addEventListener("click", ()=> overlay.remove());
   overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
 }
-document.getElementById("btnDriveConnect").addEventListener("click", showDriveModal);
 
 /* =========================================================================
    QUICK ADD — used by the floating "+" button, the installed app's icon
