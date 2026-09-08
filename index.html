@@ -2788,6 +2788,15 @@ checkIncomingQuickAction().then(handled=>{
   }
 });
 
+// Try to silently restore the Google Drive session on load (no popup) so a
+// page refresh doesn't force a manual "Se connecter" every single time.
+// A short delay gives the async Google Identity Services script time to load.
+function attemptSilentDriveReconnect(){
+  if(!driveClientId) return;
+  driveRequestToken(false).then(()=>{ updateDriveStatus(); }).catch(()=>{ /* needs manual reconnect, that's fine */ });
+}
+setTimeout(attemptSilentDriveReconnect, 700);
+
 })();
 </script>
 </body>
