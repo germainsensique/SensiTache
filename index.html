@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>SensiTâche</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#121317">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SensiTâche">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -20,7 +26,7 @@
     font-family:'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
   }
   *{box-sizing:border-box;}
-  html,body{height:100%;margin:0;background:var(--bg-main);color:var(--text-main);}
+  html,body{height:100%;margin:0;background:var(--bg-main);color:var(--text-main);overflow-x:hidden;}
   button{font-family:inherit;cursor:pointer;}
   input,textarea,select{font-family:inherit;}
   #app{height:100%;display:flex;}
@@ -189,6 +195,7 @@
   @media (max-width: 860px){
     .sidebar{position:fixed; z-index:70; height:100%; transform:translateX(-100%); transition:transform .15s;}
     .sidebar.show{transform:translateX(0);}
+    #btnToggleSidebar{display:flex;}
     .drawer{width:100vw;}
     .proc-toolbar{width:100%;height:auto;flex-direction:row;border-right:none;border-top:1px solid var(--border);order:2;padding:6px 8px;overflow-x:auto;}
     .proc-body{flex-direction:column;}
@@ -196,14 +203,25 @@
     .proc-side{position:fixed;top:0;right:0;bottom:0;width:86vw;max-width:320px;z-index:130;box-shadow:-8px 0 24px rgba(0,0,0,.4);transform:translateX(0);transition:transform .15s;}
     .proc-side.collapsed{width:86vw;max-width:320px;transform:translateX(100%);border-left:1px solid var(--border);}
     .proc-side-inner{width:100%;}
-    .topbar, .tabs{padding-left:16px;padding-right:16px;}
-    .main-content{padding:16px 16px 60px;}
+    .topbar, .tabs{padding-left:14px;padding-right:14px;}
+    .tabs{overflow-x:auto;flex-wrap:nowrap;}
+    .tabs .tab{flex-shrink:0;}
+    .main-content{padding:14px 14px 60px;}
+    .task-row{flex-wrap:wrap;row-gap:6px;}
+    .assignee-chip{margin-left:auto;}
+    .newtask-row{flex-wrap:wrap;}
+    .newtask-row input{min-width:0;}
+    .modal{width:92vw!important;}
   }
   ::-webkit-scrollbar{width:11px;height:11px;}
   ::-webkit-scrollbar-thumb{background:#3A3E48;border-radius:6px;border:3px solid var(--bg-app);}
   ::-webkit-scrollbar-track{background:transparent;}
-  .icon-btn{background:none;border:none;color:var(--text-dim);padding:6px;border-radius:6px;display:flex;}
-  .icon-btn:hover{background:var(--bg-panel-2);color:var(--text);}
+  .icon-btn{background:none;border:none;color:var(--text-dim);padding:6px;border-radius:6px;display:flex;cursor:pointer;font-size:15px;}
+  .icon-btn:hover{background:var(--bg-panel-2);color:var(--text-main);}
+  #btnToggleSidebar{display:none;}
+  #btnOpenSettings2{margin-left:auto;}
+  .sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:65;}
+  .sidebar-backdrop.show{display:block;}
   #procNameInput:hover{border-color:var(--border-light)!important;}
   #procNameInput:focus{outline:none;border-color:var(--accent)!important;background:var(--bg-panel-2)!important;}
   #procSideTabLegend.tabactive, #procSideTabTasks.tabactive{background:var(--accent);border-color:var(--accent);color:var(--bg-app);}
@@ -222,20 +240,17 @@
     <div id="wsList"></div>
     <button class="sidebtn" id="btnNewWs">+ Nouvel espace</button>
     <div class="side-footer">
-      <div id="backupStatus" style="font-size:11px;color:var(--text-sub);padding:2px 10px 4px;line-height:1.4;"></div>
-      <button class="sidebtn" id="btnAutoBackup">💾 Sauvegarde automatique…</button>
-      <button class="sidebtn" id="btnDriveConnect">☁️ Google Drive…</button>
-      <button class="sidebtn" id="btnUndo">↩ Annuler la dernière action</button>
-      <button class="sidebtn" id="btnExportAll">⭳ Exporter la sauvegarde</button>
-      <button class="sidebtn" id="btnImportAll">⭱ Importer une sauvegarde</button>
-      <input type="file" id="importAllFile" accept="application/json" style="display:none">
+      <button class="sidebtn" id="btnOpenSettings">⚙️ Paramètres</button>
     </div>
   </div>
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+  <input type="file" id="importAllFile" accept="application/json" style="display:none">
 
   <div class="main">
     <div class="topbar">
-      <button class="icon-btn" id="btnToggleSidebar" style="display:none;">☰</button>
+      <button class="icon-btn" id="btnToggleSidebar">☰</button>
       <h1 id="wsTitle">—</h1>
+      <button class="icon-btn" id="btnOpenSettings2" title="Paramètres">⚙️</button>
     </div>
     <div class="tabs" id="tabs">
       <div class="tab active" data-tab="tasks">Tâches</div>
@@ -427,10 +442,6 @@ const PALETTE = ["#5B6CFF","#E8813A","#1FA971","#E0555F","#3AA0D6","#7A5CFA","#D
 /* backup/sync state declared early: saveData() below can fire during the
    very first app initialization (before any of the later code runs), so
    these must exist before that point to avoid a "used before declaration" error */
-const AUTOSAVE_FILENAME = "sensitache-sauvegarde-auto.json";
-let autoBackupDirHandle = null;
-let lastAutoBackupAt = null;
-let backupNeedsReauth = false;
 let backupDebounceTimer = null;
 const DRIVE_FILENAME = "sensitache-sauvegarde-drive.json";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
@@ -508,6 +519,7 @@ function renderSidebar(){
     row.addEventListener("click", (e)=>{
       if(e.target.dataset.del || e.target.dataset.rename || e.target.dataset.icon) return;
       currentWsId = ws.id; openTaskId=null; currentTab="tasks"; renderSidebar(); renderMain();
+      closeSidebarMobile();
     });
     row.querySelector("[data-icon]").addEventListener("click", (e)=>{
       e.stopPropagation();
@@ -571,14 +583,25 @@ document.getElementById("btnNewWs").addEventListener("click", ()=>{
   const ws = {id:uid("ws"), name:n.trim()};
   DATA.workspaces.push(ws); currentWsId = ws.id; saveData(); renderSidebar(); renderMain();
 });
+function closeSidebarMobile(){
+  document.getElementById("sidebar").classList.remove("show");
+  document.getElementById("sidebarBackdrop").classList.remove("show");
+}
+function toggleSidebarMobile(){
+  document.getElementById("sidebar").classList.toggle("show");
+  document.getElementById("sidebarBackdrop").classList.toggle("show");
+}
+document.getElementById("btnToggleSidebar").addEventListener("click", toggleSidebarMobile);
+document.getElementById("sidebarBackdrop").addEventListener("click", closeSidebarMobile);
+
 document.getElementById("btnManageCollabs").addEventListener("click", showCollabManagerModal);
-document.getElementById("btnExportAll").addEventListener("click", ()=>{
+
+function exportAllData(){
   const blob = new Blob([JSON.stringify(DATA,null,2)], {type:"application/json"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a"); a.href=url; a.download="sensitache-sauvegarde-"+todayStr()+".json"; a.click();
   URL.revokeObjectURL(url);
-});
-document.getElementById("btnImportAll").addEventListener("click", ()=> document.getElementById("importAllFile").click());
+}
 document.getElementById("importAllFile").addEventListener("change", (e)=>{
   const f = e.target.files[0]; if(!f) return;
   const r = new FileReader();
@@ -595,6 +618,32 @@ document.getElementById("importAllFile").addEventListener("change", (e)=>{
   };
   r.readAsText(f);
 });
+function showSettingsModal(){
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal" style="width:340px;">
+      <h2>⚙️ Paramètres</h2>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <button class="btn" id="setDrive" style="justify-content:flex-start;">☁️ Google Drive…</button>
+        <button class="btn" id="setCollabs" style="justify-content:flex-start;">👥 Collaborateurs</button>
+        <button class="btn" id="setUndo" style="justify-content:flex-start;">↩ Annuler la dernière action</button>
+        <button class="btn" id="setExport" style="justify-content:flex-start;">⭳ Exporter la sauvegarde</button>
+        <button class="btn" id="setImport" style="justify-content:flex-start;">⭱ Importer une sauvegarde</button>
+      </div>
+      <div class="modal-actions"><button class="btn ghost" id="setClose">Fermer</button></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector("#setDrive").addEventListener("click", ()=>{ overlay.remove(); showDriveModal(); });
+  overlay.querySelector("#setCollabs").addEventListener("click", ()=>{ overlay.remove(); showCollabManagerModal(); });
+  overlay.querySelector("#setUndo").addEventListener("click", ()=>{ undo(); overlay.remove(); });
+  overlay.querySelector("#setExport").addEventListener("click", ()=>{ exportAllData(); overlay.remove(); });
+  overlay.querySelector("#setImport").addEventListener("click", ()=>{ document.getElementById("importAllFile").click(); overlay.remove(); });
+  overlay.querySelector("#setClose").addEventListener("click", ()=> overlay.remove());
+  overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
+}
+document.getElementById("btnOpenSettings").addEventListener("click", ()=>{ showSettingsModal(); closeSidebarMobile(); });
+document.getElementById("btnOpenSettings2").addEventListener("click", showSettingsModal);
 
 /* =========================================================
    COLLABORATORS
@@ -2056,151 +2105,14 @@ document.getElementById("btnProcExportPng").addEventListener("click", ()=> procE
 document.getElementById("btnProcExportPdf").addEventListener("click", ()=> procExport("pdf"));
 
 /* =========================================================================
-   LOCAL FOLDER AUTO-BACKUP
-   Uses the File System Access API (Chrome / Edge on desktop only) to write
-   a JSON backup straight into a folder you choose — e.g. your Google Drive
-   desktop-sync folder, so Drive's own client uploads it for you. There is
-   no Google account connection involved: this only writes a plain file to
-   a folder on disk that you pick.
+   AUTO-BACKUP TRIGGER (Drive-only)
 ========================================================================= */
-
-function idbOpen(){
-  return new Promise((resolve,reject)=>{
-    const req = indexedDB.open("sensitache-fs", 1);
-    req.onupgradeneeded = ()=> req.result.createObjectStore("handles");
-    req.onsuccess = ()=> resolve(req.result);
-    req.onerror = ()=> reject(req.error);
-  });
-}
-async function idbSet(key, value){
-  const db = await idbOpen();
-  return new Promise((resolve,reject)=>{
-    const tx = db.transaction("handles","readwrite");
-    tx.objectStore("handles").put(value, key);
-    tx.oncomplete = ()=>resolve(); tx.onerror = ()=>reject(tx.error);
-  });
-}
-async function idbGet(key){
-  const db = await idbOpen();
-  return new Promise((resolve,reject)=>{
-    const tx = db.transaction("handles","readonly");
-    const req = tx.objectStore("handles").get(key);
-    req.onsuccess = ()=>resolve(req.result); req.onerror = ()=>reject(req.error);
-  });
-}
-async function idbDel(key){
-  const db = await idbOpen();
-  return new Promise((resolve,reject)=>{
-    const tx = db.transaction("handles","readwrite");
-    tx.objectStore("handles").delete(key);
-    tx.oncomplete = ()=>resolve(); tx.onerror = ()=>reject(tx.error);
-  });
-}
-
-function updateBackupStatus(){
-  const el = document.getElementById("backupStatus");
-  if(!el) return;
-  if(!window.showDirectoryPicker){
-    el.textContent = "Sauvegarde auto : non disponible sur ce navigateur (utilise Chrome ou Edge).";
-    return;
-  }
-  if(!autoBackupDirHandle){
-    el.textContent = "Sauvegarde auto : aucun dossier choisi.";
-    return;
-  }
-  if(backupNeedsReauth){
-    el.innerHTML = "⚠️ Autorisation à renouveler — clique sur « Sauvegarde automatique… ».";
-    return;
-  }
-  el.textContent = "✅ Sauvegarde auto active" + (lastAutoBackupAt ? " · dernière : "+new Date(lastAutoBackupAt).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}) : "");
-}
-
-async function chooseBackupFolder(){
-  if(!window.showDirectoryPicker){
-    alert("Cette fonction nécessite Chrome ou Edge sur ordinateur — elle n'est pas disponible dans ce navigateur.");
-    return;
-  }
-  try{
-    const handle = await window.showDirectoryPicker();
-    const perm = await handle.requestPermission({mode:"readwrite"});
-    if(perm!=="granted"){ alert("Autorisation refusée : la sauvegarde automatique ne peut pas être activée."); return; }
-    autoBackupDirHandle = handle;
-    backupNeedsReauth = false;
-    await idbSet("backupDirHandle", handle);
-    await writeAutoBackup();
-    updateBackupStatus();
-  }catch(e){ /* the user cancelled the picker — nothing to do */ }
-}
-async function reauthorizeBackupFolder(){
-  if(!autoBackupDirHandle) return;
-  try{
-    const perm = await autoBackupDirHandle.requestPermission({mode:"readwrite"});
-    if(perm==="granted"){ backupNeedsReauth=false; updateBackupStatus(); writeAutoBackup(); }
-  }catch(e){}
-}
-async function disableBackupFolder(){
-  autoBackupDirHandle = null; backupNeedsReauth = false;
-  await idbDel("backupDirHandle");
-  updateBackupStatus();
-}
-async function restoreBackupFolder(){
-  try{
-    const handle = await idbGet("backupDirHandle");
-    if(!handle) { updateBackupStatus(); return; }
-    autoBackupDirHandle = handle;
-    const perm = await handle.queryPermission({mode:"readwrite"});
-    backupNeedsReauth = (perm!=="granted");
-    updateBackupStatus();
-  }catch(e){ updateBackupStatus(); }
-}
 function scheduleAutoBackup(){
-  const localOk = autoBackupDirHandle && !backupNeedsReauth;
   const driveOk = driveClientId && driveAccessToken && Date.now() < driveTokenExpiry;
-  if(!localOk && !driveOk) return;
+  if(!driveOk) return;
   clearTimeout(backupDebounceTimer);
-  backupDebounceTimer = setTimeout(()=>{
-    if(localOk) writeAutoBackup();
-    if(driveOk) writeDriveBackup();
-  }, 1200);
+  backupDebounceTimer = setTimeout(writeDriveBackup, 1200);
 }
-async function writeAutoBackup(){
-  if(!autoBackupDirHandle) return;
-  try{
-    const perm = await autoBackupDirHandle.queryPermission({mode:"readwrite"});
-    if(perm!=="granted"){ backupNeedsReauth = true; updateBackupStatus(); return; }
-    const fileHandle = await autoBackupDirHandle.getFileHandle(AUTOSAVE_FILENAME, {create:true});
-    const writable = await fileHandle.createWritable();
-    await writable.write(JSON.stringify(DATA, null, 2));
-    await writable.close();
-    lastAutoBackupAt = Date.now();
-    updateBackupStatus();
-  }catch(e){ console.warn("Échec de la sauvegarde automatique :", e); }
-}
-function showBackupModal(){
-  const overlay = document.createElement("div");
-  overlay.className = "modal-overlay";
-  overlay.innerHTML = `
-    <div class="modal" style="width:420px;">
-      <h2>Sauvegarde automatique locale</h2>
-      <p>Choisis un dossier sur ton ordinateur : à chaque modification, SensiTâche y écrit un fichier <code>${AUTOSAVE_FILENAME}</code> à jour. Pointe-le vers ton dossier Google Drive synchronisé en local (ex. « G:\\Mon Drive\\SensiTâche ») pour que Drive l'envoie automatiquement dans le cloud — aucune connexion à un compte Google n'est nécessaire ici.</p>
-      <p style="margin-top:10px;">${autoBackupDirHandle ? "Dossier actuellement choisi : sauvegarde "+(backupNeedsReauth?"en attente de ré-autorisation.":"active.") : "Aucun dossier choisi pour l'instant."}</p>
-      <div class="modal-actions" style="flex-wrap:wrap;">
-        ${backupNeedsReauth ? '<button class="btn small" id="bkReauth">Réautoriser l’accès</button>' : ''}
-        <button class="btn small" id="bkChoose">${autoBackupDirHandle ? "Changer de dossier" : "Choisir un dossier"}</button>
-        ${autoBackupDirHandle ? '<button class="btn small danger" id="bkDisable">Désactiver</button>' : ''}
-        <button class="btn ghost" id="bkClose">Fermer</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-  const reauthBtn = overlay.querySelector("#bkReauth");
-  if(reauthBtn) reauthBtn.addEventListener("click", async ()=>{ await reauthorizeBackupFolder(); overlay.remove(); });
-  overlay.querySelector("#bkChoose").addEventListener("click", async ()=>{ await chooseBackupFolder(); overlay.remove(); });
-  const disableBtn = overlay.querySelector("#bkDisable");
-  if(disableBtn) disableBtn.addEventListener("click", async ()=>{ await disableBackupFolder(); overlay.remove(); });
-  overlay.querySelector("#bkClose").addEventListener("click", ()=> overlay.remove());
-  overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
-}
-document.getElementById("btnAutoBackup").addEventListener("click", showBackupModal);
 
 /* =========================================================================
    GOOGLE DRIVE SYNC
@@ -2323,10 +2235,10 @@ function showDriveModal(){
           <li>Va sur <a href="https://console.cloud.google.com/" target="_blank" style="color:var(--accent);">console.cloud.google.com</a> et crée un projet (nom libre).</li>
           <li>« APIs & Services » → « Library » → cherche <b>Google Drive API</b> → Activer.</li>
           <li>« APIs & Services » → « OAuth consent screen » → type <b>Externe</b> → nom « SensiTâche » → ajoute ta propre adresse email comme utilisateur test.</li>
-          <li>« APIs & Services » → « Credentials » → « Create Credentials » → « OAuth client ID » → type <b>Application Web</b> → dans « Origines JavaScript autorisées », ajoute l'adresse depuis laquelle tu ouvres SensiTâche (ex. <code>http://localhost:8000</code>).</li>
+          <li>« APIs & Services » → « Credentials » → « Create Credentials » → « OAuth client ID » → type <b>Application Web</b> → dans « Origines JavaScript autorisées », ajoute l'adresse web fixe où SensiTâche est hébergé (ex. <code>https://tonnom.github.io</code>) — utilise une vraie adresse hébergée, pas <code>localhost</code>, si tu veux y accéder depuis ton téléphone et plusieurs ordinateurs : une seule adresse fonctionne alors partout.</li>
           <li>Copie l'identifiant généré (il se termine par <code>.apps.googleusercontent.com</code>) et colle-le ci-dessous.</li>
         </ol>
-        <p style="font-size:12px;color:var(--text-sub);margin-top:8px;">⚠️ Google refuse cette connexion depuis un fichier ouvert en double-clic (<code>file://</code>). Ouvre SensiTâche via une adresse <code>http://</code> ou <code>https://</code> — par exemple avec un petit serveur local (<code>python -m http.server 8000</code> dans le dossier du fichier, puis <code>http://localhost:8000/sensitache.html</code>), ou en l'hébergeant en ligne.</p>
+        <p style="font-size:12px;color:var(--text-sub);margin-top:8px;">⚠️ Google refuse cette connexion depuis un fichier ouvert en double-clic (<code>file://</code>). Pour un usage multi-appareils (téléphone + plusieurs PC), héberge SensiTâche en ligne (ex. GitHub Pages, gratuit) et utilise cette adresse partout. Pour un test rapide sur un seul PC uniquement, un serveur local fait aussi l'affaire (<code>python -m http.server 8000</code> puis <code>http://localhost:8000/sensitache.html</code>) — mais ton téléphone n'y aura pas accès.</p>
         <p style="font-size:12px;color:var(--text-sub);margin-top:8px;">La première connexion affichera un écran « Application non validée par Google » — c'est normal pour une app personnelle en mode test : clique sur « Paramètres avancés » puis « Accéder à SensiTâche (non sécurisé) ».</p>
       </details>
       <label style="font-size:12px;color:var(--text-sub);display:block;margin:10px 0 5px;">Identifiant client OAuth Google</label>
@@ -2373,7 +2285,9 @@ document.getElementById("btnDriveConnect").addEventListener("click", showDriveMo
 ========================================================= */
 renderSidebar();
 renderMain();
-restoreBackupFolder();
+if("serviceWorker" in navigator && (location.protocol==="https:" || location.hostname==="localhost")){
+  navigator.serviceWorker.register("service-worker.js").catch(()=>{});
+}
 
 })();
 </script>
