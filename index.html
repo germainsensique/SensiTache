@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>SensiTâche</title>
 <link rel="manifest" href="manifest.json">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" href="favicon.png" type="image/png">
 <meta name="theme-color" content="#121317">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -64,8 +66,8 @@
 
   /* ---------- Main ---------- */
   .main{flex:1; display:flex; flex-direction:column; min-width:0;}
-  .topbar{display:flex; align-items:center; gap:10px; padding:14px 26px 0; flex-wrap:wrap;}
-  .topbar h1{font-size:19px; margin:0; font-weight:700; flex:1;}
+  .topbar{display:grid; grid-template-columns:40px 1fr 40px; align-items:center; gap:10px; padding:14px 26px 0;}
+  .topbar h1{font-size:19px; margin:0; font-weight:700; grid-column:2; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .tabs{display:flex; gap:4px; padding:14px 26px 0; border-bottom:1px solid var(--border-soft);}
   .tab{padding:9px 14px; font-size:13.5px; color:var(--text-sub); border-bottom:2px solid transparent; cursor:pointer;}
   .tab:hover{color:var(--text-main);}
@@ -111,6 +113,12 @@
   .overlay-bg{position:fixed; inset:0; background:rgba(10,11,14,.35); z-index:60; display:none;}
   .overlay-bg.show{display:block;}
   .drawer{position:fixed; top:0; right:0; bottom:0; width:460px; max-width:92vw; background:var(--bg-main); z-index:61; box-shadow:-10px 0 30px rgba(0,0,0,.25); transform:translateX(100%); transition:transform .18s ease; display:flex; flex-direction:column;}
+  .drawer.fullscreen{width:100vw; max-width:100vw;}
+  .drawer.fullscreen .drawer-body{max-width:820px; margin:0 auto; width:100%;}
+  .drawer.fullscreen #taskDescInput{min-height:220px; font-size:14.5px;}
+  #inlineProcessPreview{margin:4px 0 20px; border:1px solid var(--border-soft); border-radius:10px; overflow:hidden; background:var(--bg-canvas); cursor:pointer;}
+  #inlineProcessPreview .ipp-label{padding:8px 12px; font-size:12px; color:var(--text-sub); border-top:1px solid var(--border-soft);}
+  #inlineProcessPreview svg{display:block; width:100%; max-height:380px;}
   .drawer.show{transform:translateX(0);}
   .drawer-head{display:flex; align-items:center; gap:8px; padding:14px 16px; border-bottom:1px solid var(--border-soft);}
   .drawer-body{flex:1; overflow-y:auto; padding:16px 20px 60px;}
@@ -195,7 +203,7 @@
   @media (max-width: 860px){
     .sidebar{position:fixed; z-index:70; height:100%; width:min(82vw,300px); transform:translateX(-100%); transition:transform .15s;}
     .sidebar.show{transform:translateX(0);}
-    #btnToggleSidebar{display:flex;}
+    #btnToggleSidebar{visibility:visible;}
     .drawer{width:100vw;}
     .drawer-head{flex-wrap:wrap;gap:8px;}
     .proc-topbar{overflow-x:auto;flex-wrap:nowrap;}
@@ -233,8 +241,8 @@
   .icon-btn{background:none;border:none;color:var(--text-dim);padding:6px;border-radius:6px;display:flex;cursor:pointer;font-size:15px;}
   .icon-btn:hover{background:var(--bg-panel-2);color:var(--text-main);}
 
-  #btnToggleSidebar{display:none;}
-  #btnOpenSettings2{margin-left:auto;}
+  #btnToggleSidebar{grid-column:1; visibility:hidden;}
+  #btnOpenSettings2{grid-column:3; justify-self:end;}
   .sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:65;}
   .sidebar-backdrop.show{display:block;}
   #procNameInput:hover{border-color:var(--border-light)!important;}
@@ -282,11 +290,16 @@
     <div class="drawer-head">
       <button class="icon-btn" id="btnCloseDrawer">✕</button>
       <div style="flex:1;"></div>
+      <button class="icon-btn" id="btnDrawerFullscreen" title="Plein écran"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
       <button class="btn small danger" id="btnDeleteTask">Supprimer la tâche</button>
     </div>
     <div class="drawer-body">
       <input id="taskTitleInput" placeholder="Titre de la tâche">
       <textarea id="taskDescInput" placeholder="Description…"></textarea>
+      <div style="display:flex;gap:6px;margin:-8px 0 16px;">
+        <button class="btn small" id="btnDescFix">✓ Corriger les fautes</button>
+        <button class="btn small" id="btnDescRephrase">🔄 Reformuler</button>
+      </div>
 
       <div class="field-row">
         <div class="field-label">Marqueurs</div>
@@ -644,6 +657,7 @@ function showSettingsModal(){
       <div style="display:flex;flex-direction:column;gap:6px;">
         ${showInstall ? '<button class="btn primary" id="setInstall" style="justify-content:flex-start;">📲 Installer l’application</button><p id="setInstallHint" style="font-size:11.5px;color:var(--text-sub);margin:-2px 0 4px;"></p>' : ''}
         <button class="btn" id="setDrive" style="justify-content:flex-start;">☁️ Google Drive…</button>
+        <button class="btn" id="setAI" style="justify-content:flex-start;">🤖 Assistant IA (correction/reformulation)…</button>
         <button class="btn" id="setCollabs" style="justify-content:flex-start;">👥 Collaborateurs</button>
         <button class="btn" id="setUndo" style="justify-content:flex-start;">↩ Annuler la dernière action</button>
         <button class="btn" id="setExport" style="justify-content:flex-start;">⭳ Exporter la sauvegarde</button>
@@ -670,6 +684,7 @@ function showSettingsModal(){
     overlay.remove();
   });
   overlay.querySelector("#setDrive").addEventListener("click", ()=>{ overlay.remove(); showDriveModal(); });
+  overlay.querySelector("#setAI").addEventListener("click", ()=>{ overlay.remove(); showAIModal(); });
   overlay.querySelector("#setCollabs").addEventListener("click", ()=>{ overlay.remove(); showCollabManagerModal(); });
   overlay.querySelector("#setUndo").addEventListener("click", ()=>{ undo(); overlay.remove(); });
   overlay.querySelector("#setExport").addEventListener("click", ()=>{ exportAllData(); overlay.remove(); });
@@ -900,18 +915,24 @@ function renderMain(){
 /* ---------- TASKS TAB ---------- */
 function renderTasksTab(el){
   el.innerHTML = `
-    <div class="newtask-row">
-      <input type="text" id="newTaskInput" placeholder="Nouvelle tâche… (Entrée pour ajouter)">
-      <button class="btn primary" id="btnAddTask">+ Ajouter</button>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:14px;">
+      <button id="btnAddTask" title="Nouvelle tâche" style="width:34px;height:34px;border-radius:50%;background:#ECEBE6;color:#15171C;border:none;font-size:19px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;">+</button>
     </div>
+    <div id="taskSearchWrap"></div>
     <div id="taskGroups"></div>
   `;
+  document.getElementById("btnAddTask").addEventListener("click", createAndOpenNewTask);
+  renderTaskSearchBox();
+  renderTasksGroupedList();
+}
+function renderTasksGroupedList(){
   const groupsEl = document.getElementById("taskGroups");
   const tasks = myVisibleTasks().slice().sort((a,b)=>{
     const ca = sortCategory(a), cb = sortCategory(b);
     if(ca!==cb) return ca-cb;
     return (b.updatedAt||0)-(a.updatedAt||0);
   });
+  groupsEl.innerHTML = "";
   if(tasks.length===0){
     groupsEl.innerHTML = "<div class=\"empty-hint\">Aucune tache active qui te soit affectee pour le moment. Regarde aussi l onglet Collaboration.</div>";
   } else {
@@ -927,21 +948,57 @@ function renderTasksTab(el){
       groupsEl.appendChild(renderTaskRow(t));
     });
   }
-  document.getElementById("btnAddTask").addEventListener("click", addTaskFromInput);
-  document.getElementById("newTaskInput").addEventListener("keydown", e=>{ if(e.key==="Enter") addTaskFromInput(); });
 }
-function addTaskFromInput(){
-  const input = document.getElementById("newTaskInput");
-  const title = input.value.trim();
-  if(!title) return;
+function renderTaskSearchBox(){
+  const wrap = document.getElementById("taskSearchWrap");
+  if(!wrap) return;
+  wrap.innerHTML = `<input type="text" id="taskSearchInput" placeholder="🔍 Rechercher une tâche… (y compris les archives)" style="width:100%;border:1px solid var(--border-soft);border-radius:8px;padding:9px 14px;font-size:13.5px;background:var(--bg-card);color:var(--text-main);margin-bottom:16px;">`;
+  document.getElementById("taskSearchInput").addEventListener("input", (e)=> runTaskSearch(e.target.value));
+}
+function renderSearchResultRow(t){
+  const row = document.createElement("div");
+  row.className = "task-row";
+  let statusBadge = "";
+  if(t.done) statusBadge = '<span style="font-size:10px;color:var(--text-sub);border:1px solid var(--border-soft);border-radius:10px;padding:2px 8px;white-space:nowrap;">Archivée</span>';
+  else if(t.knowledge) statusBadge = '<span style="font-size:10px;color:var(--knowledge);border:1px solid var(--border-soft);border-radius:10px;padding:2px 8px;white-space:nowrap;">Connaissance</span>';
+  row.innerHTML = `
+    <div class="task-title" style="${t.done?'text-decoration:line-through;color:var(--text-sub);':''}">${escapeHtml(t.title)}</div>
+    <div class="badges">${statusBadge}</div>
+    <div class="assignee-chip" style="width:auto;">
+      <div style="display:flex;align-items:center;">${assigneeAvatarsHtml(t)}</div>
+    </div>
+  `;
+  row.addEventListener("click", ()=> openTaskDrawer(t.id));
+  return row;
+}
+function runTaskSearch(query){
+  const groupsEl = document.getElementById("taskGroups");
+  query = (query||"").trim().toLowerCase();
+  if(!query){ renderTasksGroupedList(); return; }
+  const results = wsTasks().filter(t=>
+    (t.title||"").toLowerCase().includes(query) || (t.description||"").toLowerCase().includes(query)
+  ).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+  groupsEl.innerHTML = "";
+  if(results.length===0){
+    groupsEl.innerHTML = '<div class="empty-hint">Aucun résultat pour « '+escapeHtml(query)+' ».</div>';
+    return;
+  }
+  const label = document.createElement("div");
+  label.className = "task-group-label";
+  label.textContent = results.length+" résultat"+(results.length>1?"s":"")+" (toutes sections confondues)";
+  groupsEl.appendChild(label);
+  results.forEach(t=> groupsEl.appendChild(renderSearchResultRow(t)));
+}
+function createAndOpenNewTask(){
   snapshot();
   const t = {
-    id: uid("task"), workspaceId: currentWsId, title, description:"",
+    id: uid("task"), workspaceId: currentWsId, title: "Nouvelle tâche", description:"",
     assignedTo: [DATA.currentUserId], today:false, urgent:false, knowledge:false,
     reminderDate:null, recurrence:null, done:false, doneAt:null,
     attachments:[], process:null, createdAt:Date.now(), updatedAt:Date.now()
   };
-  DATA.tasks.push(t); saveData(); input.value=""; renderMain();
+  DATA.tasks.push(t); saveData(); renderMain();
+  openTaskDrawer(t.id);
 }
 function renderTaskRow(t){
   const row = document.createElement("div");
@@ -1103,12 +1160,93 @@ function openTaskDrawer(id){
 
   renderAttachList(t);
   renderProcessLinkRow(t);
+  document.getElementById("drawer").classList.remove("fullscreen");
+  setFullscreenIcon(false);
+  removeInlineProcessPreview();
 }
 function closeDrawer(){
   document.getElementById("overlayBg").classList.remove("show");
   document.getElementById("drawer").classList.remove("show");
+  document.getElementById("drawer").classList.remove("fullscreen");
+  removeInlineProcessPreview();
   openTaskId = null;
   renderMain();
+}
+function removeInlineProcessPreview(){
+  const ex = document.getElementById("inlineProcessPreview");
+  if(ex) ex.remove();
+}
+function setFullscreenIcon(isFull){
+  const btn = document.getElementById("btnDrawerFullscreen");
+  if(!btn) return;
+  btn.innerHTML = isFull
+    ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v3a2 2 0 0 1-2 2H4M15 3v3a2 2 0 0 0 2 2h3M9 21v-3a2 2 0 0 0-2-2H4M15 21v-3a2 2 0 0 1 2-2h3"/></svg>'
+    : '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>';
+  btn.title = isFull ? "Quitter le plein écran" : "Plein écran";
+}
+document.getElementById("btnDrawerFullscreen").addEventListener("click", ()=>{
+  const drawer = document.getElementById("drawer");
+  const isFull = drawer.classList.toggle("fullscreen");
+  setFullscreenIcon(isFull);
+  if(isFull) renderInlineProcessPreview(curTask());
+  else removeInlineProcessPreview();
+});
+function renderInlineProcessPreview(t){
+  removeInlineProcessPreview();
+  if(!t || !t.process || !t.process.shapes || t.process.shapes.length===0) return;
+  const shapes = t.process.shapes;
+  let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+  shapes.forEach(s=>{ minX=Math.min(minX,s.x); minY=Math.min(minY,s.y); maxX=Math.max(maxX,s.x+s.w); maxY=Math.max(maxY,s.y+s.h); });
+  const pad=30, bw=(maxX-minX)+pad*2, bh=(maxY-minY)+pad*2;
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS,"svg");
+  svg.setAttribute("viewBox", (minX-pad)+" "+(minY-pad)+" "+bw+" "+bh);
+  const colorMap = {positive:"#1FA971", negative:"#E07B39", neutral:"#9A9DA8"};
+  (t.process.arrows||[]).forEach(arrow=>{
+    const fs = shapes.find(s=>s.id===arrow.from.shapeId), ts = shapes.find(s=>s.id===arrow.to.shapeId);
+    if(!fs||!ts) return;
+    const p0 = procAnchorPoint(fs, arrow.from.side), p1 = procAnchorPoint(ts, arrow.to.side);
+    const pts = procRouteOrthogonal(p0, procSideDir[arrow.from.side], p1, procSideDir[arrow.to.side]);
+    const path = document.createElementNS(svgNS,"path");
+    path.setAttribute("d", procPointsToPath(pts));
+    path.setAttribute("fill","none");
+    path.setAttribute("stroke", colorMap[arrow.kind||"neutral"]);
+    path.setAttribute("stroke-width","2");
+    svg.appendChild(path);
+  });
+  shapes.forEach(s=>{
+    const g = document.createElementNS(svgNS,"g");
+    if(s.type==="rect"){
+      const rect = document.createElementNS(svgNS,"rect");
+      rect.setAttribute("x",s.x); rect.setAttribute("y",s.y); rect.setAttribute("width",s.w); rect.setAttribute("height",s.h);
+      rect.setAttribute("rx","8"); rect.setAttribute("fill", s.color||"#FFD966"); rect.setAttribute("stroke","rgba(0,0,0,.25)"); rect.setAttribute("stroke-width","1.5");
+      g.appendChild(rect);
+    } else {
+      const cx=s.x+s.w/2, cy=s.y+s.h/2;
+      const poly = document.createElementNS(svgNS,"polygon");
+      poly.setAttribute("points", cx+","+s.y+" "+(s.x+s.w)+","+cy+" "+cx+","+(s.y+s.h)+" "+s.x+","+cy);
+      poly.setAttribute("fill", s.color||"#FFD966"); poly.setAttribute("stroke","rgba(0,0,0,.25)"); poly.setAttribute("stroke-width","1.5");
+      g.appendChild(poly);
+    }
+    const fo = document.createElementNS(svgNS,"foreignObject");
+    fo.setAttribute("x", s.x+8); fo.setAttribute("y", s.y+6); fo.setAttribute("width", Math.max(0,s.w-16)); fo.setAttribute("height", Math.max(0,s.h-12));
+    const div = document.createElement("div");
+    div.setAttribute("xmlns","http://www.w3.org/1999/xhtml");
+    div.style.cssText = "font-size:11px;color:#1B1D23;text-align:center;display:flex;align-items:center;justify-content:center;height:100%;overflow:hidden;";
+    div.innerHTML = s.content||"";
+    fo.appendChild(div);
+    g.appendChild(fo);
+    svg.appendChild(g);
+  });
+  const wrap = document.createElement("div");
+  wrap.id = "inlineProcessPreview";
+  wrap.appendChild(svg);
+  const label = document.createElement("div");
+  label.className = "ipp-label";
+  label.textContent = "🧩 " + (t.process.name||"Processus") + " — cliquer pour ouvrir";
+  wrap.appendChild(label);
+  wrap.addEventListener("click", ()=> openProcessEditor(t));
+  document.getElementById("taskDescInput").insertAdjacentElement("afterend", wrap);
 }
 document.getElementById("btnCloseDrawer").addEventListener("click", closeDrawer);
 document.getElementById("btnCloseDrawer2").addEventListener("click", closeDrawer);
@@ -2231,11 +2369,51 @@ async function driveFindOrCreateFile(token){
   localStorage.setItem("sensitache.driveFileId", driveFileId);
   return driveFileId;
 }
+function mergeAppData(local, remote){
+  if(!remote || !remote.workspaces || !remote.tasks) return local;
+  const merged = JSON.parse(JSON.stringify(local));
+
+  // Collaborators: union by id (new ones from the other device are added;
+  // keep this device's own copy on conflict, since renames rarely matter here).
+  const collabIds = new Set(merged.collaborators.map(c=>c.id));
+  (remote.collaborators||[]).forEach(rc=>{ if(!collabIds.has(rc.id)) merged.collaborators.push(rc); });
+
+  // Workspaces: union by id.
+  const wsIds = new Set(merged.workspaces.map(w=>w.id));
+  (remote.workspaces||[]).forEach(rw=>{ if(!wsIds.has(rw.id)) merged.workspaces.push(rw); });
+
+  // Tasks: union by id, keep whichever copy was modified most recently.
+  const taskMap = new Map(merged.tasks.map(t=>[t.id, t]));
+  (remote.tasks||[]).forEach(rt=>{
+    const lt = taskMap.get(rt.id);
+    if(!lt || (rt.updatedAt||0) > (lt.updatedAt||0)) taskMap.set(rt.id, rt);
+  });
+  merged.tasks = Array.from(taskMap.values());
+  merged.tasks.forEach(t=>{ if(!Array.isArray(t.assignedTo)) t.assignedTo = t.assignedTo ? [t.assignedTo] : [merged.currentUserId]; });
+  return merged;
+}
 async function writeDriveBackup(){
   if(!driveClientId) return;
   try{
     const token = await driveGetToken();
     const fileId = await driveFindOrCreateFile(token);
+    // Pull the current Drive copy first and merge it into what's local, so
+    // creating tasks on different devices accumulates instead of the last
+    // device to sync silently overwriting what another device had added.
+    try{
+      const res = await fetch("https://www.googleapis.com/drive/v3/files/"+fileId+"?alt=media", {headers:{Authorization:"Bearer "+token}});
+      if(res.ok){
+        const text = await res.text();
+        if(text.trim()){
+          const remote = JSON.parse(text);
+          const merged = mergeAppData(DATA, remote);
+          DATA = merged;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
+          if(!DATA.workspaces.find(w=>w.id===currentWsId)) currentWsId = DATA.workspaces[0] ? DATA.workspaces[0].id : null;
+          renderSidebar(); renderMain();
+        }
+      }
+    }catch(e){ /* couldn't read remote (offline, empty file, etc.) — push local as-is */ }
     await fetch("https://www.googleapis.com/upload/drive/v3/files/"+fileId+"?uploadType=media", {
       method:"PATCH",
       headers:{Authorization:"Bearer "+token, "Content-Type":"application/json"},
@@ -2247,7 +2425,7 @@ async function writeDriveBackup(){
   updateDriveStatus();
 }
 async function driveImport(){
-  if(!confirm("Remplacer les données de cet appareil par la version enregistrée sur Google Drive ?")) return;
+  if(!confirm("Fusionner les données de Google Drive avec celles de cet appareil (rien n'est perdu des deux côtés) ?")) return;
   try{
     const token = await driveGetToken();
     const fileId = await driveFindOrCreateFile(token);
@@ -2255,14 +2433,13 @@ async function driveImport(){
     if(!res.ok) throw new Error("Fichier introuvable sur Drive.");
     const text = await res.text();
     if(!text.trim()){ alert("Le fichier sur Drive est vide (aucune sauvegarde envoyée pour l'instant)."); return; }
-    const imported = JSON.parse(text);
-    if(!imported.workspaces || !imported.tasks) throw new Error("Contenu du fichier Drive invalide.");
+    const remote = JSON.parse(text);
+    if(!remote.workspaces || !remote.tasks) throw new Error("Contenu du fichier Drive invalide.");
     snapshot();
-    DATA = imported;
-    (DATA.tasks||[]).forEach(t=>{ if(!Array.isArray(t.assignedTo)) t.assignedTo = t.assignedTo ? [t.assignedTo] : [DATA.currentUserId]; });
-    currentWsId = DATA.workspaces[0] ? DATA.workspaces[0].id : null;
+    DATA = mergeAppData(DATA, remote);
+    if(!DATA.workspaces.find(w=>w.id===currentWsId)) currentWsId = DATA.workspaces[0] ? DATA.workspaces[0].id : null;
     saveData(); renderSidebar(); renderMain();
-    alert("Import depuis Google Drive terminé.");
+    alert("Fusion avec Google Drive terminée.");
   }catch(e){ alert("Échec de l'import : "+e.message); }
 }
 function updateDriveStatus(){
@@ -2328,6 +2505,101 @@ function showDriveModal(){
   overlay.querySelector("#driveClose").addEventListener("click", ()=> overlay.remove());
   overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
 }
+
+/* =========================================================================
+   AI ASSISTANT (spelling correction / rephrasing) — uses your own Anthropic
+   API key, called directly from the browser with your own key. I can't run
+   this for free inside a plain hosted web page; this key never leaves your
+   device except to talk to api.anthropic.com directly.
+========================================================================= */
+let anthropicApiKey = localStorage.getItem("sensitache.anthropicKey") || "";
+async function callClaudeText(text, mode){
+  if(!anthropicApiKey) throw new Error("Aucune clé API renseignée. Va dans Paramètres → Assistant IA.");
+  const systemPrompt = mode==="fix"
+    ? "Tu es un correcteur. Corrige uniquement l'orthographe, la grammaire et la ponctuation du texte fourni, en français. Ne change rien d'autre : ni le sens, ni le ton, ni la longueur. Réponds uniquement avec le texte corrigé, sans aucune explication ni guillemets."
+    : "Tu reformules le texte fourni en français pour qu'il soit plus clair et mieux structuré, en conservant exactement le même sens et les mêmes informations. Réponds uniquement avec le texte reformulé, sans aucune explication ni guillemets.";
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": anthropicApiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true"
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: [{ role: "user", content: text }]
+    })
+  });
+  if(!res.ok){
+    const errText = await res.text().catch(()=> "");
+    throw new Error("Erreur API ("+res.status+") : "+errText.slice(0,200));
+  }
+  const data = await res.json();
+  const out = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("").trim();
+  if(!out) throw new Error("Réponse vide de l'IA.");
+  return out;
+}
+function showAIModal(){
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal" style="width:460px;">
+      <h2>🤖 Assistant IA</h2>
+      <p>Ajoute ta propre clé API Anthropic pour activer les boutons « Corriger les fautes » et « Reformuler » sur le champ Description des tâches. Ta clé reste uniquement sur cet appareil, elle n'est envoyée qu'à api.anthropic.com.</p>
+      <p style="font-size:12px;color:var(--text-sub);">Pas encore de clé ? Crée-en une gratuitement sur <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--accent);">console.anthropic.com</a> (l'utilisation de l'API est payante à l'usage, mais la correction/reformulation de texte coûte des fractions de centime par tâche).</p>
+      <label style="font-size:12px;color:var(--text-sub);display:block;margin:10px 0 5px;">Clé API Anthropic</label>
+      <input type="password" id="aiKeyInput" placeholder="sk-ant-..." value="${escapeHtml(anthropicApiKey)}" style="width:100%;border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;background:var(--bg-app);color:var(--text-main);font-size:12.5px;">
+      <div class="modal-actions" style="flex-wrap:wrap;">
+        <button class="btn small" id="aiSave">Enregistrer</button>
+        <button class="btn small danger" id="aiClear">Retirer la clé</button>
+        <button class="btn ghost" id="aiClose">Fermer</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector("#aiSave").addEventListener("click", ()=>{
+    anthropicApiKey = overlay.querySelector("#aiKeyInput").value.trim();
+    localStorage.setItem("sensitache.anthropicKey", anthropicApiKey);
+    alert("Clé enregistrée.");
+    overlay.remove();
+  });
+  overlay.querySelector("#aiClear").addEventListener("click", ()=>{
+    anthropicApiKey = "";
+    localStorage.removeItem("sensitache.anthropicKey");
+    overlay.remove();
+  });
+  overlay.querySelector("#aiClose").addEventListener("click", ()=> overlay.remove());
+  overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
+}
+async function runDescriptionAI(mode){
+  const t = curTask(); if(!t) return;
+  const btn = document.getElementById(mode==="fix" ? "btnDescFix" : "btnDescRephrase");
+  const textarea = document.getElementById("taskDescInput");
+  const text = textarea.value.trim();
+  if(!text){ alert("Écris d'abord une description."); return; }
+  const originalLabel = btn.textContent;
+  btn.textContent = "…"; btn.disabled = true;
+  try{
+    const result = await callClaudeText(text, mode);
+    snapshot();
+    textarea.value = result;
+    t.description = result;
+    t.updatedAt = Date.now();
+    saveData();
+  }catch(e){
+    if(e.message && e.message.includes("Aucune clé API")){
+      if(confirm(e.message+"\nOuvrir les paramètres maintenant ?")) showAIModal();
+    } else {
+      alert("Échec : "+e.message);
+    }
+  }finally{
+    btn.textContent = originalLabel; btn.disabled = false;
+  }
+}
+document.getElementById("btnDescFix").addEventListener("click", ()=> runDescriptionAI("fix"));
+document.getElementById("btnDescRephrase").addEventListener("click", ()=> runDescriptionAI("rephrase"));
 
 /* =========================================================================
    QUICK ADD — used by the floating "+" button, the installed app's icon
