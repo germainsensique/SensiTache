@@ -461,6 +461,7 @@ const PALETTE = ["#5B6CFF","#E8813A","#1FA971","#E0555F","#3AA0D6","#7A5CFA","#D
    very first app initialization (before any of the later code runs), so
    these must exist before that point to avoid a "used before declaration" error */
 let backupDebounceTimer = null;
+let deferredInstallPrompt = null;
 const DRIVE_FILENAME = "sensitache-sauvegarde-drive.json";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 let driveClientId = localStorage.getItem("sensitache.driveClientId") || "";
@@ -654,22 +655,19 @@ function showSettingsModal(){
       <div class="modal-actions"><button class="btn ghost" id="setClose">Fermer</button></div>
     </div>`;
   document.body.appendChild(overlay);
-  const installHint = overlay.querySelector("#setInstallHint");
-  const isStandalone = window.matchMedia && window.matchMedia("(display-mode: standalone)").matches;
-  if(isStandalone){
-    installHint.textContent = "Déjà installée sur cet appareil ✅";
-  } else if(deferredInstallPrompt){
-    installHint.textContent = "Ajoute une icône sur ton écran d'accueil.";
-  } else {
-    installHint.innerHTML = "Pas de fenêtre automatique ici : ouvre le menu ⋮ du navigateur → « Installer l'application » ou « Ajouter à l'écran d'accueil ».";
-  }
+
+  // Wire every button FIRST, unconditionally — so even if the install-hint
+  // logic below hits an edge case, no click handler in this modal is left
+  // silently unattached.
   overlay.querySelector("#setInstall").addEventListener("click", async ()=>{
     if(!deferredInstallPrompt){
       alert("Le navigateur ne propose pas d'installation automatique ici.\nOuvre le menu ⋮ (en haut à droite de Chrome) puis « Installer l'application » ou « Ajouter à l'écran d'accueil ».");
       return;
     }
-    deferredInstallPrompt.prompt();
-    await deferredInstallPrompt.userChoice;
+    try{
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+    }catch(e){ /* ignore */ }
     deferredInstallPrompt = null;
     overlay.remove();
   });
@@ -680,6 +678,19 @@ function showSettingsModal(){
   overlay.querySelector("#setImport").addEventListener("click", ()=>{ document.getElementById("importAllFile").click(); overlay.remove(); });
   overlay.querySelector("#setClose").addEventListener("click", ()=> overlay.remove());
   overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
+
+  // Purely cosmetic hint text — wrapped so it can never break the buttons above.
+  try{
+    const installHint = overlay.querySelector("#setInstallHint");
+    const isStandalone = !!(window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+    if(isStandalone){
+      installHint.textContent = "Déjà installée sur cet appareil ✅";
+    } else if(typeof deferredInstallPrompt !== "undefined" && deferredInstallPrompt){
+      installHint.textContent = "Ajoute une icône sur ton écran d'accueil.";
+    } else {
+      installHint.innerHTML = "Pas de fenêtre automatique ici : ouvre le menu ⋮ du navigateur → « Installer l'application » ou « Ajouter à l'écran d'accueil ».";
+    }
+  }catch(e){ console.warn("Hint d'installation indisponible :", e); }
 }
 document.getElementById("btnOpenSettings").addEventListener("click", ()=>{ showSettingsModal(); closeSidebarMobile(); });
 document.getElementById("btnOpenSettings2").addEventListener("click", showSettingsModal);
@@ -2420,7 +2431,6 @@ async function checkIncomingQuickAction(){
 /* =========================================================
    INIT
 ========================================================= */
-let deferredInstallPrompt = null;
 window.addEventListener("beforeinstallprompt", (e)=>{
   e.preventDefault();
   deferredInstallPrompt = e;
