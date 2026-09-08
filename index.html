@@ -643,6 +643,8 @@ function showSettingsModal(){
     <div class="modal" style="width:340px;">
       <h2>⚙️ Paramètres</h2>
       <div style="display:flex;flex-direction:column;gap:6px;">
+        <button class="btn primary" id="setInstall" style="justify-content:flex-start;">📲 Installer l'application</button>
+        <p id="setInstallHint" style="font-size:11.5px;color:var(--text-sub);margin:-2px 0 4px;"></p>
         <button class="btn" id="setDrive" style="justify-content:flex-start;">☁️ Google Drive…</button>
         <button class="btn" id="setCollabs" style="justify-content:flex-start;">👥 Collaborateurs</button>
         <button class="btn" id="setUndo" style="justify-content:flex-start;">↩ Annuler la dernière action</button>
@@ -652,6 +654,25 @@ function showSettingsModal(){
       <div class="modal-actions"><button class="btn ghost" id="setClose">Fermer</button></div>
     </div>`;
   document.body.appendChild(overlay);
+  const installHint = overlay.querySelector("#setInstallHint");
+  const isStandalone = window.matchMedia && window.matchMedia("(display-mode: standalone)").matches;
+  if(isStandalone){
+    installHint.textContent = "Déjà installée sur cet appareil ✅";
+  } else if(deferredInstallPrompt){
+    installHint.textContent = "Ajoute une icône sur ton écran d'accueil.";
+  } else {
+    installHint.innerHTML = "Pas de fenêtre automatique ici : ouvre le menu ⋮ du navigateur → « Installer l'application » ou « Ajouter à l'écran d'accueil ».";
+  }
+  overlay.querySelector("#setInstall").addEventListener("click", async ()=>{
+    if(!deferredInstallPrompt){
+      alert("Le navigateur ne propose pas d'installation automatique ici.\nOuvre le menu ⋮ (en haut à droite de Chrome) puis « Installer l'application » ou « Ajouter à l'écran d'accueil ».");
+      return;
+    }
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    overlay.remove();
+  });
   overlay.querySelector("#setDrive").addEventListener("click", ()=>{ overlay.remove(); showDriveModal(); });
   overlay.querySelector("#setCollabs").addEventListener("click", ()=>{ overlay.remove(); showCollabManagerModal(); });
   overlay.querySelector("#setUndo").addEventListener("click", ()=>{ undo(); overlay.remove(); });
@@ -2399,6 +2420,11 @@ async function checkIncomingQuickAction(){
 /* =========================================================
    INIT
 ========================================================= */
+let deferredInstallPrompt = null;
+window.addEventListener("beforeinstallprompt", (e)=>{
+  e.preventDefault();
+  deferredInstallPrompt = e;
+});
 renderSidebar();
 renderMain();
 if("serviceWorker" in navigator && (location.protocol==="https:" || location.hostname==="localhost")){
