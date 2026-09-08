@@ -231,7 +231,8 @@
     .recur-datetime-row > div{width:100%!important;}
     .attach-item{flex-wrap:wrap;}
     .drawer-footer{flex-wrap:wrap;gap:8px;}
-    .modal{width:92vw!important;max-height:82vh;overflow-y:auto;}
+    .modal{width:100vw!important;max-width:100vw!important;max-height:92vh;border-radius:0;box-sizing:border-box;overflow-y:auto;}
+    .modal-overlay{padding:0;}
     .modal-actions{flex-wrap:wrap;}
     .chiprow .btn.chip{padding:8px 12px;}
   }
@@ -239,10 +240,13 @@
   ::-webkit-scrollbar-thumb{background:#3A3E48;border-radius:6px;border:3px solid var(--bg-app);}
   ::-webkit-scrollbar-track{background:transparent;}
   .icon-btn{background:none;border:none;color:var(--text-dim);padding:6px;border-radius:6px;display:flex;cursor:pointer;font-size:15px;}
+  .drive-dot{position:absolute;top:5px;right:6px;width:8px;height:8px;border-radius:50%;background:#6B7280;border:1.5px solid var(--bg-app);}
+  .drive-dot.connected{background:#1FA971;}
   .icon-btn:hover{background:var(--bg-panel-2);color:var(--text-main);}
 
   #btnToggleSidebar{grid-column:1; visibility:hidden;}
-  #btnOpenSettings2{grid-column:3; justify-self:end;}
+  #btnOpenSettings2{grid-column:3; justify-self:end; visibility:hidden;}
+  @media (max-width:860px){ #btnOpenSettings2{visibility:visible;} }
   .sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:65;}
   .sidebar-backdrop.show{display:block;}
   .sidebar.collapsed-desktop{width:0; min-width:0; padding:0; overflow:hidden; border-right:none;}
@@ -270,7 +274,7 @@
     <div id="wsList"></div>
     <button class="sidebtn" id="btnNewWs">+ Nouvel espace</button>
     <div class="side-footer">
-      <button class="sidebtn" id="btnOpenSettings">⚙️ Paramètres</button>
+      <button class="sidebtn" id="btnOpenSettings" style="position:relative;">⚙️ Paramètres <span id="driveDotSidebar" class="drive-dot"></span></button>
     </div>
   </div>
   <button class="icon-btn" id="btnExpandSidebar" title="Afficher le menu"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
@@ -281,15 +285,16 @@
     <div class="topbar">
       <button class="icon-btn" id="btnToggleSidebar">☰</button>
       <h1 id="wsTitle">—</h1>
-      <button class="icon-btn" id="btnOpenSettings2" title="Paramètres"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82A1.65 1.65 0 0 0 3 13.09H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+      <button class="icon-btn" id="btnOpenSettings2" title="Paramètres" style="position:relative;"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82A1.65 1.65 0 0 0 3 13.09H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span id="driveDotTopbar" class="drive-dot" style="top:2px;right:2px;"></span></button>
     </div>
     <div class="tabs" id="tabs">
+      <button id="btnAddTask" title="Nouvelle tâche" style="width:28px;height:28px;flex-shrink:0;align-self:center;border-radius:50%;background:#ECEBE6;color:#15171C;border:none;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;margin-right:8px;">+</button>
       <div class="tab active" data-tab="tasks">Tâches</div>
       <div class="tab" data-tab="collab">Collaboration</div>
-      <div class="tab" data-tab="recurrence">Récurrences</div>
       <div class="tab" data-tab="knowledge">Base de connaissances</div>
-      <div class="tab" data-tab="archive">Archives</div>
       <div class="tab" data-tab="search">Rechercher</div>
+      <div class="tab" data-tab="archive">Corbeille</div>
+      <div class="tab" data-tab="recurrence">Récurrences</div>
     </div>
     <div class="main-content" id="mainContent"></div>
   </div>
@@ -300,7 +305,6 @@
       <button class="icon-btn" id="btnCloseDrawer">✕</button>
       <div style="flex:1;"></div>
       <button class="icon-btn" id="btnDrawerFullscreen" title="Plein écran"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
-      <button class="btn small danger" id="btnDeleteTask">Supprimer la tâche</button>
     </div>
     <div class="drawer-body">
       <input id="taskTitleInput" placeholder="Titre de la tâche">
@@ -391,7 +395,10 @@
     </div>
     <div class="drawer-footer">
       <span style="font-size:11.5px;color:var(--text-sub);" id="taskMeta"></span>
-      <button class="btn primary small" id="btnCloseDrawer2">Fermer</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn small danger" id="btnDeleteTask">Supprimer la tâche</button>
+        <button class="btn primary small" id="btnCloseDrawer2">Fermer</button>
+      </div>
     </div>
   </div>
 
@@ -672,11 +679,19 @@ document.getElementById("importAllFile").addEventListener("change", (e)=>{
 });
 function showSettingsModal(){
   const showInstall = isPhoneSize();
+  const wsListHtml = DATA.workspaces.map(w=>
+    `<button class="btn small" data-ws="${w.id}" style="justify-content:flex-start;${w.id===currentWsId?'border-color:var(--accent);':''}">${w.icon?w.icon+" ":"🗀 "}${escapeHtml(w.name)}${w.id===currentWsId?' ✓':''}</button>`
+  ).join("");
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.innerHTML = `
     <div class="modal" style="width:340px;">
       <h2>⚙️ Paramètres</h2>
+      <div class="side-section-label" style="padding:0 0 6px;">Espaces de travail</div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;max-height:180px;overflow-y:auto;">
+        ${wsListHtml}
+      </div>
+      <button class="btn small" id="setNewWs" style="width:100%;justify-content:center;margin-bottom:16px;">+ Nouvel espace</button>
       <div style="display:flex;flex-direction:column;gap:6px;">
         ${showInstall ? '<button class="btn primary" id="setInstall" style="justify-content:flex-start;">📲 Installer l’application</button><p id="setInstallHint" style="font-size:11.5px;color:var(--text-sub);margin:-2px 0 4px;"></p>' : ''}
         <button class="btn" id="setDrive" style="justify-content:flex-start;">☁️ Google Drive…</button>
@@ -689,6 +704,22 @@ function showSettingsModal(){
       <div class="modal-actions"><button class="btn ghost" id="setClose">Fermer</button></div>
     </div>`;
   document.body.appendChild(overlay);
+
+  overlay.querySelectorAll("[data-ws]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      currentWsId = btn.dataset.ws; openTaskId = null; currentTab = "tasks";
+      renderSidebar(); renderMain();
+      overlay.remove(); closeSidebarMobile();
+    });
+  });
+  overlay.querySelector("#setNewWs").addEventListener("click", ()=>{
+    const n = prompt("Nom du nouvel espace de travail :");
+    if(!n || !n.trim()) return;
+    const ws = {id: uid("ws"), name: n.trim()};
+    DATA.workspaces.push(ws); currentWsId = ws.id;
+    saveData(); renderSidebar(); renderMain();
+    overlay.remove();
+  });
 
   // Wire every button FIRST, unconditionally — so even if the install-hint
   // logic below hits an edge case, no click handler in this modal is left
@@ -799,6 +830,13 @@ document.querySelectorAll(".tab").forEach(t=>{
     document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active", x===t));
     renderMain();
   });
+});
+document.getElementById("btnAddTask").addEventListener("click", ()=>{
+  if(currentTab!=="tasks"){
+    currentTab = "tasks";
+    document.querySelectorAll(".tab").forEach(x=> x.classList.toggle("active", x.dataset.tab==="tasks"));
+  }
+  createAndOpenNewTask();
 });
 
 /* =========================================================
@@ -938,13 +976,7 @@ function renderMain(){
 
 /* ---------- TASKS TAB ---------- */
 function renderTasksTab(el){
-  el.innerHTML = `
-    <div style="display:flex;justify-content:flex-end;margin-bottom:14px;">
-      <button id="btnAddTask" title="Nouvelle tâche" style="width:34px;height:34px;border-radius:50%;background:#ECEBE6;color:#15171C;border:none;font-size:19px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;">+</button>
-    </div>
-    <div id="taskGroups"></div>
-  `;
-  document.getElementById("btnAddTask").addEventListener("click", createAndOpenNewTask);
+  el.innerHTML = `<div id="taskGroups"></div>`;
   renderTasksGroupedList();
 }
 function renderTasksGroupedList(){
@@ -2334,7 +2366,7 @@ function scheduleAutoBackup(){
   const driveOk = driveClientId && driveAccessToken && Date.now() < driveTokenExpiry;
   if(!driveOk) return;
   clearTimeout(backupDebounceTimer);
-  backupDebounceTimer = setTimeout(writeDriveBackup, 1200);
+  backupDebounceTimer = setTimeout(writeDriveBackup, 500);
 }
 
 /* =========================================================================
@@ -2477,7 +2509,15 @@ async function driveImport(){
     alert("Fusion avec Google Drive terminée.");
   }catch(e){ alert("Échec de l'import : "+e.message); }
 }
+function updateDriveIndicator(){
+  const connected = !!(driveClientId && driveAccessToken && Date.now() < driveTokenExpiry);
+  ["driveDotSidebar","driveDotTopbar"].forEach(id=>{
+    const dot = document.getElementById(id);
+    if(dot) dot.classList.toggle("connected", connected);
+  });
+}
 function updateDriveStatus(){
+  updateDriveIndicator();
   const el = document.getElementById("driveStatus");
   if(!el) return;
   if(!driveClientId){ el.textContent = "Pas encore configuré."; return; }
@@ -2690,9 +2730,10 @@ function openQuickAddModal(prefill){
     overlay.remove();
     if(prefill.closeOnCreate) attemptCloseApp();
   });
-  overlay.querySelector("#qaCreate").addEventListener("click", ()=>{
+  overlay.querySelector("#qaCreate").addEventListener("click", async ()=>{
     const title = overlay.querySelector("#qaTitle").value.trim();
     if(!title){ alert("Donne un titre à la tâche."); return; }
+    const createBtn = overlay.querySelector("#qaCreate");
     const wsId = wsSel.value;
     const t = {
       id: uid("task"), workspaceId: wsId, title, description:"",
@@ -2705,14 +2746,33 @@ function openQuickAddModal(prefill){
     currentWsId = wsId; currentTab = "tasks";
     document.querySelectorAll(".tab").forEach(x=> x.classList.toggle("active", x.dataset.tab==="tasks"));
     saveData(); renderSidebar(); renderMain();
-    overlay.remove();
-    if(prefill.closeOnCreate) attemptCloseApp();
+    if(prefill.closeOnCreate){
+      createBtn.textContent = "Enregistrement…"; createBtn.disabled = true;
+      await flushDriveBackupNow();
+      overlay.remove();
+      attemptCloseApp();
+    } else {
+      overlay.remove();
+    }
   });
   overlay.addEventListener("click", e=>{ if(e.target===overlay){ overlay.remove(); if(prefill.closeOnCreate) attemptCloseApp(); } });
 }
 function isPhoneSize(){ return window.innerWidth <= 860; }
 function isStandaloneApp(){
   return !!((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true);
+}
+async function flushDriveBackupNow(){
+  // On the phone quick-capture flow the app closes itself right after
+  // creating a task — if we only relied on the debounced background sync,
+  // closing the app too fast could cut it off before it ever reached Drive.
+  // So push immediately here and wait for it (capped so a slow/offline
+  // connection never leaves the person stuck unable to close the app).
+  if(!(driveClientId && driveAccessToken && Date.now() < driveTokenExpiry)) return;
+  clearTimeout(backupDebounceTimer);
+  await Promise.race([
+    writeDriveBackup(),
+    new Promise(resolve => setTimeout(resolve, 4000))
+  ]);
 }
 function attemptCloseApp(){
   // Browsers only allow window.close() on windows/tabs opened by script,
@@ -2770,6 +2830,7 @@ window.addEventListener("beforeinstallprompt", (e)=>{
 });
 renderSidebar();
 renderMain();
+updateDriveIndicator();
 // The service worker was causing the app to stop responding for some users
 // (a broken service worker can get stuck controlling the page even after
 // the underlying files are fixed). Actively remove any existing one so the
@@ -2788,14 +2849,17 @@ checkIncomingQuickAction().then(handled=>{
   }
 });
 
-// Try to silently restore the Google Drive session on load (no popup) so a
-// page refresh doesn't force a manual "Se connecter" every single time.
-// A short delay gives the async Google Identity Services script time to load.
-function attemptSilentDriveReconnect(){
+// Try to restore the Google Drive session on load so a page refresh doesn't
+// force a manual "Se connecter" every time. Depending on the browser's
+// third-party cookie policy this can sometimes show a brief Google window
+// instead of staying fully silent — the status dot next to the gear icon
+// always reflects the real connection state either way.
+function attemptDriveReconnect(){
   if(!driveClientId) return;
-  driveRequestToken(false).then(()=>{ updateDriveStatus(); }).catch(()=>{ /* needs manual reconnect, that's fine */ });
+  driveRequestToken(false).then(()=>{ updateDriveIndicator(); updateDriveStatus(); }).catch(()=>{ updateDriveIndicator(); });
 }
-setTimeout(attemptSilentDriveReconnect, 700);
+setTimeout(attemptDriveReconnect, 700);
+setInterval(updateDriveIndicator, 30000);
 
 })();
 </script>
