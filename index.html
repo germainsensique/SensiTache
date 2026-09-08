@@ -226,15 +226,13 @@
     .modal{width:92vw!important;max-height:82vh;overflow-y:auto;}
     .modal-actions{flex-wrap:wrap;}
     .chiprow .btn.chip{padding:8px 12px;}
-    .fab{right:16px;bottom:16px;}
   }
   ::-webkit-scrollbar{width:11px;height:11px;}
   ::-webkit-scrollbar-thumb{background:#3A3E48;border-radius:6px;border:3px solid var(--bg-app);}
   ::-webkit-scrollbar-track{background:transparent;}
   .icon-btn{background:none;border:none;color:var(--text-dim);padding:6px;border-radius:6px;display:flex;cursor:pointer;font-size:15px;}
   .icon-btn:hover{background:var(--bg-panel-2);color:var(--text-main);}
-  .fab{position:fixed;right:22px;bottom:22px;width:56px;height:56px;border-radius:50%;background:var(--accent);color:var(--bg-app);border:none;font-size:26px;line-height:1;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(0,0,0,.45);cursor:pointer;z-index:55;}
-  .fab:hover{background:var(--accent-dark);}
+
   #btnToggleSidebar{display:none;}
   #btnOpenSettings2{margin-left:auto;}
   .sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:65;}
@@ -262,13 +260,12 @@
   </div>
   <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
   <input type="file" id="importAllFile" accept="application/json" style="display:none">
-  <button class="fab" id="fabQuickAdd" title="Nouvelle tâche rapide">+</button>
 
   <div class="main">
     <div class="topbar">
       <button class="icon-btn" id="btnToggleSidebar">☰</button>
       <h1 id="wsTitle">—</h1>
-      <button class="icon-btn" id="btnOpenSettings2" title="Paramètres">⚙️</button>
+      <button class="icon-btn" id="btnOpenSettings2" title="Paramètres"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82A1.65 1.65 0 0 0 3 13.09H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
     </div>
     <div class="tabs" id="tabs">
       <div class="tab active" data-tab="tasks">Tâches</div>
@@ -638,14 +635,14 @@ document.getElementById("importAllFile").addEventListener("change", (e)=>{
   r.readAsText(f);
 });
 function showSettingsModal(){
+  const showInstall = isPhoneSize();
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.innerHTML = `
     <div class="modal" style="width:340px;">
       <h2>⚙️ Paramètres</h2>
       <div style="display:flex;flex-direction:column;gap:6px;">
-        <button class="btn primary" id="setInstall" style="justify-content:flex-start;">📲 Installer l'application</button>
-        <p id="setInstallHint" style="font-size:11.5px;color:var(--text-sub);margin:-2px 0 4px;"></p>
+        ${showInstall ? '<button class="btn primary" id="setInstall" style="justify-content:flex-start;">📲 Installer l’application</button><p id="setInstallHint" style="font-size:11.5px;color:var(--text-sub);margin:-2px 0 4px;"></p>' : ''}
         <button class="btn" id="setDrive" style="justify-content:flex-start;">☁️ Google Drive…</button>
         <button class="btn" id="setCollabs" style="justify-content:flex-start;">👥 Collaborateurs</button>
         <button class="btn" id="setUndo" style="justify-content:flex-start;">↩ Annuler la dernière action</button>
@@ -659,7 +656,8 @@ function showSettingsModal(){
   // Wire every button FIRST, unconditionally — so even if the install-hint
   // logic below hits an edge case, no click handler in this modal is left
   // silently unattached.
-  overlay.querySelector("#setInstall").addEventListener("click", async ()=>{
+  const installBtn = overlay.querySelector("#setInstall");
+  if(installBtn) installBtn.addEventListener("click", async ()=>{
     if(!deferredInstallPrompt){
       alert("Le navigateur ne propose pas d'installation automatique ici.\nOuvre le menu ⋮ (en haut à droite de Chrome) puis « Installer l'application » ou « Ajouter à l'écran d'accueil ».");
       return;
@@ -680,17 +678,19 @@ function showSettingsModal(){
   overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
 
   // Purely cosmetic hint text — wrapped so it can never break the buttons above.
-  try{
-    const installHint = overlay.querySelector("#setInstallHint");
-    const isStandalone = !!(window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
-    if(isStandalone){
-      installHint.textContent = "Déjà installée sur cet appareil ✅";
-    } else if(typeof deferredInstallPrompt !== "undefined" && deferredInstallPrompt){
-      installHint.textContent = "Ajoute une icône sur ton écran d'accueil.";
-    } else {
-      installHint.innerHTML = "Pas de fenêtre automatique ici : ouvre le menu ⋮ du navigateur → « Installer l'application » ou « Ajouter à l'écran d'accueil ».";
-    }
-  }catch(e){ console.warn("Hint d'installation indisponible :", e); }
+  if(showInstall){
+    try{
+      const installHint = overlay.querySelector("#setInstallHint");
+      const isStandalone = !!(window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+      if(isStandalone){
+        installHint.textContent = "Déjà installée sur cet appareil ✅";
+      } else if(deferredInstallPrompt){
+        installHint.textContent = "Ajoute une icône sur ton écran d'accueil.";
+      } else {
+        installHint.innerHTML = "Pas de fenêtre automatique ici : ouvre le menu ⋮ du navigateur → « Installer l'application » ou « Ajouter à l'écran d'accueil ».";
+      }
+    }catch(e){ console.warn("Hint d'installation indisponible :", e); }
+  }
 }
 document.getElementById("btnOpenSettings").addEventListener("click", ()=>{ showSettingsModal(); closeSidebarMobile(); });
 document.getElementById("btnOpenSettings2").addEventListener("click", showSettingsModal);
@@ -2336,11 +2336,14 @@ function showDriveModal(){
 function openQuickAddModal(prefill){
   prefill = prefill || {};
   if(DATA.workspaces.length===0){ alert("Crée d'abord un espace de travail."); return; }
+  if(prefill.closeOnCreate){
+    const appEl = document.getElementById("app");
+    if(appEl) appEl.style.display = "none";
+  }
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.innerHTML = `
-    <div class="modal" style="width:360px;">
-      <h2>⚡ Nouvelle tâche rapide</h2>
+    <div class="modal" style="width:360px;">      <h2>⚡ Nouvelle tâche rapide</h2>
       <input type="text" id="qaTitle" class="fieldinput" placeholder="Titre de la tâche" value="${escapeHtml(prefill.title||"")}" style="margin-bottom:10px;">
       <select id="qaWorkspace" class="fieldselect" style="margin-bottom:10px;"></select>
       <div id="qaPhotoPreview" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;"></div>
@@ -2376,7 +2379,10 @@ function openQuickAddModal(prefill){
     });
     e.target.value = "";
   });
-  overlay.querySelector("#qaCancel").addEventListener("click", ()=> overlay.remove());
+  overlay.querySelector("#qaCancel").addEventListener("click", ()=>{
+    overlay.remove();
+    if(prefill.closeOnCreate) attemptCloseApp();
+  });
   overlay.querySelector("#qaCreate").addEventListener("click", ()=>{
     const title = overlay.querySelector("#qaTitle").value.trim();
     if(!title){ alert("Donne un titre à la tâche."); return; }
@@ -2393,10 +2399,29 @@ function openQuickAddModal(prefill){
     document.querySelectorAll(".tab").forEach(x=> x.classList.toggle("active", x.dataset.tab==="tasks"));
     saveData(); renderSidebar(); renderMain();
     overlay.remove();
+    if(prefill.closeOnCreate) attemptCloseApp();
   });
-  overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
+  overlay.addEventListener("click", e=>{ if(e.target===overlay){ overlay.remove(); if(prefill.closeOnCreate) attemptCloseApp(); } });
 }
-document.getElementById("fabQuickAdd").addEventListener("click", ()=> openQuickAddModal());
+function isPhoneSize(){ return window.innerWidth <= 860; }
+function isStandaloneApp(){
+  return !!((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true);
+}
+function attemptCloseApp(){
+  // Browsers only allow window.close() on windows/tabs opened by script,
+  // which an installed PWA or a normally-opened tab usually isn't — so this
+  // is best-effort. If it's silently refused, tell the person what to do.
+  window.close();
+  setTimeout(()=>{
+    if(!document.hidden){
+      const note = document.createElement("div");
+      note.style.cssText = "position:fixed;left:16px;right:16px;bottom:16px;background:var(--bg-card);border:1px solid var(--border-soft);border-radius:10px;padding:12px 14px;font-size:13px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);";
+      note.textContent = "Tâche créée ✅ — tu peux fermer l'appli.";
+      document.body.appendChild(note);
+      setTimeout(()=> note.remove(), 3500);
+    }
+  }, 300);
+}
 
 /* Handle the "Nouvelle tâche" home-screen shortcut and incoming photo shares
    from other apps (both delivered as a redirect with a URL flag, since this
@@ -2406,15 +2431,15 @@ async function checkIncomingQuickAction(){
   const params = new URLSearchParams(location.search);
   if(params.get("quickadd")==="1"){
     history.replaceState(null, "", location.pathname);
-    openQuickAddModal();
-    return;
+    openQuickAddModal({closeOnCreate: isStandaloneApp()});
+    return true;
   }
   if(params.get("shared")==="1"){
     history.replaceState(null, "", location.pathname);
     try{
       const cache = await caches.open("sensitache-share-cache");
       const metaRes = await cache.match("/shared-meta");
-      if(!metaRes) return;
+      if(!metaRes) return false;
       const meta = await metaRes.json();
       const files = [];
       for(let i=0;i<(meta.filesData||[]).length;i++){
@@ -2422,9 +2447,11 @@ async function checkIncomingQuickAction(){
         if(fRes){ files.push({name:meta.filesData[i].name, blob: await fRes.blob()}); await cache.delete("/shared-file-"+i); }
       }
       await cache.delete("/shared-meta");
-      openQuickAddModal({title: meta.title || meta.text || "", files});
-    }catch(e){ console.warn("Échec de récupération du partage :", e); }
+      openQuickAddModal({title: meta.title || meta.text || "", files, closeOnCreate: isStandaloneApp()});
+      return true;
+    }catch(e){ console.warn("Échec de récupération du partage :", e); return false; }
   }
+  return false;
 }
 
 /* =========================================================
@@ -2448,7 +2475,11 @@ if("serviceWorker" in navigator){
     caches.keys().then(keys=> keys.forEach(k=> caches.delete(k))).catch(()=>{});
   }
 }
-checkIncomingQuickAction();
+checkIncomingQuickAction().then(handled=>{
+  if(!handled && isStandaloneApp()){
+    openQuickAddModal({closeOnCreate: true});
+  }
+});
 
 })();
 </script>
