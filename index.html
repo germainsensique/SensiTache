@@ -2555,6 +2555,19 @@ function updateDriveIndicator(){
     if(dot) dot.classList.toggle("connected", connected);
   });
 }
+async function refreshDriveDiag(){
+  const el = document.getElementById("driveDiag");
+  if(!el) return;
+  if(!(driveAccessToken && Date.now() < driveTokenExpiry)){ el.style.display = "none"; return; }
+  try{
+    const res = await fetch("https://www.googleapis.com/drive/v3/about?fields=user", {headers:{Authorization:"Bearer "+driveAccessToken}});
+    const data = await res.json();
+    const email = data.user ? data.user.emailAddress : "?";
+    el.style.display = "block";
+    el.innerHTML = "Compte connecté : <b style=\"color:var(--text-main);\">"+escapeHtml(email)+"</b><br>ID du fichier de sauvegarde : <code>"+escapeHtml(driveFileId||"(pas encore créé)")+"</code>"
+      + "<br><span style='font-size:10.5px;'>Compare ces deux informations sur tous tes appareils — si le compte ou l'ID diffère, ils ne se synchronisent pas ensemble.</span>";
+  }catch(e){ el.style.display = "none"; }
+}
 function updateDriveStatus(){
   updateDriveIndicator();
   const el = document.getElementById("driveStatus");
@@ -2585,6 +2598,7 @@ function showDriveModal(){
       <label style="font-size:12px;color:var(--text-sub);display:block;margin:10px 0 5px;">Identifiant client OAuth Google</label>
       <input type="text" id="driveClientIdInput" placeholder="xxxxxxxx.apps.googleusercontent.com" value="${escapeHtml(driveClientId)}" style="width:100%;border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;background:var(--bg-app);color:var(--text-main);font-size:12.5px;">
       <div id="driveStatus" style="font-size:12px;color:var(--text-sub);margin:10px 0;"></div>
+      <div id="driveDiag" style="font-size:11.5px;color:var(--text-sub);background:var(--bg-app);border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;margin-bottom:10px;display:none;"></div>
       <div class="modal-actions" style="flex-wrap:wrap;">
         <button class="btn small" id="driveSaveId">Enregistrer l'identifiant</button>
         <button class="btn small primary" id="driveConnectBtn">Se connecter</button>
@@ -2595,6 +2609,7 @@ function showDriveModal(){
     </div>`;
   document.body.appendChild(overlay);
   updateDriveStatus();
+  refreshDriveDiag();
   overlay.querySelector("#driveSaveId").addEventListener("click", ()=>{
     driveClientId = overlay.querySelector("#driveClientIdInput").value.trim();
     localStorage.setItem("sensitache.driveClientId", driveClientId);
@@ -2609,11 +2624,13 @@ function showDriveModal(){
       await driveRequestToken(true);
       await driveFindOrCreateFile(driveAccessToken);
       updateDriveStatus();
+      refreshDriveDiag();
     }catch(e){ alert("Connexion annulée ou refusée : "+(e.message||e.error||"")); }
   });
   overlay.querySelector("#driveSyncNow").addEventListener("click", async ()=>{
     if(!driveAccessToken || Date.now()>=driveTokenExpiry){ alert("Connecte-toi d'abord."); return; }
     await writeDriveBackup();
+    refreshDriveDiag();
   });
   overlay.querySelector("#driveImportBtn").addEventListener("click", driveImport);
   overlay.querySelector("#driveClose").addEventListener("click", ()=> overlay.remove());
@@ -2799,8 +2816,16 @@ function openQuickAddModal(prefill){
     saveData(); renderSidebar(); renderMain();
     if(prefill.closeOnCreate){
       createBtn.textContent = "Enregistrement…"; createBtn.disabled = true;
-      await flushDriveBackupNow();
+      const synced = await flushDriveBackupNow();
       overlay.remove();
+      if(!synced){
+        const note = document.createElement("div");
+        note.style.cssText = "position:fixed;left:16px;right:16px;bottom:16px;background:var(--bg-card);border:1px solid var(--danger);border-radius:10px;padding:12px 14px;font-size:13px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);";
+        note.textContent = "⚠️ Tâche enregistrée sur ce téléphone, mais l'envoi vers Drive n'a pas eu le temps de se terminer (connexion lente ?). Elle se synchronisera à la prochaine ouverture connectée.";
+        document.body.appendChild(note);
+        setTimeout(()=>{ note.remove(); attemptCloseApp(); }, 4000);
+        return;
+      }
       attemptCloseApp();
     } else {
       overlay.remove();
@@ -2816,14 +2841,18 @@ async function flushDriveBackupNow(){
   // On the phone quick-capture flow the app closes itself right after
   // creating a task — if we only relied on the debounced background sync,
   // closing the app too fast could cut it off before it ever reached Drive.
-  // So push immediately here and wait for it (capped so a slow/offline
-  // connection never leaves the person stuck unable to close the app).
-  if(!(driveClientId && driveAccessToken && Date.now() < driveTokenExpiry)) return;
+  // So push immediately here and wait for it. The cap is generous because
+  // mobile data (vs Wi-Fi) and Android's Data Saver mode can both add real
+  // latency to these requests — but capped so a genuinely offline connection
+  // never leaves the person stuck unable to close the app.
+  if(!(driveClientId && driveAccessToken && Date.now() < driveTokenExpiry)) return true; // nothing to sync, not a failure
   clearTimeout(backupDebounceTimer);
+  let finished = false;
   await Promise.race([
-    writeDriveBackup(),
-    new Promise(resolve => setTimeout(resolve, 4000))
+    writeDriveBackup().then(()=>{ finished = true; }),
+    new Promise(resolve => setTimeout(resolve, 10000))
   ]);
+  return finished;
 }
 function attemptCloseApp(){
   // Browsers only allow window.close() on windows/tabs opened by script,
