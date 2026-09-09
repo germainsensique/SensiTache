@@ -2449,6 +2449,22 @@ async function driveFindOrCreateFile(token){
 function mergeAppData(local, remote){
   if(!remote || !remote.workspaces || !remote.tasks) return local;
   const merged = JSON.parse(JSON.stringify(local));
+
+  // Reconcile "Moi" across devices. Each device generates its own random
+  // collaborator id for "Moi" the very first time it's ever opened, before
+  // it has any idea another device exists. Once two devices sync through
+  // the same Google account, they need to agree on a single id for "you" —
+  // otherwise a task you created shows up as assigned to "someone else"
+  // (a different "Moi") on your other device, landing in Collaboration
+  // instead of Tâches. Whichever id is already on the remote copy wins, so
+  // every device converges onto the same one from here on.
+  if(remote.currentUserId && remote.currentUserId !== merged.currentUserId){
+    const oldId = merged.currentUserId, newId = remote.currentUserId;
+    merged.tasks.forEach(t=>{ t.assignedTo = (t.assignedTo||[]).map(id=> id===oldId ? newId : id); });
+    merged.collaborators = merged.collaborators.filter(c=> c.id!==oldId);
+    merged.currentUserId = newId;
+  }
+
   merged.tombstones = merged.tombstones || {workspaces:{}, tasks:{}, collaborators:{}};
   const remoteTomb = remote.tombstones || {workspaces:{}, tasks:{}, collaborators:{}};
 
@@ -2936,10 +2952,29 @@ checkIncomingQuickAction().then(handled=>{
 // always reflects the real connection state either way.
 function attemptDriveReconnect(){
   if(!driveClientId) return;
-  driveRequestToken(false).then(()=>{ updateDriveIndicator(); updateDriveStatus(); }).catch(()=>{ updateDriveIndicator(); });
+  driveRequestToken(false).then(()=>{
+    updateDriveIndicator(); updateDriveStatus();
+    // A successful reconnect only restores the connection — it doesn't by
+    // itself pull in what another device may have added meanwhile. Only
+    // making a local change used to trigger that pull, which is exactly why
+    // a device sitting untouched never saw the other device's tasks without
+    // clicking "Importer depuis Drive" by hand. Do that pull right away too.
+    writeDriveBackup();
+  }).catch(()=>{ updateDriveIndicator(); });
 }
 setTimeout(attemptDriveReconnect, 700);
 setInterval(updateDriveIndicator, 30000);
+// Periodically pull in whatever another device may have synced, and also
+// whenever this tab/app comes back to the foreground (e.g. switching back
+// from another app on the phone, or back to this browser tab on the PC).
+setInterval(()=>{
+  if(driveClientId && driveAccessToken && Date.now() < driveTokenExpiry) writeDriveBackup();
+}, 45000);
+document.addEventListener("visibilitychange", ()=>{
+  if(document.visibilityState==="visible" && driveClientId && driveAccessToken && Date.now() < driveTokenExpiry){
+    writeDriveBackup();
+  }
+});
 
 })();
 </script>
