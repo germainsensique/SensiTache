@@ -50,7 +50,7 @@
   /* ---------- Sidebar (dark, on the app) ---------- */
   .sidebar{width:230px; flex-shrink:0; background:var(--bg-app); color:var(--text); display:flex; flex-direction:column; padding:16px 10px;}
   .brand{font-size:15.5px; font-weight:700; padding:6px 10px 14px; letter-spacing:.2px;}
-  .brand span{color:var(--accent);}
+  .brand span.brand-accent{color:var(--accent);}
   .side-section-label{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-dim); padding:14px 10px 6px;}
   .ws-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:7px;font-size:13.5px;cursor:pointer;color:var(--text-dim);}
   .ws-item:hover{background:var(--bg-panel-2); color:var(--text);}
@@ -266,9 +266,9 @@
 <div id="app">
 
   <div class="sidebar" id="sidebar">
-    <div class="brand" style="display:flex;align-items:center;justify-content:space-between;">
-      Sensi<span>Tâche</span>
-      <button class="icon-btn" id="btnCollapseSidebar" title="Replier le menu"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <div class="brand" style="display:flex;align-items:center;">
+      <span>Sensi<span class="brand-accent">Tâche</span></span>
+      <button class="icon-btn" id="btnCollapseSidebar" title="Replier le menu" style="margin-left:auto;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
     </div>
     <div class="side-section-label">Espaces de travail</div>
     <div id="wsList"></div>
@@ -518,11 +518,15 @@ if(!DATA){
   DATA = {
     currentUserId: meId,
     collaborators: [{id:meId, name:"Moi", color:PALETTE[0]}],
-    workspaces: [{id:uid("ws"), name:"Général"}],
-    tasks: []
+    workspaces: [{id:uid("ws"), name:"Général", updatedAt:Date.now()}],
+    tasks: [],
+    tombstones: {workspaces:{}, tasks:{}, collaborators:{}}
   };
   saveData();
 }
+// migration: older saves may not have a tombstones table or workspace timestamps yet
+if(!DATA.tombstones) DATA.tombstones = {workspaces:{}, tasks:{}, collaborators:{}};
+(DATA.workspaces||[]).forEach(w=>{ if(!w.updatedAt) w.updatedAt = Date.now(); });
 // migration: assignedTo used to be a single collaborator id, now it's an array
 (DATA.tasks||[]).forEach(t=>{
   if(!Array.isArray(t.assignedTo)) t.assignedTo = t.assignedTo ? [t.assignedTo] : [DATA.currentUserId];
@@ -575,15 +579,19 @@ function renderSidebar(){
       const n = prompt("Nouveau nom de l'espace de travail :", ws.name);
       if(!n || !n.trim()) return;
       ws.name = n.trim();
+      ws.updatedAt = Date.now();
       saveData(); renderSidebar(); renderMain();
     });
     row.querySelector("[data-del]").addEventListener("click", (e)=>{
       e.stopPropagation();
       if(!confirm("Supprimer l'espace « "+ws.name+" » et toutes ses tâches ?")) return;
       snapshot();
+      const now = Date.now();
       const removedIds = new Set(DATA.tasks.filter(t=>t.workspaceId===ws.id).map(t=>t.id));
+      removedIds.forEach(id=> DATA.tombstones.tasks[id] = now);
       DATA.tasks = DATA.tasks.filter(t=>t.workspaceId!==ws.id);
       cleanupLinkedShapeRefs(removedIds);
+      DATA.tombstones.workspaces[ws.id] = now;
       DATA.workspaces = DATA.workspaces.filter(w=>w.id!==ws.id);
       if(currentWsId===ws.id) currentWsId = DATA.workspaces[0] ? DATA.workspaces[0].id : null;
       saveData(); renderSidebar(); renderMain();
@@ -625,7 +633,7 @@ function showWorkspaceIconPicker(ws){
 document.getElementById("btnNewWs").addEventListener("click", ()=>{
   const n = prompt("Nom du nouvel espace de travail :");
   if(!n || !n.trim()) return;
-  const ws = {id:uid("ws"), name:n.trim()};
+  const ws = {id:uid("ws"), name:n.trim(), updatedAt:Date.now()};
   DATA.workspaces.push(ws); currentWsId = ws.id; saveData(); renderSidebar(); renderMain();
 });
 function closeSidebarMobile(){
@@ -715,7 +723,7 @@ function showSettingsModal(){
   overlay.querySelector("#setNewWs").addEventListener("click", ()=>{
     const n = prompt("Nom du nouvel espace de travail :");
     if(!n || !n.trim()) return;
-    const ws = {id: uid("ws"), name: n.trim()};
+    const ws = {id: uid("ws"), name: n.trim(), updatedAt:Date.now()};
     DATA.workspaces.push(ws); currentWsId = ws.id;
     saveData(); renderSidebar(); renderMain();
     overlay.remove();
@@ -806,6 +814,7 @@ function showCollabManagerModal(){
           if(t.assignedTo.length===0) t.assignedTo=[DATA.currentUserId];
         });
         DATA.collaborators = DATA.collaborators.filter(x=>x.id!==c.id);
+        DATA.tombstones.collaborators[c.id] = Date.now();
         saveData(); draw(); renderMain();
       });
       wrap.appendChild(row);
@@ -1192,7 +1201,7 @@ function renderArchiveTab(el){
     row.querySelector("[data-restore]").addEventListener("click", ()=>{ snapshot(); t.done=false; t.doneAt=null; saveData(); renderMain(); });
     row.querySelector("[data-purge]").addEventListener("click", ()=>{
       if(!confirm("Supprimer définitivement cette tâche ?")) return;
-      snapshot(); DATA.tasks = DATA.tasks.filter(x=>x.id!==t.id); cleanupLinkedShapeRefs(new Set([t.id])); saveData(); renderMain();
+      snapshot(); DATA.tasks = DATA.tasks.filter(x=>x.id!==t.id); DATA.tombstones.tasks[t.id]=Date.now(); cleanupLinkedShapeRefs(new Set([t.id])); saveData(); renderMain();
     });
     el.appendChild(row);
   });
@@ -1479,6 +1488,7 @@ document.getElementById("btnDeleteTask").addEventListener("click", ()=>{
   if(!confirm("Supprimer définitivement cette tâche ?")) return;
   snapshot();
   DATA.tasks = DATA.tasks.filter(x=>x.id!==t.id);
+  DATA.tombstones.tasks[t.id] = Date.now();
   cleanupLinkedShapeRefs(new Set([t.id]));
   saveData(); closeDrawer();
 });
@@ -2439,23 +2449,52 @@ async function driveFindOrCreateFile(token){
 function mergeAppData(local, remote){
   if(!remote || !remote.workspaces || !remote.tasks) return local;
   const merged = JSON.parse(JSON.stringify(local));
+  merged.tombstones = merged.tombstones || {workspaces:{}, tasks:{}, collaborators:{}};
+  const remoteTomb = remote.tombstones || {workspaces:{}, tasks:{}, collaborators:{}};
+
+  // Merge the deletion records themselves first (union, keep the latest timestamp per id).
+  ["workspaces","tasks","collaborators"].forEach(kind=>{
+    merged.tombstones[kind] = merged.tombstones[kind] || {};
+    Object.keys(remoteTomb[kind]||{}).forEach(id=>{
+      const rTime = remoteTomb[kind][id];
+      const lTime = merged.tombstones[kind][id];
+      if(!lTime || rTime > lTime) merged.tombstones[kind][id] = rTime;
+    });
+  });
+  // An item only "wins" over a deletion if it was genuinely modified after
+  // the delete happened (i.e. deliberately recreated) — otherwise a device
+  // that hasn't caught up yet would just bring a deleted item back to life.
+  function deletedAfter(kind, id, itemUpdatedAt){
+    const t = merged.tombstones[kind][id];
+    if(!t) return false;
+    return !(itemUpdatedAt && itemUpdatedAt > t);
+  }
 
   // Collaborators: union by id (new ones from the other device are added;
   // keep this device's own copy on conflict, since renames rarely matter here).
   const collabIds = new Set(merged.collaborators.map(c=>c.id));
-  (remote.collaborators||[]).forEach(rc=>{ if(!collabIds.has(rc.id)) merged.collaborators.push(rc); });
+  (remote.collaborators||[]).forEach(rc=>{
+    if(deletedAfter("collaborators", rc.id, rc.updatedAt)) return;
+    if(!collabIds.has(rc.id)) merged.collaborators.push(rc);
+  });
+  merged.collaborators = merged.collaborators.filter(c=> !deletedAfter("collaborators", c.id, c.updatedAt));
 
-  // Workspaces: union by id.
+  // Workspaces: union by id, respecting deletions.
   const wsIds = new Set(merged.workspaces.map(w=>w.id));
-  (remote.workspaces||[]).forEach(rw=>{ if(!wsIds.has(rw.id)) merged.workspaces.push(rw); });
+  (remote.workspaces||[]).forEach(rw=>{
+    if(deletedAfter("workspaces", rw.id, rw.updatedAt)) return;
+    if(!wsIds.has(rw.id)) merged.workspaces.push(rw);
+  });
+  merged.workspaces = merged.workspaces.filter(w=> !deletedAfter("workspaces", w.id, w.updatedAt));
 
-  // Tasks: union by id, keep whichever copy was modified most recently.
+  // Tasks: union by id, keep whichever copy was modified most recently, respecting deletions.
   const taskMap = new Map(merged.tasks.map(t=>[t.id, t]));
   (remote.tasks||[]).forEach(rt=>{
+    if(deletedAfter("tasks", rt.id, rt.updatedAt)) return;
     const lt = taskMap.get(rt.id);
     if(!lt || (rt.updatedAt||0) > (lt.updatedAt||0)) taskMap.set(rt.id, rt);
   });
-  merged.tasks = Array.from(taskMap.values());
+  merged.tasks = Array.from(taskMap.values()).filter(t=> !deletedAfter("tasks", t.id, t.updatedAt));
   merged.tasks.forEach(t=>{ if(!Array.isArray(t.assignedTo)) t.assignedTo = t.assignedTo ? [t.assignedTo] : [merged.currentUserId]; });
   return merged;
 }
