@@ -520,7 +520,7 @@ if(!DATA){
   const meId = uid("collab");
   DATA = {
     currentUserId: meId,
-    collaborators: [{id:meId, name:"Moi", color:PALETTE[0]}],
+    collaborators: [{id:meId, name:"Moi", color:PALETTE[0], updatedAt:Date.now()}],
     workspaces: [{id:uid("ws"), name:"Général", updatedAt:Date.now()}],
     tasks: [],
     tombstones: {workspaces:{}, tasks:{}, collaborators:{}}
@@ -530,6 +530,7 @@ if(!DATA){
 // migration: older saves may not have a tombstones table or workspace timestamps yet
 if(!DATA.tombstones) DATA.tombstones = {workspaces:{}, tasks:{}, collaborators:{}};
 (DATA.workspaces||[]).forEach(w=>{ if(!w.updatedAt) w.updatedAt = Date.now(); });
+(DATA.collaborators||[]).forEach(c=>{ if(!c.updatedAt) c.updatedAt = Date.now(); });
 // migration: assignedTo used to be a single collaborator id, now it's an array
 (DATA.tasks||[]).forEach(t=>{
   if(!Array.isArray(t.assignedTo)) t.assignedTo = t.assignedTo ? [t.assignedTo] : [DATA.currentUserId];
@@ -592,6 +593,7 @@ function renderSidebar(){
       const now = Date.now();
       const removedIds = new Set(DATA.tasks.filter(t=>t.workspaceId===ws.id).map(t=>t.id));
       removedIds.forEach(id=> DATA.tombstones.tasks[id] = now);
+      DATA.tasks.filter(t=>t.workspaceId===ws.id).forEach(cleanupTaskAttachments);
       DATA.tasks = DATA.tasks.filter(t=>t.workspaceId!==ws.id);
       cleanupLinkedShapeRefs(removedIds);
       DATA.tombstones.workspaces[ws.id] = now;
@@ -620,15 +622,15 @@ function showWorkspaceIconPicker(ws){
     </div>`;
   document.body.appendChild(overlay);
   overlay.querySelectorAll("[data-pick]").forEach(b=>{
-    b.addEventListener("click", ()=>{ ws.icon = b.dataset.pick; saveData(); renderSidebar(); renderMain(); overlay.remove(); });
+    b.addEventListener("click", ()=>{ ws.icon = b.dataset.pick; ws.updatedAt=Date.now(); saveData(); renderSidebar(); renderMain(); overlay.remove(); });
   });
   overlay.querySelector("#wsIconCustom").addEventListener("click", ()=>{
     const n = prompt("Colle un émoji ou un court symbole :", ws.icon||"");
     if(n===null) return;
-    ws.icon = n.trim(); saveData(); renderSidebar(); renderMain(); overlay.remove();
+    ws.icon = n.trim(); ws.updatedAt=Date.now(); saveData(); renderSidebar(); renderMain(); overlay.remove();
   });
   overlay.querySelector("#wsIconClear").addEventListener("click", ()=>{
-    ws.icon = ""; saveData(); renderSidebar(); renderMain(); overlay.remove();
+    ws.icon = ""; ws.updatedAt=Date.now(); saveData(); renderSidebar(); renderMain(); overlay.remove();
   });
   overlay.querySelector("#wsIconClose").addEventListener("click", ()=> overlay.remove());
   overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
@@ -690,6 +692,9 @@ document.getElementById("importAllFile").addEventListener("change", (e)=>{
 });
 function showSettingsModal(){
   const showInstall = isPhoneSize();
+  const usedBytes = new Blob([JSON.stringify(DATA)]).size;
+  const usedMo = usedBytes/(1024*1024);
+  const usedColor = usedMo>7 ? "var(--danger)" : (usedMo>4 ? "var(--flame)" : "var(--text-sub)");
   const wsListHtml = DATA.workspaces.map(w=>
     `<button class="btn small" data-ws="${w.id}" style="justify-content:flex-start;${w.id===currentWsId?'border-color:var(--accent);':''}">${w.icon?w.icon+" ":"🗀 "}${escapeHtml(w.name)}${w.id===currentWsId?' ✓':''}</button>`
   ).join("");
@@ -698,6 +703,7 @@ function showSettingsModal(){
   overlay.innerHTML = `
     <div class="modal" style="width:340px;">
       <h2>⚙️ Paramètres</h2>
+      <p style="font-size:11.5px;color:${usedColor};margin:-6px 0 14px;">💾 Stockage utilisé : ${formatBytes(usedBytes)} (les navigateurs limitent en général à 5-10 Mo)</p>
       <div class="side-section-label" style="padding:0 0 6px;">Espaces de travail</div>
       <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;max-height:180px;overflow-y:auto;">
         ${wsListHtml}
@@ -809,7 +815,7 @@ function showCollabManagerModal(){
       row.innerHTML = `<span style="width:20px;height:20px;border-radius:50%;background:${c.color};flex-shrink:0;"></span>
         <input type="text" value="${escapeHtml(c.name)}" style="flex:1;border:1px solid var(--border-soft);border-radius:6px;padding:5px 8px;font-size:13px;background:var(--bg-app);color:var(--text-main);">
         ${c.id===DATA.currentUserId?'<span style="font-size:11px;color:var(--text-sub);">(vous)</span>':'<button class="btn small danger">✕</button>'}`;
-      row.querySelector("input").addEventListener("input", e=>{ c.name=e.target.value; saveData(); renderMain(); });
+      row.querySelector("input").addEventListener("input", e=>{ c.name=e.target.value; c.updatedAt=Date.now(); saveData(); renderMain(); });
       const delBtn = row.querySelector("button.danger");
       if(delBtn) delBtn.addEventListener("click", ()=>{
         if(!confirm("Supprimer ce collaborateur ? Les tâches lui étant affectées seront réaffectées à vous.")) return;
@@ -828,7 +834,7 @@ function showCollabManagerModal(){
   draw();
   overlay.querySelector("#collabMgrAdd").addEventListener("click", ()=>{
     const n = prompt("Nom du collaborateur :"); if(!n||!n.trim()) return;
-    DATA.collaborators.push({id:uid("collab"), name:n.trim(), color:PALETTE[DATA.collaborators.length % PALETTE.length]});
+    DATA.collaborators.push({id:uid("collab"), name:n.trim(), color:PALETTE[DATA.collaborators.length % PALETTE.length], updatedAt:Date.now()});
     saveData(); draw();
   });
   overlay.querySelector("#collabMgrClose").addEventListener("click", ()=> overlay.remove());
@@ -857,6 +863,12 @@ document.getElementById("btnAddTask").addEventListener("click", ()=>{
    HELPERS
 ========================================================= */
 function escapeHtml(s){ const d=document.createElement("div"); d.textContent=s||""; return d.innerHTML; }
+function cleanupTaskAttachments(task){
+  (task.attachments||[]).forEach(a=>{
+    attachDeleteLocal(a.id);
+    deleteAttachmentFromDrive(a.driveFileId);
+  });
+}
 function cleanupLinkedShapeRefs(deletedIdsSet){
   DATA.tasks.forEach(t=>{
     if(t.process && t.process.shapes){
@@ -1140,7 +1152,7 @@ function renderCollabTab(el){
     const list = byCollab[c.id]; if(!list || list.length===0) return;
     const group = document.createElement("div");
     group.className = "collab-group";
-    group.innerHTML = `<div class="collab-head"><span class="avatar" style="background:${c.color}">${c.name.slice(0,2).toUpperCase()}</span> ${escapeHtml(c.name)} <span style="color:var(--text-sub);font-weight:400;">(${list.length})</span></div>`;
+    group.innerHTML = `<div class="collab-head"><span class="avatar" style="background:${c.color}">${escapeHtml(c.name.slice(0,2).toUpperCase())}</span> ${escapeHtml(c.name)} <span style="color:var(--text-sub);font-weight:400;">(${list.length})</span></div>`;
     list.sort((a,b)=>sortCategory(a)-sortCategory(b)).forEach(t=> group.appendChild(renderTaskRow(t)));
     el.appendChild(group);
   });
@@ -1206,7 +1218,7 @@ function renderArchiveTab(el){
     row.querySelector("[data-restore]").addEventListener("click", ()=>{ snapshot(); t.done=false; t.doneAt=null; saveData(); renderMain(); });
     row.querySelector("[data-purge]").addEventListener("click", ()=>{
       if(!confirm("Supprimer définitivement cette tâche ?")) return;
-      snapshot(); DATA.tasks = DATA.tasks.filter(x=>x.id!==t.id); DATA.tombstones.tasks[t.id]=Date.now(); cleanupLinkedShapeRefs(new Set([t.id])); saveData(); renderMain();
+      snapshot(); cleanupTaskAttachments(t); DATA.tasks = DATA.tasks.filter(x=>x.id!==t.id); DATA.tombstones.tasks[t.id]=Date.now(); cleanupLinkedShapeRefs(new Set([t.id])); saveData(); renderMain();
     });
     el.appendChild(row);
   });
@@ -1403,7 +1415,7 @@ function showAssignPicker(t){
   draw();
   overlay.querySelector("#assignPickNew").addEventListener("click", ()=>{
     const n = prompt("Nom du nouveau collaborateur :"); if(!n || !n.trim()) return;
-    const c = {id:uid("collab"), name:n.trim(), color:PALETTE[DATA.collaborators.length % PALETTE.length]};
+    const c = {id:uid("collab"), name:n.trim(), color:PALETTE[DATA.collaborators.length % PALETTE.length], updatedAt:Date.now()};
     DATA.collaborators.push(c);
     t.assignedTo = t.assignedTo || [];
     t.assignedTo.push(c.id);
@@ -1492,6 +1504,7 @@ document.getElementById("btnDeleteTask").addEventListener("click", ()=>{
   const t = curTask(); if(!t) return;
   if(!confirm("Supprimer définitivement cette tâche ?")) return;
   snapshot();
+  cleanupTaskAttachments(t);
   DATA.tasks = DATA.tasks.filter(x=>x.id!==t.id);
   DATA.tombstones.tasks[t.id] = Date.now();
   cleanupLinkedShapeRefs(new Set([t.id]));
@@ -1506,21 +1519,181 @@ function detectAttachType(name){
   if(ext==="pdf") return "pdf";
   return "other";
 }
+/* Photos from a phone camera are often 3-8 Mo — far too heavy to pile up in
+   the ~5-10 Mo localStorage quota shared by the whole app. Automatically
+   resizing and re-compressing to a reasonable size (typically 10-20x
+   smaller) fixes the root cause instead of just warning about it. */
+function compressImageFile(file, maxDim, quality){
+  maxDim = maxDim || 1600; quality = quality || 0.8;
+  return new Promise((resolve)=>{
+    if(file.type==="image/svg+xml"){ // vector, nothing to gain from rasterizing — keep as-is
+      const r = new FileReader(); r.onload = ()=> resolve(r.result); r.onerror = ()=> resolve(null); r.readAsDataURL(file); return;
+    }
+    const img = new Image();
+    const objUrl = URL.createObjectURL(file);
+    img.onload = ()=>{
+      let {width, height} = img;
+      if(width>maxDim || height>maxDim){
+        if(width>height){ height = Math.round(height*maxDim/width); width = maxDim; }
+        else{ width = Math.round(width*maxDim/height); height = maxDim; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(objUrl);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = ()=>{ URL.revokeObjectURL(objUrl); resolve(null); };
+    img.src = objUrl;
+  });
+}
+function estimateDataUrlBytes(dataUrl){
+  const i = dataUrl.indexOf("base64,");
+  const b64 = i>=0 ? dataUrl.slice(i+7) : "";
+  return Math.round(b64.length*0.75);
+}
+function formatBytes(n){
+  if(n < 1024*1024) return Math.round(n/1024)+" Ko";
+  return (n/(1024*1024)).toFixed(1)+" Mo";
+}
+
+/* =========================================================================
+   ATTACHMENT STORAGE — IndexedDB instead of localStorage
+   localStorage tops out around 5-10 Mo for the WHOLE app, shared with every
+   task, process and backup. Photos/PDFs alone can blow through that in a
+   few dozen tasks. IndexedDB has a much larger quota (typically hundreds of
+   Mo or more, tied to actual free disk space rather than a small fixed
+   cap), so the actual file content lives there — the task itself only
+   keeps a lightweight {id, name, type, driveFileId} reference, which is
+   what actually gets saved to localStorage/Drive/backups. Each file is
+   also uploaded to Drive as its own file so it survives even if this
+   browser's IndexedDB is ever cleared, and so other devices can fetch it
+   on demand. ---------------------------------------------------------- */
+const ATTACH_DB_NAME = "sensitache-files";
+const ATTACH_STORE = "attachments";
+function attachDbOpen(){
+  return new Promise((resolve,reject)=>{
+    const req = indexedDB.open(ATTACH_DB_NAME, 1);
+    req.onupgradeneeded = ()=> req.result.createObjectStore(ATTACH_STORE);
+    req.onsuccess = ()=> resolve(req.result);
+    req.onerror = ()=> reject(req.error);
+  });
+}
+async function attachPut(id, dataUrl){
+  try{
+    const db = await attachDbOpen();
+    return await new Promise((resolve,reject)=>{
+      const tx = db.transaction(ATTACH_STORE,"readwrite");
+      tx.objectStore(ATTACH_STORE).put(dataUrl, id);
+      tx.oncomplete = ()=>resolve(true); tx.onerror = ()=>reject(tx.error);
+    });
+  }catch(e){ console.warn("IndexedDB indisponible pour stocker la pièce jointe :", e); return false; }
+}
+async function attachGetLocal(id){
+  try{
+    const db = await attachDbOpen();
+    return await new Promise((resolve,reject)=>{
+      const tx = db.transaction(ATTACH_STORE,"readonly");
+      const req = tx.objectStore(ATTACH_STORE).get(id);
+      req.onsuccess = ()=>resolve(req.result||null); req.onerror=()=>reject(req.error);
+    });
+  }catch(e){ return null; }
+}
+async function attachDeleteLocal(id){
+  try{
+    const db = await attachDbOpen();
+    await new Promise((resolve,reject)=>{
+      const tx = db.transaction(ATTACH_STORE,"readwrite");
+      tx.objectStore(ATTACH_STORE).delete(id);
+      tx.oncomplete = ()=>resolve(); tx.onerror=()=>reject(tx.error);
+    });
+  }catch(e){ /* non-critical */ }
+}
+async function blobToDataUrl(blob){
+  return new Promise(resolve=>{
+    const r = new FileReader(); r.onload=()=>resolve(r.result); r.onerror=()=>resolve(null); r.readAsDataURL(blob);
+  });
+}
+async function uploadAttachmentToDrive(attMeta, dataUrl, task){
+  if(!(driveClientId && driveAccessToken && Date.now() < driveTokenExpiry)) return;
+  try{
+    const token = await driveGetToken();
+    const blob = await (await fetch(dataUrl)).blob();
+    const createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
+      method:"POST", headers:{Authorization:"Bearer "+token, "Content-Type":"application/json"},
+      body: JSON.stringify({name:"sensitache-attachment-"+attMeta.id+"-"+attMeta.name})
+    });
+    const created = await createRes.json();
+    if(!created.id) return;
+    await fetch("https://www.googleapis.com/upload/drive/v3/files/"+created.id+"?uploadType=media", {
+      method:"PATCH", headers:{Authorization:"Bearer "+token, "Content-Type": blob.type||"application/octet-stream"},
+      body: blob
+    });
+    attMeta.driveFileId = created.id;
+    if(task) task.updatedAt = Date.now();
+    saveData();
+  }catch(e){ console.warn("Échec de l'envoi de la pièce jointe vers Drive :", e); }
+}
+async function deleteAttachmentFromDrive(driveFileId){
+  if(!driveFileId || !(driveClientId && driveAccessToken && Date.now() < driveTokenExpiry)) return;
+  try{
+    const token = await driveGetToken();
+    await fetch("https://www.googleapis.com/drive/v3/files/"+driveFileId, {method:"DELETE", headers:{Authorization:"Bearer "+token}});
+  }catch(e){ /* non-critical */ }
+}
+/* Resolve an attachment's actual content: local IndexedDB cache first (instant),
+   falling back to downloading it from Drive if it's not on this device yet
+   (e.g. added from another device), caching it locally once fetched. */
+async function getAttachmentDataUrl(a){
+  if(a.dataUrl) return a.dataUrl; // legacy attachments saved before this change — content is already inline
+  const cached = await attachGetLocal(a.id);
+  if(cached) return cached;
+  if(a.driveFileId && driveClientId && driveAccessToken && Date.now() < driveTokenExpiry){
+    try{
+      const token = await driveGetToken();
+      const res = await fetch("https://www.googleapis.com/drive/v3/files/"+a.driveFileId+"?alt=media", {headers:{Authorization:"Bearer "+token}});
+      if(res.ok){
+        const blob = await res.blob();
+        const dataUrl = await blobToDataUrl(blob);
+        if(dataUrl) attachPut(a.id, dataUrl);
+        return dataUrl;
+      }
+    }catch(e){ /* fall through to null below */ }
+  }
+  return null;
+}
 document.getElementById("btnAddAttach").addEventListener("click", ()=> document.getElementById("attachInput").click());
 document.getElementById("attachInput").addEventListener("change", (e)=>{
   const t = curTask(); if(!t) return;
   const files = Array.from(e.target.files);
   let remaining = files.length;
   if(remaining===0) return;
-  files.forEach(file=>{
-    const reader = new FileReader();
-    reader.onload = ()=>{
-      t.attachments.push({id:uid("att"), name:file.name, type:detectAttachType(file.name), dataUrl:reader.result});
+  files.forEach(async file=>{
+    let dataUrl;
+    if(file.type.startsWith("image/")){
+      dataUrl = await compressImageFile(file);
+    }
+    if(!dataUrl){
+      // not an image, or compression failed — fall back to the raw file,
+      // but warn first if it's large since we can't shrink a PDF/email here
+      if(file.size > 3*1024*1024 && !confirm("« "+file.name+" » fait "+formatBytes(file.size)+" — c'est assez volumineux. L'ajouter quand même ?")){
+        remaining--;
+        if(remaining===0) { saveData(); renderAttachList(t); }
+        return;
+      }
+      dataUrl = await new Promise(resolve=>{
+        const r = new FileReader(); r.onload=()=>resolve(r.result); r.onerror=()=>resolve(null); r.readAsDataURL(file);
+      });
+    }
+    if(dataUrl){
+      const attMeta = {id:uid("att"), name:file.name, type:detectAttachType(file.name), driveFileId:null};
+      await attachPut(attMeta.id, dataUrl); // real content -> IndexedDB (large quota)
+      t.attachments.push(attMeta); // only this small reference -> localStorage/Drive sync
       t.updatedAt = Date.now();
-      remaining--;
-      if(remaining===0){ saveData(); renderAttachList(t); }
-    };
-    reader.readAsDataURL(file);
+      uploadAttachmentToDrive(attMeta, dataUrl, t); // fire-and-forget copy on Drive too
+    }
+    remaining--;
+    if(remaining===0){ saveData(); renderAttachList(t); }
   });
   e.target.value="";
 });
@@ -1535,26 +1708,32 @@ function renderAttachList(t){
       <button class="btn small" data-open>${a.type==="email" ? "Aperçu" : "Ouvrir"}</button>
       ${a.type==="email" ? '<button class="btn small" data-download title="Télécharger le fichier .eml original">⭳</button>' : ''}
       <button class="btn small danger" data-del>✕</button>`;
-    row.querySelector("[data-open]").addEventListener("click", ()=>{
+    row.querySelector("[data-open]").addEventListener("click", async ()=>{
       if(a.type==="email"){
         showEmailPreviewModal(a);
       } else if(a.type==="image"){
         const w = window.open();
-        w.document.write('<img src="'+a.dataUrl+'" style="max-width:100%;">');
+        const dataUrl = await getAttachmentDataUrl(a);
+        if(!dataUrl){ w.close(); alert("Impossible de charger cette image (pas encore synchronisée sur cet appareil ?)."); return; }
+        w.document.write('<img src="'+dataUrl+'" style="max-width:100%;">');
       } else {
         openAttachmentBlob(a);
       }
     });
     const dlBtn = row.querySelector("[data-download]");
-    if(dlBtn) dlBtn.addEventListener("click", ()=>{
+    if(dlBtn) dlBtn.addEventListener("click", async ()=>{
+      const dataUrl = await getAttachmentDataUrl(a);
+      if(!dataUrl){ alert("Impossible de charger ce fichier."); return; }
       const link = document.createElement("a");
-      link.href = a.dataUrl; link.download = a.name;
+      link.href = dataUrl; link.download = a.name;
       document.body.appendChild(link); link.click(); link.remove();
     });
     row.querySelector("[data-del]").addEventListener("click", ()=>{
       if(!confirm("Supprimer ce document ?")) return;
       snapshot();
       t.attachments = t.attachments.filter(x=>x.id!==a.id);
+      attachDeleteLocal(a.id);
+      deleteAttachmentFromDrive(a.driveFileId);
       saveData(); renderAttachList(t);
     });
     wrap.appendChild(row);
@@ -1563,8 +1742,10 @@ function renderAttachList(t){
 
 /* ---- reliable file opening: browsers block navigating a new tab straight to a
    data: URL (this is what silently broke PDF opening) — convert to a blob: URL first ---- */
-function openAttachmentBlob(a){
-  fetch(a.dataUrl).then(r=>r.blob()).then(blob=>{
+async function openAttachmentBlob(a){
+  const dataUrl = await getAttachmentDataUrl(a);
+  if(!dataUrl){ alert("Impossible de charger ce fichier (pas encore synchronisé sur cet appareil ?)."); return; }
+  fetch(dataUrl).then(r=>r.blob()).then(blob=>{
     const url = URL.createObjectURL(blob);
     const w = window.open(url, "_blank");
     if(!w){ alert("Le navigateur a bloqué l'ouverture (pop-up bloqué ?). Autorise les pop-ups pour ce site, ou utilise le téléchargement."); }
@@ -1695,10 +1876,12 @@ function parseEml(raw){
     body: finalBody || "(message vide ou format non reconnu)"
   };
 }
-function showEmailPreviewModal(a){
+async function showEmailPreviewModal(a){
+  const dataUrl = await getAttachmentDataUrl(a);
+  if(!dataUrl){ alert("Impossible de charger ce fichier email (pas encore synchronisé sur cet appareil ?)."); return; }
   let parsed;
   try{
-    parsed = parseEml(dataUrlToText(a.dataUrl));
+    parsed = parseEml(dataUrlToText(dataUrl));
   }catch(err){
     alert("Impossible de lire ce fichier email : "+err.message);
     return;
@@ -1724,7 +1907,7 @@ function showEmailPreviewModal(a){
   overlay.querySelector("#emailClose").addEventListener("click", ()=> overlay.remove());
   overlay.querySelector("#emailDownloadOrig").addEventListener("click", ()=>{
     const link = document.createElement("a");
-    link.href = a.dataUrl; link.download = a.name;
+    link.href = dataUrl; link.download = a.name;
     document.body.appendChild(link); link.click(); link.remove();
   });
   overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
@@ -2004,6 +2187,8 @@ function procAssignShapeToCollaborator(shape, collabId){
     }
   } else if(shape.linkedTaskId){
     if(confirm("Supprimer aussi la tâche liée dans SensiTâche ?")){
+      const linked = DATA.tasks.find(t=>t.id===shape.linkedTaskId);
+      if(linked) cleanupTaskAttachments(linked);
       DATA.tasks = DATA.tasks.filter(t=>t.id!==shape.linkedTaskId);
       shape.linkedTaskId = null;
     }
@@ -2085,6 +2270,8 @@ function procDeleteShape(id){
   const shape = PROC.shapes.find(s=>s.id===id);
   if(shape && shape.linkedTaskId){
     if(confirm("Cette forme a une tâche liée dans SensiTâche. La supprimer aussi ?")){
+      const linked = DATA.tasks.find(t=>t.id===shape.linkedTaskId);
+      if(linked) cleanupTaskAttachments(linked);
       DATA.tasks = DATA.tasks.filter(t=>t.id!==shape.linkedTaskId);
     }
   }
@@ -2231,22 +2418,28 @@ document.getElementById("btnProcZoomOut").addEventListener("click", ()=> procSet
 
 /* reference image */
 document.getElementById("btnProcImportImg").addEventListener("click", ()=> document.getElementById("procImportImgFile").click());
-document.getElementById("procImportImgFile").addEventListener("change", e=>{
+document.getElementById("procImportImgFile").addEventListener("change", async e=>{
   const file = e.target.files[0]; if(!file) return;
-  const reader = new FileReader();
-  reader.onload = ()=>{
-    const img = new Image();
-    img.onload = ()=>{ PROC.refImage = {dataUrl:reader.result, w:img.width, h:img.height, opacity:0.5, visible:true}; saveData(); renderProcBoard(); };
-    img.src = reader.result;
+  e.target.value="";
+  const dataUrl = await compressImageFile(file, 2000, 0.85); // reference screenshots can be large; still compress, just a bit less aggressively than photo attachments so tracing detail stays readable
+  if(!dataUrl){ alert("Impossible de charger cette image."); return; }
+  const img = new Image();
+  img.onload = async ()=>{
+    const refId = uid("refimg");
+    await attachPut(refId, dataUrl); // real content -> IndexedDB, not embedded in the task/process JSON
+    PROC.refImage = {id:refId, w:img.width, h:img.height, opacity:0.5, visible:true};
+    saveData(); renderProcBoard();
   };
-  reader.readAsDataURL(file); e.target.value="";
+  img.src = dataUrl;
 });
-function renderProcRefImage(){
+async function renderProcRefImage(){
   let ex=document.getElementById("procRefImageEl"), exc=document.getElementById("procRefImageControls");
   if(ex) ex.remove(); if(exc) exc.remove();
   if(!PROC.refImage || !PROC.refImage.visible) return;
   const ri = PROC.refImage;
-  const img = document.createElement("img"); img.id="procRefImageEl"; img.src=ri.dataUrl;
+  const dataUrl = ri.dataUrl || await attachGetLocal(ri.id); // ri.dataUrl kept for backward-compat with refs saved before this change
+  if(!dataUrl) return;
+  const img = document.createElement("img"); img.id="procRefImageEl"; img.src=dataUrl;
   img.style.position="absolute"; img.style.left="0"; img.style.top="0"; img.style.width=ri.w+"px"; img.style.height=ri.h+"px";
   img.style.opacity=ri.opacity; img.style.zIndex="1"; img.style.pointerEvents="none";
   document.getElementById("procBoard").insertBefore(img, document.getElementById("procShapesLayer"));
@@ -2255,7 +2448,7 @@ function renderProcRefImage(){
   ctrl.innerHTML = `Image de référence <input type="range" min="5" max="100" value="${Math.round(ri.opacity*100)}" id="procRiOpacity" style="width:100px;"><button class="btn small" id="procRiRemove">Retirer</button>`;
   document.getElementById("procOverlay").appendChild(ctrl);
   ctrl.querySelector("#procRiOpacity").addEventListener("input", e=>{ ri.opacity=e.target.value/100; img.style.opacity=ri.opacity; saveData(); });
-  ctrl.querySelector("#procRiRemove").addEventListener("click", ()=>{ PROC.refImage=null; saveData(); renderProcBoard(); });
+  ctrl.querySelector("#procRiRemove").addEventListener("click", ()=>{ if(ri.id) attachDeleteLocal(ri.id); PROC.refImage=null; saveData(); renderProcBoard(); });
 }
 
 /* legend */
@@ -2304,7 +2497,7 @@ function renderProcTasksList(){
     row.className = "proc-task-row";
     row.innerHTML = `
       <div class="ptr-head">
-        <span class="avatar" style="background:${c?c.color:'#999'};width:18px;height:18px;font-size:9px;">${c?c.name.slice(0,2).toUpperCase():"?"}</span>
+        <span class="avatar" style="background:${c?c.color:'#999'};width:18px;height:18px;font-size:9px;">${c?escapeHtml(c.name.slice(0,2).toUpperCase()):"?"}</span>
         <span class="ptr-title">${escapeHtml(task.title)}</span>
         ${task.done?'<span style="font-size:10px;color:var(--knowledge);">✓ fait</span>':''}
       </div>
@@ -2491,22 +2684,28 @@ function mergeAppData(local, remote){
     return !(itemUpdatedAt && itemUpdatedAt > t);
   }
 
-  // Collaborators: union by id (new ones from the other device are added;
-  // keep this device's own copy on conflict, since renames rarely matter here).
-  const collabIds = new Set(merged.collaborators.map(c=>c.id));
+  // Collaborators: union by id, keep whichever copy (name/color) was
+  // updated most recently — otherwise a rename on one device never
+  // reaches the other, since "already exists locally" used to mean
+  // "ignore the incoming version" even when it was the newer one.
+  const collabMap = new Map(merged.collaborators.map(c=>[c.id, c]));
   (remote.collaborators||[]).forEach(rc=>{
     if(deletedAfter("collaborators", rc.id, rc.updatedAt)) return;
-    if(!collabIds.has(rc.id)) merged.collaborators.push(rc);
+    const lc = collabMap.get(rc.id);
+    if(!lc || (rc.updatedAt||0) > (lc.updatedAt||0)) collabMap.set(rc.id, rc);
   });
-  merged.collaborators = merged.collaborators.filter(c=> !deletedAfter("collaborators", c.id, c.updatedAt));
+  merged.collaborators = Array.from(collabMap.values()).filter(c=> !deletedAfter("collaborators", c.id, c.updatedAt));
 
-  // Workspaces: union by id, respecting deletions.
-  const wsIds = new Set(merged.workspaces.map(w=>w.id));
+  // Workspaces: same "most recently updated copy wins" treatment, so a
+  // rename or icon change actually propagates instead of being silently
+  // dropped whenever the workspace already existed on the other side.
+  const wsMap = new Map(merged.workspaces.map(w=>[w.id, w]));
   (remote.workspaces||[]).forEach(rw=>{
     if(deletedAfter("workspaces", rw.id, rw.updatedAt)) return;
-    if(!wsIds.has(rw.id)) merged.workspaces.push(rw);
+    const lw = wsMap.get(rw.id);
+    if(!lw || (rw.updatedAt||0) > (lw.updatedAt||0)) wsMap.set(rw.id, rw);
   });
-  merged.workspaces = merged.workspaces.filter(w=> !deletedAfter("workspaces", w.id, w.updatedAt));
+  merged.workspaces = Array.from(wsMap.values()).filter(w=> !deletedAfter("workspaces", w.id, w.updatedAt));
 
   // Tasks: union by id, keep whichever copy was modified most recently, respecting deletions.
   const taskMap = new Map(merged.tasks.map(t=>[t.id, t]));
@@ -3061,10 +3260,9 @@ function openQuickAddModal(prefill){
   }
   overlay.querySelector("#qaAddPhoto").addEventListener("click", ()=> overlay.querySelector("#qaPhotoInput").click());
   overlay.querySelector("#qaPhotoInput").addEventListener("change", (e)=>{
-    Array.from(e.target.files).forEach(file=>{
-      const reader = new FileReader();
-      reader.onload = ()=>{ pendingPhotos.push({name:file.name, dataUrl:reader.result}); renderPreview(); };
-      reader.readAsDataURL(file);
+    Array.from(e.target.files).forEach(async file=>{
+      const dataUrl = await compressImageFile(file);
+      if(dataUrl){ pendingPhotos.push({name:file.name, dataUrl}); renderPreview(); }
     });
     e.target.value = "";
   });
@@ -3077,13 +3275,16 @@ function openQuickAddModal(prefill){
     if(!title){ alert("Donne un titre à la tâche."); return; }
     const createBtn = overlay.querySelector("#qaCreate");
     const wsId = wsSel.value;
+    const attMetas = pendingPhotos.map(p=>({id:uid("att"), name:p.name, type:"image", driveFileId:null}));
     const t = {
       id: uid("task"), workspaceId: wsId, title, description:"",
       assignedTo:[DATA.currentUserId], today:false, urgent:false, knowledge:false,
       reminderDate:null, recurrence:null, done:false, doneAt:null,
-      attachments: pendingPhotos.map(p=>({id:uid("att"), name:p.name, type:"image", dataUrl:p.dataUrl})),
+      attachments: attMetas,
       process:null, createdAt:Date.now(), updatedAt:Date.now()
     };
+    await Promise.all(attMetas.map((meta,i)=> attachPut(meta.id, pendingPhotos[i].dataUrl)));
+    attMetas.forEach((meta,i)=> uploadAttachmentToDrive(meta, pendingPhotos[i].dataUrl, t)); // fire-and-forget
     DATA.tasks.push(t);
     currentWsId = wsId; currentTab = "tasks";
     document.querySelectorAll(".tab").forEach(x=> x.classList.toggle("active", x.dataset.tab==="tasks"));
@@ -3186,6 +3387,45 @@ window.addEventListener("beforeinstallprompt", (e)=>{
 renderSidebar();
 renderMain();
 updateDriveIndicator();
+
+// A web page can't literally stop a second tab from opening — no browser
+// gives JS that power — but it can detect one and warn immediately, which
+// is what actually matters here: catching the "two tabs silently fighting
+// over localStorage" problem before it causes a lost edit.
+(function setupMultiTabDetection(){
+  if(!("BroadcastChannel" in window)) return;
+  const tabId = uid("tab");
+  const channel = new BroadcastChannel("sensitache-tabs");
+  let warned = false;
+  function showMultiTabWarning(){
+    if(warned) return;
+    warned = true;
+    const overlay = document.createElement("div");
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(10,11,14,.95);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;";
+    overlay.innerHTML = `
+      <div style="max-width:420px;text-align:center;background:var(--bg-card);border:1px solid var(--border-soft);border-radius:14px;padding:26px;">
+        <h2 style="margin:0 0 12px;font-size:17px;">⚠️ SensiTâche est déjà ouvert ailleurs</h2>
+        <p style="color:var(--text-sub);font-size:13.5px;line-height:1.6;margin-bottom:8px;">Un autre onglet ou une autre fenêtre de ce navigateur a déjà l'application ouverte. Cet onglet-ci doit être fermé pour éviter de perdre des modifications.</p>
+        <p id="mtFallback" style="color:var(--danger);font-size:12px;line-height:1.5;margin-bottom:16px;display:none;">Ton navigateur ne permet pas à la page de se fermer elle-même — ferme cet onglet manuellement (croix de l'onglet, ou Ctrl+W / Cmd+W).</p>
+        <button class="btn primary" id="mtClose" style="width:100%;justify-content:center;">Fermer cet onglet</button>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector("#mtClose").addEventListener("click", ()=>{
+      window.close();
+      setTimeout(()=>{ if(!document.hidden) overlay.querySelector("#mtFallback").style.display = "block"; }, 300);
+    });
+  }
+  channel.onmessage = (e)=>{
+    if(!e.data) return;
+    if(e.data.type==="ping"){
+      channel.postMessage({type:"pong", tabId});
+    } else if(e.data.type==="pong" && e.data.tabId!==tabId){
+      showMultiTabWarning();
+    }
+  };
+  channel.postMessage({type:"ping", tabId});
+})();
+
 // The service worker was causing the app to stop responding for some users
 // (a broken service worker can get stuck controlling the page even after
 // the underlying files are fixed). Actively remove any existing one so the
