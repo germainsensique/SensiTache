@@ -2568,13 +2568,26 @@ function maybeCreateWeeklySnapshot(){
   saveWeeklyBackupsList(list);
   uploadBackupToDriveAsFile(entry, "sensitache-weekly-", WEEKLY_RETENTION);
 }
-function createBackupSnapshot(){
+function createBackupSnapshotNow(){
   const list = loadBackupsList();
   const entry = {ts: Date.now(), data: JSON.stringify(DATA)};
   list.push(entry);
   while(list.length > backupRetentionCount) list.shift();
   saveBackupsList(list);
   uploadBackupToDriveAsFile(entry, "sensitache-backup-", backupRetentionCount); // fire-and-forget: a real off-device copy, not just this browser's storage
+}
+function maybeCreateFrequentSnapshot(){
+  // A plain setInterval only fires while the app stays open — but on the
+  // phone quick-capture flow the app closes itself almost immediately, so
+  // that interval never gets a real chance to run. Checking "has enough
+  // time actually elapsed since the last one?" at every natural checkpoint
+  // (app open, reconnect, coming back to the foreground, not just the
+  // timer) means a backup still happens even if the app is only ever
+  // opened briefly.
+  const list = loadBackupsList();
+  const last = list.length ? list[list.length-1].ts : 0;
+  if(Date.now() - last < backupRecurrenceMin*60000) return;
+  createBackupSnapshotNow();
   maybeCreateWeeklySnapshot();
 }
 async function uploadBackupToDriveAsFile(entry, prefix, keepCount){
@@ -2609,10 +2622,10 @@ async function cleanupOldDriveBackups(token, prefix, keepCount){
 }
 function scheduleBackupTimer(){
   if(backupTimerHandle) clearInterval(backupTimerHandle);
-  backupTimerHandle = setInterval(createBackupSnapshot, backupRecurrenceMin*60000);
+  backupTimerHandle = setInterval(maybeCreateFrequentSnapshot, Math.min(backupRecurrenceMin*60000, 5*60000));
 }
 scheduleBackupTimer();
-maybeCreateWeeklySnapshot();
+maybeCreateFrequentSnapshot();
 function restoreBackupSnapshot(entry){
   if(!confirm("Restaurer la sauvegarde du "+new Date(entry.ts).toLocaleString("fr-FR")+" ?\nL'état actuel sera d'abord mis de côté (tu pourras toujours faire « Annuler » juste après si tu changes d'avis).")) return;
   snapshot();
@@ -2709,7 +2722,7 @@ function showBackupsModal(){
     overlay.remove();
   });
   overlay.querySelector("#bkNow").addEventListener("click", ()=>{
-    createBackupSnapshot();
+    createBackupSnapshotNow();
     overlay.remove(); showBackupsModal();
   });
   overlay.querySelector("#bkClose").addEventListener("click", ()=> overlay.remove());
@@ -3065,6 +3078,7 @@ async function flushDriveBackupNow(){
   // never leaves the person stuck unable to close the app.
   if(!(driveClientId && driveAccessToken && Date.now() < driveTokenExpiry)) return true; // nothing to sync, not a failure
   clearTimeout(backupDebounceTimer);
+  maybeCreateFrequentSnapshot();
   let finished = false;
   await Promise.race([
     writeDriveBackup().then(()=>{ finished = true; }),
@@ -3162,6 +3176,7 @@ function attemptDriveReconnect(){
     // a device sitting untouched never saw the other device's tasks without
     // clicking "Importer depuis Drive" by hand. Do that pull right away too.
     writeDriveBackup();
+    maybeCreateFrequentSnapshot();
   }).catch(()=>{ updateDriveIndicator(); });
 }
 setTimeout(attemptDriveReconnect, 700);
@@ -3173,8 +3188,9 @@ setInterval(()=>{
   if(driveClientId && driveAccessToken && Date.now() < driveTokenExpiry) writeDriveBackup();
 }, 45000);
 document.addEventListener("visibilitychange", ()=>{
-  if(document.visibilityState==="visible" && driveClientId && driveAccessToken && Date.now() < driveTokenExpiry){
-    writeDriveBackup();
+  if(document.visibilityState==="visible"){
+    maybeCreateFrequentSnapshot();
+    if(driveClientId && driveAccessToken && Date.now() < driveTokenExpiry) writeDriveBackup();
   }
 });
 
