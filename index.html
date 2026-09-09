@@ -2542,6 +2542,32 @@ function saveBackupsList(list){
     return false;
   }
 }
+const DAILY_BACKUPS_KEY = "sensitache.dailyBackupsList";
+const DAILY_RETENTION = 7; // 1 snapshot/day kept for 1 week
+const DAILY_INTERVAL_MS = 24*60*60*1000;
+function loadDailyBackupsList(){
+  try{ return JSON.parse(localStorage.getItem(DAILY_BACKUPS_KEY)) || []; }catch(e){ return []; }
+}
+function saveDailyBackupsList(list){
+  try{ localStorage.setItem(DAILY_BACKUPS_KEY, JSON.stringify(list)); return true; }
+  catch(e){
+    if(list.length>1){
+      const trimmed = list.slice(Math.ceil(list.length/2));
+      try{ localStorage.setItem(DAILY_BACKUPS_KEY, JSON.stringify(trimmed)); return true; }catch(e2){ return false; }
+    }
+    return false;
+  }
+}
+function maybeCreateDailySnapshot(){
+  const list = loadDailyBackupsList();
+  const last = list.length ? list[list.length-1].ts : 0;
+  if(Date.now() - last < DAILY_INTERVAL_MS) return;
+  const entry = {ts: Date.now(), data: JSON.stringify(DATA)};
+  list.push(entry);
+  while(list.length > DAILY_RETENTION) list.shift();
+  saveDailyBackupsList(list);
+  uploadBackupToDriveAsFile(entry, "sensitache-daily-", DAILY_RETENTION);
+}
 const WEEKLY_BACKUPS_KEY = "sensitache.weeklyBackupsList";
 const WEEKLY_RETENTION = 4; // 1 snapshot/week kept for ~1 month
 const WEEKLY_INTERVAL_MS = 7*24*60*60*1000;
@@ -2588,6 +2614,7 @@ function maybeCreateFrequentSnapshot(){
   const last = list.length ? list[list.length-1].ts : 0;
   if(Date.now() - last < backupRecurrenceMin*60000) return;
   createBackupSnapshotNow();
+  maybeCreateDailySnapshot();
   maybeCreateWeeklySnapshot();
 }
 async function uploadBackupToDriveAsFile(entry, prefix, keepCount){
@@ -2647,6 +2674,7 @@ function showBackupsModal(){
   overlay.className = "modal-overlay";
   const backups = loadBackupsList().slice().sort((a,b)=> b.ts-a.ts);
   const weeklyBackups = loadWeeklyBackupsList().slice().sort((a,b)=> b.ts-a.ts);
+  const dailyBackups = loadDailyBackupsList().slice().sort((a,b)=> b.ts-a.ts);
   overlay.innerHTML = `
     <div class="modal" style="width:420px;max-height:80vh;overflow-y:auto;">
       <h2>🗄️ Sauvegardes automatiques</h2>
@@ -2674,6 +2702,9 @@ function showBackupsModal(){
       </div>
       <div class="side-section-label" style="padding:0 0 6px;">Historique (${backups.length})</div>
       <div id="bkList" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;margin-bottom:14px;"></div>
+      <div class="side-section-label" style="padding:0 0 6px;">Sauvegardes quotidiennes — 1 semaine (${dailyBackups.length}/${DAILY_RETENTION})</div>
+      <p style="font-size:11px;color:var(--text-sub);margin:0 0 6px;">Un instantané pris automatiquement une fois par jour, gardé pendant 1 semaine.</p>
+      <div id="bkDailyList" style="display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto;margin-bottom:14px;"></div>
       <div class="side-section-label" style="padding:0 0 6px;">Sauvegardes hebdomadaires — 1 mois (${weeklyBackups.length}/${WEEKLY_RETENTION})</div>
       <p style="font-size:11px;color:var(--text-sub);margin:0 0 6px;">Un instantané pris automatiquement une fois par semaine, gardé pendant ~1 mois — indépendant de la fréquence réglée ci-dessus.</p>
       <div id="bkWeeklyList" style="display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto;margin-bottom:10px;"></div>
@@ -2696,6 +2727,18 @@ function showBackupsModal(){
       row.innerHTML = `<span>${new Date(entry.ts).toLocaleString("fr-FR")}</span><button class="btn small">Restaurer</button>`;
       row.querySelector("button").addEventListener("click", ()=> restoreBackupSnapshot(entry));
       listEl.appendChild(row);
+    });
+  }
+  const dailyListEl = overlay.querySelector("#bkDailyList");
+  if(dailyBackups.length===0){
+    dailyListEl.innerHTML = '<div style="font-size:12px;color:var(--text-sub);">Aucune sauvegarde quotidienne encore prise (la première sera créée automatiquement).</div>';
+  } else {
+    dailyBackups.forEach(entry=>{
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg-app);border:1px solid var(--border-soft);border-radius:8px;padding:7px 10px;font-size:12px;";
+      row.innerHTML = `<span>${new Date(entry.ts).toLocaleDateString("fr-FR")}</span><button class="btn small">Restaurer</button>`;
+      row.querySelector("button").addEventListener("click", ()=> restoreBackupSnapshot(entry));
+      dailyListEl.appendChild(row);
     });
   }
   const weeklyListEl = overlay.querySelector("#bkWeeklyList");
