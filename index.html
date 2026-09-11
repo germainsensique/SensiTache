@@ -569,7 +569,7 @@ function renderSidebar(){
   DATA.workspaces.forEach(ws=>{
     const row = document.createElement("div");
     row.className = "ws-item" + (ws.id===currentWsId ? " active":"");
-    row.innerHTML = `<span class="wsicon" data-icon="${ws.id}" title="Changer l'icône">${ws.icon||"🗀"}</span><span class="wsname">${escapeHtml(ws.name)}</span><span class="wsdel" data-rename="${ws.id}" title="Renommer">✎</span><span class="wsdel" data-del="${ws.id}" title="Supprimer">✕</span>`;
+    row.innerHTML = `<span class="wsicon" data-icon="${ws.id}" title="Changer l'icône">${ws.icon||"📁"}</span><span class="wsname">${escapeHtml(ws.name)}</span><span class="wsdel" data-rename="${ws.id}" title="Renommer">✎</span><span class="wsdel" data-del="${ws.id}" title="Supprimer">✕</span>`;
     row.addEventListener("click", (e)=>{
       if(e.target.dataset.del || e.target.dataset.rename || e.target.dataset.icon) return;
       currentWsId = ws.id; openTaskId=null; currentTab="tasks"; renderSidebar(); renderMain();
@@ -605,7 +605,7 @@ function renderSidebar(){
     list.appendChild(row);
   });
 }
-const WORKSPACE_ICON_CHOICES = ["🗀","📁","💼","🏠","⚙️","📊","🎯","📌","🚀","✅","📚","🛠️","💡","📅","🔔","🧾","🗂️","🎨","🧩","📢","🌟","🏗️","🧪","🛒"];
+const WORKSPACE_ICON_CHOICES = ["📁","💼","🏠","⚙️","📊","🎯","📌","🚀","✅","📚","🛠️","💡","📅","🔔","🧾","🗂️","🎨","🧩","📢","🌟","🏗️","🧪","🛒"];
 function showWorkspaceIconPicker(ws){
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
@@ -712,7 +712,7 @@ function showSettingsModal(){
   const showInstall = isPhoneSize();
   const textBytes = new Blob([JSON.stringify(DATA)]).size; // tasks/workspaces/etc as text — attachments live elsewhere now
   const wsListHtml = DATA.workspaces.map(w=>
-    `<button class="btn small" data-ws="${w.id}" style="justify-content:flex-start;${w.id===currentWsId?'border-color:var(--accent);':''}">${w.icon?w.icon+" ":"🗀 "}${escapeHtml(w.name)}${w.id===currentWsId?' ✓':''}</button>`
+    `<button class="btn small" data-ws="${w.id}" style="justify-content:flex-start;${w.id===currentWsId?'border-color:var(--accent);':''}">${w.icon?w.icon+" ":"📁 "}${escapeHtml(w.name)}${w.id===currentWsId?' ✓':''}</button>`
   ).join("");
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
@@ -733,8 +733,8 @@ function showSettingsModal(){
         <button class="btn" id="setBackups" style="justify-content:flex-start;">🗄️ Sauvegardes automatiques…</button>
         <button class="btn" id="setTrashRetention" style="justify-content:flex-start;">🗑️ Rétention de la Corbeille…</button>
         <button class="btn" id="setUndo" style="justify-content:flex-start;">↩ Annuler la dernière action</button>
-        <button class="btn" id="setExport" style="justify-content:flex-start;">⭳ Exporter la sauvegarde</button>
-        <button class="btn" id="setImport" style="justify-content:flex-start;">⭱ Importer une sauvegarde</button>
+        <button class="btn" id="setExport" style="justify-content:flex-start;">⬇️ Exporter la sauvegarde</button>
+        <button class="btn" id="setImport" style="justify-content:flex-start;">⬆️ Importer une sauvegarde</button>
       </div>
       <div class="modal-actions"><button class="btn ghost" id="setClose">Fermer</button></div>
     </div>`;
@@ -1736,7 +1736,7 @@ function renderAttachList(t){
     row.className = "attach-item";
     row.innerHTML = `<span class="aicon">${iconMap[a.type]}</span><span class="aname">${escapeHtml(a.name)}</span>
       <button class="btn small" data-open>${a.type==="email" ? "Aperçu" : "Ouvrir"}</button>
-      ${a.type==="email" ? '<button class="btn small" data-download title="Télécharger le fichier .eml original">⭳</button>' : ''}
+      ${a.type==="email" ? '<button class="btn small" data-download title="Télécharger le fichier .eml original">⬇️</button>' : ''}
       <button class="btn small danger" data-del>✕</button>`;
     row.querySelector("[data-open]").addEventListener("click", async ()=>{
       if(a.type==="email"){
@@ -1929,7 +1929,7 @@ async function showEmailPreviewModal(a){
       </div>
       <div style="border-top:1px solid var(--border-soft);padding-top:12px;font-size:13.5px;white-space:pre-wrap;line-height:1.5;">${escapeHtml(parsed.body)}</div>
       <div class="modal-actions" style="margin-top:16px;">
-        <button class="btn small" id="emailDownloadOrig">⭳ Télécharger l'original (.eml)</button>
+        <button class="btn small" id="emailDownloadOrig">⬇️ Télécharger l'original (.eml)</button>
         <button class="btn primary" id="emailClose">Fermer</button>
       </div>
     </div>`;
