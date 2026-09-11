@@ -3429,10 +3429,13 @@ async function flushDriveBackupNow(){
 function attemptCloseApp(){
   // Browsers only allow window.close() on windows/tabs opened by script,
   // which an installed PWA or a normally-opened tab usually isn't — so this
-  // is best-effort. If it's silently refused, tell the person what to do.
+  // is best-effort. If it's silently refused, tell the person what to do,
+  // and stop this leftover tab from counting as "an active session" so a
+  // normal browser tab opened afterwards doesn't get a false multi-tab warning.
   window.close();
   setTimeout(()=>{
     if(!document.hidden){
+      leaveMultiTabDetection();
       const note = document.createElement("div");
       note.style.cssText = "position:fixed;left:16px;right:16px;bottom:16px;background:var(--bg-card);border:1px solid var(--border-soft);border-radius:10px;padding:12px 14px;font-size:13px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);";
       note.textContent = "Tâche créée ✅ — tu peux fermer l'appli.";
@@ -3488,11 +3491,15 @@ updateDriveIndicator();
 // gives JS that power — but it can detect one and warn immediately, which
 // is what actually matters here: catching the "two tabs silently fighting
 // over localStorage" problem before it causes a lost edit.
+let leaveMultiTabDetection = ()=>{}; // replaced below once the channel exists
 (function setupMultiTabDetection(){
   if(!("BroadcastChannel" in window)) return;
+  if(isStandaloneApp()) return; // the installed app is meant to be independent — never block it, and never let it trigger the warning on a regular browser tab either
   const tabId = uid("tab");
   const channel = new BroadcastChannel("sensitache-tabs");
   let warned = false;
+  let active = true;
+  leaveMultiTabDetection = ()=>{ active = false; try{ channel.close(); }catch(e){} };
   function showMultiTabWarning(){
     if(warned) return;
     warned = true;
@@ -3512,7 +3519,7 @@ updateDriveIndicator();
     });
   }
   channel.onmessage = (e)=>{
-    if(!e.data) return;
+    if(!active || !e.data) return;
     if(e.data.type==="ping"){
       channel.postMessage({type:"pong", tabId});
     } else if(e.data.type==="pong" && e.data.tabId!==tabId){
