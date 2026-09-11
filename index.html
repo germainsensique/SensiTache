@@ -1115,13 +1115,15 @@ function runTaskSearch(query){
 function createAndOpenNewTask(){
   snapshot();
   const t = {
-    id: uid("task"), workspaceId: currentWsId, title: "Nouvelle tâche", description:"",
+    id: uid("task"), workspaceId: currentWsId, title: "", description:"",
     assignedTo: [DATA.currentUserId], today:false, urgent:false, knowledge:false,
     reminderDate:null, recurrence:null, done:false, doneAt:null,
     attachments:[], process:null, createdAt:Date.now(), updatedAt:Date.now()
   };
   DATA.tasks.push(t); saveData(); renderMain();
   openTaskDrawer(t.id);
+  const titleInput = document.getElementById("taskTitleInput");
+  titleInput.focus();
 }
 function renderTaskRow(t){
   const row = document.createElement("div");
@@ -3322,6 +3324,7 @@ function openQuickAddModal(prefill){
     </div>`;
   document.body.appendChild(overlay);
   updateDriveIndicator();
+  overlay.querySelector("#qaTitle").focus();
   overlay.querySelector("#qaSettingsBtn").addEventListener("click", ()=> showSettingsModal());
   overlay.querySelector("#qaToggleMore").addEventListener("click", (e)=>{
     const box = overlay.querySelector("#qaMoreOptions");
