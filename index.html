@@ -139,7 +139,7 @@
   .drawer-footer{padding:12px 20px; border-top:1px solid var(--border-soft); display:flex; justify-content:space-between; gap:8px;}
 
   /* ---------- Modals (collaborator create, workspace) ---------- */
-  .modal-overlay{position:fixed; inset:0; background:rgba(10,11,14,.5); z-index:100; display:flex; align-items:center; justify-content:center;}
+  .modal-overlay{position:fixed; inset:0; background:transparent; z-index:100; display:flex; align-items:center; justify-content:center;}
   .modal{background:var(--bg-card); border-radius:12px; padding:22px; width:340px; max-width:90vw;}
   .modal h2{margin:0 0 12px; font-size:16px;}
   .modal input{width:100%; border:1px solid var(--border-soft); border-radius:8px; padding:9px 11px; font-size:13.5px; margin-bottom:10px; background:var(--bg-app); color:var(--text-main);}
@@ -690,11 +690,26 @@ document.getElementById("importAllFile").addEventListener("change", (e)=>{
   };
   r.readAsText(f);
 });
+async function refreshStorageUsageLine(textBytes){
+  const el = document.getElementById("storageUsageLine");
+  if(!el) return;
+  if(navigator.storage && navigator.storage.estimate){
+    try{
+      const {usage, quota} = await navigator.storage.estimate();
+      const pct = quota ? Math.round((usage/quota)*100) : null;
+      const color = pct>85 ? "var(--danger)" : (pct>60 ? "var(--flame)" : "var(--text-sub)");
+      el.style.color = color;
+      el.textContent = "💾 Espace total utilisé : "+formatBytes(usage)+(quota?" sur "+formatBytes(quota)+" disponibles ("+pct+"%)":"")+" — dont "+formatBytes(textBytes)+" de données texte (tâches, processus).";
+    }catch(e){
+      el.textContent = "💾 Données texte (tâches, processus) : "+formatBytes(textBytes)+". Espace total (avec pièces jointes) indisponible sur ce navigateur.";
+    }
+  } else {
+    el.textContent = "💾 Données texte (tâches, processus) : "+formatBytes(textBytes)+". Ce navigateur ne permet pas de mesurer l'espace total (pièces jointes incluses).";
+  }
+}
 function showSettingsModal(){
   const showInstall = isPhoneSize();
-  const usedBytes = new Blob([JSON.stringify(DATA)]).size;
-  const usedMo = usedBytes/(1024*1024);
-  const usedColor = usedMo>7 ? "var(--danger)" : (usedMo>4 ? "var(--flame)" : "var(--text-sub)");
+  const textBytes = new Blob([JSON.stringify(DATA)]).size; // tasks/workspaces/etc as text — attachments live elsewhere now
   const wsListHtml = DATA.workspaces.map(w=>
     `<button class="btn small" data-ws="${w.id}" style="justify-content:flex-start;${w.id===currentWsId?'border-color:var(--accent);':''}">${w.icon?w.icon+" ":"🗀 "}${escapeHtml(w.name)}${w.id===currentWsId?' ✓':''}</button>`
   ).join("");
@@ -703,7 +718,7 @@ function showSettingsModal(){
   overlay.innerHTML = `
     <div class="modal" style="width:340px;">
       <h2>⚙️ Paramètres</h2>
-      <p style="font-size:11.5px;color:${usedColor};margin:-6px 0 14px;">💾 Stockage utilisé : ${formatBytes(usedBytes)} (les navigateurs limitent en général à 5-10 Mo)</p>
+      <p id="storageUsageLine" style="font-size:11.5px;color:var(--text-sub);margin:-6px 0 14px;">💾 Calcul de l'espace utilisé…</p>
       <div class="side-section-label" style="padding:0 0 6px;">Espaces de travail</div>
       <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;max-height:180px;overflow-y:auto;">
         ${wsListHtml}
@@ -722,6 +737,7 @@ function showSettingsModal(){
       <div class="modal-actions"><button class="btn ghost" id="setClose">Fermer</button></div>
     </div>`;
   document.body.appendChild(overlay);
+  refreshStorageUsageLine(textBytes);
 
   overlay.querySelectorAll("[data-ws]").forEach(btn=>{
     btn.addEventListener("click", ()=>{
@@ -3225,7 +3241,7 @@ function openQuickAddModal(prefill){
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>
           Nouvelle tâche rapide
         </h2>
-        <button id="qaSettingsBtn" class="icon-btn" title="Paramètres" style="position:relative;">
+        <button id="qaSettingsBtn" class="icon-btn" title="Paramètres" style="position:relative;background:#ECEBE6;color:#15171C;border-radius:50%;width:32px;height:32px;padding:0;align-items:center;justify-content:center;">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82A1.65 1.65 0 0 0 3 13.09H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           <span id="driveDotQuickAdd" class="drive-dot" style="top:2px;right:2px;"></span>
         </button>
@@ -3235,6 +3251,20 @@ function openQuickAddModal(prefill){
       <div id="qaPhotoPreview" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;"></div>
       <input type="file" id="qaPhotoInput" accept="image/*" capture="environment" multiple style="display:none">
       <button class="btn small" id="qaAddPhoto" style="width:100%;justify-content:center;margin-bottom:10px;">📷 Ajouter une photo</button>
+      <button class="btn small" id="qaToggleMore" style="width:100%;justify-content:center;margin-bottom:10px;">+ Plus d'options</button>
+      <div id="qaMoreOptions" style="display:none;">
+        <textarea id="qaDesc" placeholder="Description…" style="width:100%;min-height:70px;border:1px solid var(--border-soft);border-radius:8px;padding:9px 11px;font-size:13.5px;background:var(--bg-card);color:var(--text-main);margin-bottom:10px;"></textarea>
+        <div class="chiprow" style="margin-bottom:12px;">
+          <button class="btn chip small flame" id="qaChipToday">🔥 Aujourd'hui</button>
+          <button class="btn chip small urgent" id="qaChipUrgent">🎯 Urgent</button>
+          <button class="btn chip small knowledge" id="qaChipKnowledge">📚 Connaissance</button>
+        </div>
+        <label style="font-size:11px;color:var(--text-sub);display:block;margin-bottom:4px;">Affectation</label>
+        <div id="qaAssignChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
+        <button class="btn small" id="qaAddAssignee" style="width:100%;justify-content:center;margin-bottom:10px;">+ Affecter un collaborateur</button>
+        <label style="font-size:11px;color:var(--text-sub);display:block;margin-bottom:4px;">🕒 Rappel</label>
+        <input type="date" class="fieldinput" id="qaReminder" style="margin-bottom:10px;">
+      </div>
       <div class="modal-actions">
         <button class="btn ghost" id="qaCancel">Annuler</button>
         <button class="btn primary" id="qaCreate">Créer la tâche</button>
@@ -3243,6 +3273,70 @@ function openQuickAddModal(prefill){
   document.body.appendChild(overlay);
   updateDriveIndicator();
   overlay.querySelector("#qaSettingsBtn").addEventListener("click", ()=> showSettingsModal());
+  overlay.querySelector("#qaToggleMore").addEventListener("click", (e)=>{
+    const box = overlay.querySelector("#qaMoreOptions");
+    const isHidden = box.style.display==="none";
+    box.style.display = isHidden ? "block" : "none";
+    e.currentTarget.textContent = isHidden ? "− Moins d'options" : "+ Plus d'options";
+  });
+  let qaToday=false, qaUrgent=false, qaKnowledge=false;
+  overlay.querySelector("#qaChipToday").addEventListener("click", e=>{ qaToday=!qaToday; e.currentTarget.classList.toggle("on", qaToday); });
+  overlay.querySelector("#qaChipUrgent").addEventListener("click", e=>{ qaUrgent=!qaUrgent; e.currentTarget.classList.toggle("on", qaUrgent); });
+  overlay.querySelector("#qaChipKnowledge").addEventListener("click", e=>{ qaKnowledge=!qaKnowledge; e.currentTarget.classList.toggle("on", qaKnowledge); });
+  let qaAssignedTo = [DATA.currentUserId];
+  function renderQaAssignChips(){
+    const wrap = overlay.querySelector("#qaAssignChips");
+    wrap.innerHTML = "";
+    qaAssignedTo.map(id=>collabById(id)).filter(Boolean).forEach(c=>{
+      const chip = document.createElement("div");
+      chip.style.cssText = "display:flex;align-items:center;gap:6px;background:var(--bg-card);border:1px solid var(--border-soft);border-radius:20px;padding:4px 10px 4px 4px;font-size:12.5px;";
+      chip.innerHTML = `<span class="avatar" style="background:${c.color};width:20px;height:20px;font-size:9px;">${escapeHtml(c.name.slice(0,2).toUpperCase())}</span>${escapeHtml(c.name)}<span data-rm="${c.id}" style="cursor:pointer;color:var(--text-sub);margin-left:2px;">✕</span>`;
+      chip.querySelector("[data-rm]").addEventListener("click", ()=>{
+        qaAssignedTo = qaAssignedTo.filter(id=>id!==c.id);
+        if(qaAssignedTo.length===0) qaAssignedTo=[DATA.currentUserId];
+        renderQaAssignChips();
+      });
+      wrap.appendChild(chip);
+    });
+  }
+  renderQaAssignChips();
+  overlay.querySelector("#qaAddAssignee").addEventListener("click", ()=>{
+    const pickOverlay = document.createElement("div");
+    pickOverlay.className = "modal-overlay";
+    pickOverlay.innerHTML = `<div class="modal" style="width:300px;">
+      <h2>Affecter</h2>
+      <div id="qaPickList" style="display:flex;flex-direction:column;gap:4px;margin-bottom:14px;max-height:240px;overflow-y:auto;"></div>
+      <button class="btn small" id="qaPickNew" style="width:100%;justify-content:center;margin-bottom:10px;">+ Nouveau collaborateur</button>
+      <div class="modal-actions"><button class="btn primary" id="qaPickDone">OK</button></div>
+    </div>`;
+    document.body.appendChild(pickOverlay);
+    function drawPick(){
+      const wrap = pickOverlay.querySelector("#qaPickList");
+      wrap.innerHTML = "";
+      DATA.collaborators.forEach(c=>{
+        const row = document.createElement("label");
+        row.style.cssText = "display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px;border-radius:6px;";
+        row.innerHTML = `<input type="checkbox" ${qaAssignedTo.includes(c.id)?"checked":""}><span class="avatar" style="background:${c.color};width:20px;height:20px;font-size:9px;">${escapeHtml(c.name.slice(0,2).toUpperCase())}</span>${escapeHtml(c.name)}`;
+        row.querySelector("input").addEventListener("change", e=>{
+          if(e.target.checked){ if(!qaAssignedTo.includes(c.id)) qaAssignedTo.push(c.id); }
+          else { qaAssignedTo = qaAssignedTo.filter(id=>id!==c.id); }
+          renderQaAssignChips();
+        });
+        wrap.appendChild(row);
+      });
+    }
+    drawPick();
+    pickOverlay.querySelector("#qaPickNew").addEventListener("click", ()=>{
+      const n = prompt("Nom du nouveau collaborateur :"); if(!n||!n.trim()) return;
+      const c = {id:uid("collab"), name:n.trim(), color:PALETTE[DATA.collaborators.length % PALETTE.length], updatedAt:Date.now()};
+      DATA.collaborators.push(c); qaAssignedTo.push(c.id); saveData(); drawPick(); renderQaAssignChips();
+    });
+    pickOverlay.querySelector("#qaPickDone").addEventListener("click", ()=>{
+      if(qaAssignedTo.length===0) qaAssignedTo=[DATA.currentUserId];
+      pickOverlay.remove();
+    });
+    pickOverlay.addEventListener("click", e=>{ if(e.target===pickOverlay) pickOverlay.remove(); });
+  });
   const wsSel = overlay.querySelector("#qaWorkspace");
   wsSel.innerHTML = DATA.workspaces.map(w=>`<option value="${w.id}" ${w.id===currentWsId?"selected":""}>${escapeHtml((w.icon?w.icon+" ":"")+w.name)}</option>`).join("");
   let pendingPhotos = [];
@@ -3277,9 +3371,11 @@ function openQuickAddModal(prefill){
     const wsId = wsSel.value;
     const attMetas = pendingPhotos.map(p=>({id:uid("att"), name:p.name, type:"image", driveFileId:null}));
     const t = {
-      id: uid("task"), workspaceId: wsId, title, description:"",
-      assignedTo:[DATA.currentUserId], today:false, urgent:false, knowledge:false,
-      reminderDate:null, recurrence:null, done:false, doneAt:null,
+      id: uid("task"), workspaceId: wsId, title, description: overlay.querySelector("#qaDesc").value.trim(),
+      assignedTo: qaAssignedTo.length ? qaAssignedTo : [DATA.currentUserId],
+      today: qaToday, urgent: qaUrgent, knowledge: qaKnowledge,
+      reminderDate: overlay.querySelector("#qaReminder").value || null,
+      recurrence:null, done:false, doneAt:null,
       attachments: attMetas,
       process:null, createdAt:Date.now(), updatedAt:Date.now()
     };
