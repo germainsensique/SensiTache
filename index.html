@@ -490,6 +490,7 @@ const BACKUPS_KEY = "sensitache.backupsList";
 let backupRecurrenceMin = Number(localStorage.getItem("sensitache.backupRecurrenceMin")) || 30;
 let backupRetentionCount = Number(localStorage.getItem("sensitache.backupRetentionCount")) || 10;
 let backupTimerHandle = null;
+let corbeilleRetentionDays = Number(localStorage.getItem("sensitache.corbeilleRetentionDays")) || 0; // 0 = never auto-delete
 let deferredInstallPrompt = null;
 const DRIVE_FILENAME = "sensitache-sauvegarde-drive.json";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
@@ -730,6 +731,7 @@ function showSettingsModal(){
         <button class="btn" id="setAI" style="justify-content:flex-start;">🤖 Assistant IA (correction/reformulation)…</button>
         <button class="btn" id="setCollabs" style="justify-content:flex-start;">👥 Collaborateurs</button>
         <button class="btn" id="setBackups" style="justify-content:flex-start;">🗄️ Sauvegardes automatiques…</button>
+        <button class="btn" id="setTrashRetention" style="justify-content:flex-start;">🗑️ Rétention de la Corbeille…</button>
         <button class="btn" id="setUndo" style="justify-content:flex-start;">↩ Annuler la dernière action</button>
         <button class="btn" id="setExport" style="justify-content:flex-start;">⭳ Exporter la sauvegarde</button>
         <button class="btn" id="setImport" style="justify-content:flex-start;">⭱ Importer une sauvegarde</button>
@@ -775,6 +777,7 @@ function showSettingsModal(){
   overlay.querySelector("#setAI").addEventListener("click", ()=>{ overlay.remove(); showAIModal(); });
   overlay.querySelector("#setCollabs").addEventListener("click", ()=>{ overlay.remove(); showCollabManagerModal(); });
   overlay.querySelector("#setBackups").addEventListener("click", ()=>{ overlay.remove(); showBackupsModal(); });
+  overlay.querySelector("#setTrashRetention").addEventListener("click", ()=>{ overlay.remove(); showTrashRetentionModal(); });
   overlay.querySelector("#setUndo").addEventListener("click", ()=>{ undo(); overlay.remove(); });
   overlay.querySelector("#setExport").addEventListener("click", ()=>{ exportAllData(); overlay.remove(); });
   overlay.querySelector("#setImport").addEventListener("click", ()=>{ document.getElementById("importAllFile").click(); overlay.remove(); });
@@ -884,6 +887,17 @@ function cleanupTaskAttachments(task){
     attachDeleteLocal(a.id);
     deleteAttachmentFromDrive(a.driveFileId);
   });
+}
+function purgeOldTrash(){
+  if(!corbeilleRetentionDays || corbeilleRetentionDays<=0) return 0;
+  const cutoff = Date.now() - corbeilleRetentionDays*24*60*60*1000;
+  const toDelete = DATA.tasks.filter(t=> t.done && t.doneAt && t.doneAt < cutoff);
+  if(toDelete.length===0) return 0;
+  const idsToDelete = new Set(toDelete.map(t=>t.id));
+  toDelete.forEach(t=>{ cleanupTaskAttachments(t); DATA.tombstones.tasks[t.id] = Date.now(); });
+  DATA.tasks = DATA.tasks.filter(t=> !idsToDelete.has(t.id));
+  cleanupLinkedShapeRefs(idsToDelete);
+  return toDelete.length;
 }
 function cleanupLinkedShapeRefs(deletedIdsSet){
   DATA.tasks.forEach(t=>{
@@ -2986,6 +3000,42 @@ function showBackupsModal(){
   overlay.querySelector("#bkClose").addEventListener("click", ()=> overlay.remove());
   overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
 }
+function showTrashRetentionModal(){
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal" style="width:340px;">
+      <h2>🗑️ Rétention de la Corbeille</h2>
+      <p style="font-size:12.5px;color:var(--text-sub);">Les tâches archivées depuis plus longtemps que ce délai sont supprimées définitivement (pièces jointes comprises). En changeant ce réglage, tout ce qui dépasse déjà la nouvelle limite est supprimé immédiatement.</p>
+      <select id="trashRetentionSelect" class="fieldselect" style="margin:14px 0;">
+        <option value="0">Jamais (conserver indéfiniment)</option>
+        <option value="7">7 jours</option>
+        <option value="14">14 jours</option>
+        <option value="30">30 jours</option>
+        <option value="60">60 jours</option>
+        <option value="90">90 jours</option>
+      </select>
+      <div class="modal-actions">
+        <button class="btn ghost" id="trCancel">Annuler</button>
+        <button class="btn primary" id="trSave">Enregistrer</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector("#trashRetentionSelect").value = String(corbeilleRetentionDays);
+  overlay.querySelector("#trCancel").addEventListener("click", ()=> overlay.remove());
+  overlay.querySelector("#trSave").addEventListener("click", ()=>{
+    snapshot();
+    corbeilleRetentionDays = Number(overlay.querySelector("#trashRetentionSelect").value);
+    localStorage.setItem("sensitache.corbeilleRetentionDays", String(corbeilleRetentionDays));
+    const deletedCount = purgeOldTrash();
+    saveData(); renderMain();
+    overlay.remove();
+    if(deletedCount>0){
+      alert(deletedCount+" tâche"+(deletedCount>1?"s":"")+" de la Corbeille dépassant désormais la limite "+(deletedCount>1?"ont":"a")+" été supprimée"+(deletedCount>1?"s":"")+" définitivement.");
+    }
+  });
+  overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
+}
 
 async function writeDriveBackup(){
   if(!driveClientId) return;
@@ -3429,13 +3479,10 @@ async function flushDriveBackupNow(){
 function attemptCloseApp(){
   // Browsers only allow window.close() on windows/tabs opened by script,
   // which an installed PWA or a normally-opened tab usually isn't — so this
-  // is best-effort. If it's silently refused, tell the person what to do,
-  // and stop this leftover tab from counting as "an active session" so a
-  // normal browser tab opened afterwards doesn't get a false multi-tab warning.
+  // is best-effort. If it's silently refused, tell the person what to do.
   window.close();
   setTimeout(()=>{
     if(!document.hidden){
-      leaveMultiTabDetection();
       const note = document.createElement("div");
       note.style.cssText = "position:fixed;left:16px;right:16px;bottom:16px;background:var(--bg-card);border:1px solid var(--border-soft);border-radius:10px;padding:12px 14px;font-size:13px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);";
       note.textContent = "Tâche créée ✅ — tu peux fermer l'appli.";
@@ -3484,50 +3531,9 @@ window.addEventListener("beforeinstallprompt", (e)=>{
   deferredInstallPrompt = e;
 });
 renderSidebar();
+if(purgeOldTrash()>0) saveData();
 renderMain();
 updateDriveIndicator();
-
-// A web page can't literally stop a second tab from opening — no browser
-// gives JS that power — but it can detect one and warn immediately, which
-// is what actually matters here: catching the "two tabs silently fighting
-// over localStorage" problem before it causes a lost edit.
-let leaveMultiTabDetection = ()=>{}; // replaced below once the channel exists
-(function setupMultiTabDetection(){
-  if(!("BroadcastChannel" in window)) return;
-  if(isStandaloneApp()) return; // the installed app is meant to be independent — never block it, and never let it trigger the warning on a regular browser tab either
-  const tabId = uid("tab");
-  const channel = new BroadcastChannel("sensitache-tabs");
-  let warned = false;
-  let active = true;
-  leaveMultiTabDetection = ()=>{ active = false; try{ channel.close(); }catch(e){} };
-  function showMultiTabWarning(){
-    if(warned) return;
-    warned = true;
-    const overlay = document.createElement("div");
-    overlay.style.cssText = "position:fixed;inset:0;background:rgba(10,11,14,.95);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;";
-    overlay.innerHTML = `
-      <div style="max-width:420px;text-align:center;background:var(--bg-card);border:1px solid var(--border-soft);border-radius:14px;padding:26px;">
-        <h2 style="margin:0 0 12px;font-size:17px;">⚠️ SensiTâche est déjà ouvert ailleurs</h2>
-        <p style="color:var(--text-sub);font-size:13.5px;line-height:1.6;margin-bottom:8px;">Un autre onglet ou une autre fenêtre de ce navigateur a déjà l'application ouverte. Cet onglet-ci doit être fermé pour éviter de perdre des modifications.</p>
-        <p id="mtFallback" style="color:var(--danger);font-size:12px;line-height:1.5;margin-bottom:16px;display:none;">Ton navigateur ne permet pas à la page de se fermer elle-même — ferme cet onglet manuellement (croix de l'onglet, ou Ctrl+W / Cmd+W).</p>
-        <button class="btn primary" id="mtClose" style="width:100%;justify-content:center;">Fermer cet onglet</button>
-      </div>`;
-    document.body.appendChild(overlay);
-    overlay.querySelector("#mtClose").addEventListener("click", ()=>{
-      window.close();
-      setTimeout(()=>{ if(!document.hidden) overlay.querySelector("#mtFallback").style.display = "block"; }, 300);
-    });
-  }
-  channel.onmessage = (e)=>{
-    if(!active || !e.data) return;
-    if(e.data.type==="ping"){
-      channel.postMessage({type:"pong", tabId});
-    } else if(e.data.type==="pong" && e.data.tabId!==tabId){
-      showMultiTabWarning();
-    }
-  };
-  channel.postMessage({type:"ping", tabId});
-})();
 
 // The service worker was causing the app to stop responding for some users
 // (a broken service worker can get stuck controlling the page even after
