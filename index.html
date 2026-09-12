@@ -579,6 +579,7 @@ let currentWsId = (function(){
 })();
 let currentTab = localStorage.getItem("sensitache.lastTab") || "tasks";
 let openTaskId = null;
+let suppressNextPopstate = false;
 
 /* =========================================================
    SIDEBAR
@@ -1303,6 +1304,8 @@ function renderArchiveTab(el){
 ========================================================= */
 function openTaskDrawer(id){
   openTaskId = id;
+  localStorage.setItem("sensitache.openTaskId", id);
+  history.pushState({sensitacheModal:"drawer"}, "", location.href);
   const t = DATA.tasks.find(x=>x.id===id); if(!t) return;
   document.getElementById("overlayBg").classList.add("show");
   document.getElementById("drawer").classList.add("show");
@@ -1340,6 +1343,8 @@ function closeDrawer(){
   document.getElementById("drawer").classList.remove("fullscreen");
   removeInlineProcessPreview();
   openTaskId = null;
+  localStorage.removeItem("sensitache.openTaskId");
+  if(history.state && history.state.sensitacheModal==="drawer"){ suppressNextPopstate = true; history.back(); }
   renderMain();
 }
 function removeInlineProcessPreview(){
@@ -2004,6 +2009,8 @@ let procArrowDraft = null, procDragState = null, procPanState = null;
 
 function openProcessEditor(t){
   PROC = t.process;
+  localStorage.setItem("sensitache.procEditorOpen", "1");
+  history.pushState({sensitacheModal:"proc"}, "", location.href);
   document.getElementById("procNameInput").value = PROC.name || "Processus";
   procSelectedShapeId = null; procSelectedArrowId = null; procActiveTool="select"; procZoom=1;
   document.getElementById("procOverlay").classList.add("show");
@@ -2044,11 +2051,14 @@ document.getElementById("btnOpenProcess").addEventListener("click", ()=>{
   renderProcessLinkRow(t);
   openProcessEditor(t);
 });
-document.getElementById("btnProcClose").addEventListener("click", ()=>{
+function closeProcessEditor(){
   document.getElementById("procOverlay").classList.remove("show");
+  localStorage.removeItem("sensitache.procEditorOpen");
   saveData();
   const t = curTask(); if(t){ renderMain(); renderProcessLinkRow(t); }
-});
+  if(history.state && history.state.sensitacheModal==="proc"){ suppressNextPopstate = true; history.back(); }
+}
+document.getElementById("btnProcClose").addEventListener("click", closeProcessEditor);
 document.querySelectorAll(".proc-toolbar .tbtn[data-ptool]").forEach(btn=>{
   btn.addEventListener("click", ()=> setProcTool(btn.dataset.ptool));
 });
@@ -2278,6 +2288,8 @@ function procAssignShapeToCollaborator(shape, collabId){
 function procOpenLinkedTask(taskId){
   const lt = DATA.tasks.find(t=>t.id===taskId); if(!lt) return;
   document.getElementById("procOverlay").classList.remove("show");
+  localStorage.removeItem("sensitache.procEditorOpen");
+  if(history.state && history.state.sensitacheModal==="proc"){ suppressNextPopstate = true; history.back(); }
   currentWsId = lt.workspaceId; currentTab = "tasks";
   document.querySelectorAll(".tab").forEach(x=> x.classList.toggle("active", x.dataset.tab==="tasks"));
   renderSidebar(); renderMain();
@@ -3731,6 +3743,40 @@ document.querySelectorAll(".tab").forEach(x=> x.classList.toggle("active", x.dat
 if(purgeOldTrash()>0) saveData();
 renderMain();
 updateDriveIndicator();
+
+// Restore whichever task drawer (and process editor within it) was open
+// before the page refreshed, so a reload doesn't kick the person back out
+// to the task list while they're in the middle of working on something.
+// Intercept the phone's back button (and browser back) so it closes the
+// process editor or task drawer — just like clicking their own close
+// button — instead of navigating away from the app entirely.
+window.addEventListener("popstate", ()=>{
+  if(suppressNextPopstate){ suppressNextPopstate = false; return; }
+  if(document.getElementById("procOverlay").classList.contains("show")){
+    closeProcessEditor();
+    return;
+  }
+  if(openTaskId){
+    closeDrawer();
+    return;
+  }
+});
+
+(function restoreOpenTask(){
+  const savedTaskId = localStorage.getItem("sensitache.openTaskId");
+  if(!savedTaskId) return;
+  const t = DATA.tasks.find(x=>x.id===savedTaskId);
+  if(!t) { localStorage.removeItem("sensitache.openTaskId"); return; }
+  if(t.workspaceId !== currentWsId){
+    currentWsId = t.workspaceId; currentTab = "tasks";
+    document.querySelectorAll(".tab").forEach(x=> x.classList.toggle("active", x.dataset.tab==="tasks"));
+    renderSidebar(); renderMain();
+  }
+  openTaskDrawer(savedTaskId);
+  if(localStorage.getItem("sensitache.procEditorOpen")==="1" && t.process){
+    openProcessEditor(t);
+  }
+})();
 
 // The service worker was causing the app to stop responding for some users
 // (a broken service worker can get stuck controlling the page even after
