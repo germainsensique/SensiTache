@@ -203,8 +203,8 @@
   }
 
   @media (min-width: 861px){
-    #taskGroups{ display:grid; grid-template-columns: 1fr 1fr; column-gap:16px; align-items:start; }
-    #taskGroups .task-group-label{ grid-column: 1 / -1; }
+    .two-col-layout{ display:flex; gap:20px; align-items:flex-start; }
+    .task-col{ flex:1; min-width:0; }
   }
 
   @media (max-width: 860px){
@@ -466,6 +466,7 @@
           <div style="display:flex;gap:4px;margin-bottom:14px;">
             <button class="btn small" id="procSideTabLegend" style="flex:1;justify-content:center;">Légende</button>
             <button class="btn small" id="procSideTabTasks" style="flex:1;justify-content:center;">Tâches liées</button>
+            <button class="btn small" id="procSideTabSummary" style="flex:1;justify-content:center;">Résumé</button>
           </div>
           <div id="procSideLegendPane">
             <h3>Légende des couleurs</h3>
@@ -475,6 +476,10 @@
           <div id="procSideTasksPane" style="display:none;">
             <h3>Tâches assignées dans ce processus</h3>
             <div id="procTasksList"></div>
+          </div>
+          <div id="procSideSummaryPane" style="display:none;">
+            <h3>Résumé du processus</h3>
+            <div id="procSummaryList"></div>
           </div>
         </div>
       </div>
@@ -1056,26 +1061,48 @@ function renderTasksTab(el){
 }
 function renderTasksGroupedList(){
   const groupsEl = document.getElementById("taskGroups");
-  const tasks = myVisibleTasks().slice().sort((a,b)=>{
-    const ca = sortCategory(a), cb = sortCategory(b);
-    if(ca!==cb) return ca-cb;
-    return (b.updatedAt||0)-(a.updatedAt||0);
-  });
-  groupsEl.innerHTML = "";
+  const tasks = myVisibleTasks();
   if(tasks.length===0){
+    groupsEl.className = "";
     groupsEl.innerHTML = "<div class=\"empty-hint\">Aucune tache active qui te soit affectee pour le moment. Regarde aussi l onglet Collaboration.</div>";
-  } else {
-    let lastCat = null;
-    tasks.forEach(t=>{
-      const cat = sortCategory(t);
-      if(cat!==lastCat){
-        const label = document.createElement("div");
-        label.className = "task-group-label"; label.textContent = CATEGORY_LABEL[cat];
-        groupsEl.appendChild(label);
-        lastCat = cat;
-      }
-      groupsEl.appendChild(renderTaskRow(t));
+    return;
+  }
+  const buckets = {1:[],2:[],3:[],4:[],5:[],6:[]};
+  tasks.forEach(t=> buckets[sortCategory(t)].push(t));
+  Object.keys(buckets).forEach(k=> buckets[k].sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)));
+
+  if(isPhoneSize()){
+    groupsEl.className = "";
+    groupsEl.innerHTML = "";
+    [3,4,1,2,5,6].forEach(cat=>{
+      const list = buckets[cat];
+      if(list.length===0) return;
+      const label = document.createElement("div");
+      label.className = "task-group-label"; label.textContent = CATEGORY_LABEL[cat];
+      groupsEl.appendChild(label);
+      list.forEach(t=> groupsEl.appendChild(renderTaskRow(t)));
     });
+  } else {
+    groupsEl.className = "two-col-layout";
+    groupsEl.innerHTML = `<div id="taskColLeft" class="task-col"></div><div id="taskColRight" class="task-col"></div>`;
+    const left = document.getElementById("taskColLeft");
+    const right = document.getElementById("taskColRight");
+    function fillCol(container, cat, label){
+      const list = buckets[cat];
+      if(list.length===0) return;
+      if(label){
+        const l = document.createElement("div");
+        l.className = "task-group-label"; l.textContent = label;
+        container.appendChild(l);
+      }
+      list.forEach(t=> container.appendChild(renderTaskRow(t)));
+    }
+    fillCol(left, 3, "Aujourd'hui");
+    fillCol(left, 1, "Planifié");
+    fillCol(left, 5, "Rapide");
+    fillCol(right, 4, "Urgences");
+    fillCol(right, 2, "Récurrence");
+    fillCol(right, 6, null); // "le reste" intentionally shown without a header
   }
 }
 
@@ -2262,16 +2289,22 @@ function procShowFloatToolbarForShape(id){
   bar.className="pfloat-toolbar"; bar.id="procFloatToolbar";
   bar.style.left=shape.x+"px"; bar.style.top=(shape.y-46)+"px";
   bar.style.flexWrap="wrap"; bar.style.maxWidth="290px";
+  bar.style.flexDirection="column"; bar.style.alignItems="stretch";
   const collabOpts = `<option value="">Aucun collaborateur</option>` + DATA.collaborators.map(c=>`<option value="${c.id}" ${shape.collabTag===c.id?"selected":""}>${escapeHtml(c.name)}</option>`).join("");
   bar.innerHTML = `
-    <input type="color" class="swatch-input" id="pftColor" value="${shape.color&&shape.color.startsWith('#')?shape.color:'#ffd966'}">
-    <select id="pftTag" title="Affecter un collaborateur : crée automatiquement une tâche pour lui dans SensiTâche" style="font-size:12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg-panel-2);color:var(--text);">${collabOpts}</select>
-    ${shape.linkedTaskId ? '<button class="btn small" id="pftDetail">📝 Détail</button><button class="btn small" id="pftOpenTask">Ouvrir la tâche →</button>' : ''}
-    <button class="btn small" id="pftFix" title="Corriger les fautes">✓</button>
-    <button class="btn small" id="pftLink">Lien</button>
-    <button class="btn small danger" id="pftDelete">Suppr.</button>
+    <div style="display:flex;flex-wrap:wrap;gap:5px;">
+      <input type="color" class="swatch-input" id="pftColor" value="${shape.color&&shape.color.startsWith('#')?shape.color:'#ffd966'}">
+      <select id="pftTag" title="Affecter un collaborateur : crée automatiquement une tâche pour lui dans SensiTâche" style="font-size:12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg-panel-2);color:var(--text);">${collabOpts}</select>
+      ${shape.linkedTaskId ? '<button class="btn small" id="pftDetail">📝 Détail</button><button class="btn small" id="pftOpenTask">Ouvrir la tâche →</button>' : ''}
+      <button class="btn small" id="pftFix" title="Corriger les fautes">✓</button>
+      <button class="btn small" id="pftLink">Lien</button>
+      <button class="btn small danger" id="pftDelete">Suppr.</button>
+    </div>
+    <textarea id="pftDesc" placeholder="Description de cette étape (visible uniquement quand la forme est sélectionnée)…" style="margin-top:6px;width:270px;min-height:50px;font-size:12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg-panel-2);color:var(--text);padding:6px 8px;resize:vertical;">${escapeHtml(shape.description||"")}</textarea>
   `;
   document.getElementById("procShapesLayer").appendChild(bar);
+  bar.querySelector("#pftDesc").addEventListener("pointerdown", e=> e.stopPropagation());
+  bar.querySelector("#pftDesc").addEventListener("input", e=>{ shape.description = e.target.value; saveData(); });
   bar.querySelector("#pftColor").addEventListener("input", e=>{
     shape.color=e.target.value; document.querySelector('.pshape[data-id="'+id+'"] .pshapeBg').style.background=shape.color; saveData();
   });
@@ -2556,12 +2589,53 @@ document.getElementById("btnProcAddLegend").addEventListener("click", ()=>{
 function setProcSideTab(tab){
   document.getElementById("procSideLegendPane").style.display = tab==="legend" ? "block" : "none";
   document.getElementById("procSideTasksPane").style.display = tab==="tasks" ? "block" : "none";
+  document.getElementById("procSideSummaryPane").style.display = tab==="summary" ? "block" : "none";
   document.getElementById("procSideTabLegend").classList.toggle("tabactive", tab==="legend");
   document.getElementById("procSideTabTasks").classList.toggle("tabactive", tab==="tasks");
+  document.getElementById("procSideTabSummary").classList.toggle("tabactive", tab==="summary");
   if(tab==="tasks") renderProcTasksList();
+  if(tab==="summary") renderProcSummary();
 }
 document.getElementById("procSideTabLegend").addEventListener("click", ()=> setProcSideTab("legend"));
 document.getElementById("procSideTabTasks").addEventListener("click", ()=> setProcSideTab("tasks"));
+document.getElementById("procSideTabSummary").addEventListener("click", ()=> setProcSideTab("summary"));
+
+/* Follows the arrows to produce a natural "step 1, step 2…" reading order
+   (starting from shapes with no incoming arrow), falling back to a simple
+   top-to-bottom / left-to-right position order for anything disconnected. */
+function computeFlowOrder(shapes, arrows){
+  if(!shapes || shapes.length===0) return [];
+  const incoming = {}; shapes.forEach(s=> incoming[s.id]=0);
+  (arrows||[]).forEach(a=>{ if(incoming[a.to.shapeId]!==undefined) incoming[a.to.shapeId]++; });
+  const outgoingMap = {};
+  (arrows||[]).forEach(a=>{ (outgoingMap[a.from.shapeId] = outgoingMap[a.from.shapeId]||[]).push(a.to.shapeId); });
+  const byPos = (a,b)=> (a.y-b.y) || (a.x-b.x);
+  const visited = new Set(), order = [];
+  function visit(id){
+    if(visited.has(id)) return;
+    visited.add(id);
+    const shape = shapes.find(s=>s.id===id);
+    if(shape) order.push(shape);
+    const nexts = (outgoingMap[id]||[]).map(nid=>shapes.find(s=>s.id===nid)).filter(Boolean).sort(byPos);
+    nexts.forEach(s=> visit(s.id));
+  }
+  const starts = shapes.filter(s=> incoming[s.id]===0).sort(byPos);
+  (starts.length?starts:shapes.slice().sort(byPos)).forEach(s=> visit(s.id));
+  shapes.slice().sort(byPos).forEach(s=>{ if(!visited.has(s.id)) visit(s.id); }); // leftover cycles/isolated shapes
+  return order;
+}
+function renderProcSummary(){
+  const wrap = document.getElementById("procSummaryList");
+  if(!wrap) return;
+  const order = computeFlowOrder(PROC.shapes, PROC.arrows);
+  if(order.length===0){ wrap.innerHTML = '<div style="font-size:12px;color:var(--text-dim);">Aucune étape dans ce processus.</div>'; return; }
+  wrap.innerHTML = order.map((s,i)=>`
+    <div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border-light);">
+      <div style="font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:3px;">${i+1}. ${escapeHtml(stripHtml(s.content||"(sans titre)"))}</div>
+      ${s.description ? '<div style="font-size:11.5px;color:var(--text-dim);white-space:pre-wrap;line-height:1.4;">'+escapeHtml(s.description)+'</div>' : ''}
+    </div>
+  `).join("");
+}
 
 function renderProcTasksList(){
   const wrap = document.getElementById("procTasksList");
@@ -2624,13 +2698,55 @@ function procBoundingBox(){
   PROC.shapes.forEach(s=>{ minX=Math.min(minX,s.x); minY=Math.min(minY,s.y); maxX=Math.max(maxX,s.x+s.w); maxY=Math.max(maxY,s.y+s.h); });
   const pad=60; return {x:Math.max(0,minX-pad), y:Math.max(0,minY-pad), w:(maxX-minX)+pad*2, h:(maxY-minY)+pad*2};
 }
+async function buildProcSidePanelCanvas(){
+  const holder = document.createElement("div");
+  holder.style.cssText = "position:fixed;left:-99999px;top:0;width:520px;background:#EFEEE8;padding:32px;font-family:'Segoe UI',Arial,sans-serif;color:#1B1D23;box-sizing:border-box;";
+  const order = computeFlowOrder(PROC.shapes, PROC.arrows);
+  let html = `<h1 style="font-size:24px;margin:0 0 22px;">${escapeHtml(PROC.name||"Processus")}</h1>`;
+  html += `<h2 style="font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#767A85;margin:0 0 12px;">Étapes du processus</h2>`;
+  if(order.length===0){
+    html += `<p style="font-size:13px;color:#767A85;">Aucune étape.</p>`;
+  } else {
+    order.forEach((s,i)=>{
+      html += `<div style="margin-bottom:16px;">
+        <div style="font-size:14.5px;font-weight:700;margin-bottom:3px;">${i+1}. ${escapeHtml(stripHtml(s.content||"(sans titre)"))}</div>
+        ${s.description ? '<div style="font-size:12.5px;color:#444;white-space:pre-wrap;line-height:1.45;">'+escapeHtml(s.description)+'</div>' : ''}
+      </div>`;
+    });
+  }
+  if(PROC.legend && PROC.legend.length){
+    html += `<h2 style="font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#767A85;margin:26px 0 12px;">Légende</h2>`;
+    PROC.legend.forEach(item=>{
+      html += `<div style="display:flex;gap:9px;align-items:flex-start;margin-bottom:12px;">
+        <span style="width:16px;height:16px;border-radius:4px;background:${item.color};flex-shrink:0;margin-top:2px;"></span>
+        <div><div style="font-size:13.5px;font-weight:600;">${escapeHtml(item.label||"")}</div>${item.detail?'<div style="font-size:12px;color:#666;">'+escapeHtml(item.detail)+'</div>':''}</div>
+      </div>`;
+    });
+  }
+  holder.innerHTML = html;
+  document.body.appendChild(holder);
+  try{
+    return await html2canvas(holder, {backgroundColor:"#EFEEE8", scale:2});
+  } finally {
+    document.body.removeChild(holder);
+  }
+}
 async function procExport(kind){
   procRemoveFloatToolbar();
   document.querySelectorAll(".panchor").forEach(a=>a.style.opacity=0);
   const saved = procBoardEl.style.transform; procBoardEl.style.transform="none";
   const box = procBoundingBox();
   try{
-    const canvas = await html2canvas(procBoardEl, {backgroundColor:"#EFEEE8", x:box.x, y:box.y, width:box.w, height:box.h, scale:2, useCORS:true});
+    const boardCanvas = await html2canvas(procBoardEl, {backgroundColor:"#EFEEE8", x:box.x, y:box.y, width:box.w, height:box.h, scale:2, useCORS:true});
+    const panelCanvas = await buildProcSidePanelCanvas();
+    const totalW = boardCanvas.width + panelCanvas.width;
+    const totalH = Math.max(boardCanvas.height, panelCanvas.height);
+    const canvas = document.createElement("canvas");
+    canvas.width = totalW; canvas.height = totalH;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#EFEEE8"; ctx.fillRect(0,0,totalW,totalH);
+    ctx.drawImage(boardCanvas, 0, 0);
+    ctx.drawImage(panelCanvas, boardCanvas.width, 0);
     const name = (curTask()? curTask().title : "processus") || "processus";
     if(kind==="png"){
       canvas.toBlob(blob=>{ const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=name+".png"; a.click(); URL.revokeObjectURL(url); });
