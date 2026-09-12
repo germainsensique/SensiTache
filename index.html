@@ -46,6 +46,7 @@
   .btn.chip.on.flame{background:rgba(232,129,58,.2);border-color:var(--flame);color:#F0A46B;}
   .btn.chip.on.urgent{background:rgba(224,85,95,.2);border-color:var(--urgent);color:#F0838C;}
   .btn.chip.on.knowledge{background:rgba(31,169,113,.2);border-color:var(--knowledge);color:#5FD9A4;}
+  .btn.chip.on.quick{background:rgba(58,160,214,.2);border-color:var(--clock);color:#7CC6E8;}
 
   /* ---------- Sidebar (dark, on the app) ---------- */
   .sidebar{width:230px; flex-shrink:0; background:var(--bg-app); color:var(--text); display:flex; flex-direction:column; padding:16px 10px;}
@@ -91,6 +92,7 @@
   .badge.urgent{background:rgba(224,85,95,.18); color:#F0838C;}
   .badge.clock{background:rgba(58,160,214,.18); color:var(--clock);}
   .badge.recur{background:rgba(122,92,250,.18); color:var(--recur);}
+  .badge.quick{background:rgba(58,160,214,.18); color:var(--clock);}
   .badge.knowledge{background:rgba(31,169,113,.18); color:#5FD9A4;}
   .badge.proc{background:rgba(255,255,255,.12); color:var(--accent);}
   .badge.attach{background:var(--bg-panel-2); color:var(--text-sub); font-size:10px; font-weight:700; width:auto; padding:0 6px;}
@@ -200,6 +202,11 @@
     .presizeHandle{width:20px;height:20px;right:-9px;bottom:-9px;display:block;}
   }
 
+  @media (min-width: 861px){
+    #taskGroups{ display:grid; grid-template-columns: 1fr 1fr; column-gap:16px; align-items:start; }
+    #taskGroups .task-group-label{ grid-column: 1 / -1; }
+  }
+
   @media (max-width: 860px){
     .sidebar{position:fixed; z-index:70; height:100%; width:min(82vw,300px); transform:translateX(-100%); transition:transform .15s;}
     .sidebar.show{transform:translateX(0);}
@@ -306,7 +313,10 @@
       <button class="icon-btn" id="btnDrawerFullscreen" title="Plein écran"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
     </div>
     <div class="drawer-body">
-      <input id="taskTitleInput" placeholder="Titre de la tâche">
+      <div style="display:flex; gap:6px; align-items:center; margin-bottom:4px;">
+        <input id="taskTitleInput" placeholder="Titre de la tâche" style="flex:1; width:auto; min-width:0;">
+        <button class="btn small" id="btnTitleFix" title="Corriger les fautes">✓</button>
+      </div>
       <textarea id="taskDescInput" placeholder="Description…"></textarea>
       <div style="display:flex;gap:6px;margin:-8px 0 16px;">
         <button class="btn small" id="btnDescFix">✓ Corriger les fautes</button>
@@ -318,6 +328,7 @@
         <div class="chiprow">
           <button class="btn chip small flame" id="chipToday">🔥 Aujourd'hui</button>
           <button class="btn chip small urgent" id="chipUrgent">🎯 Urgent</button>
+          <button class="btn chip small quick" id="chipQuick">⚡ Rapide</button>
           <button class="btn chip small knowledge" id="chipKnowledge">📚 Base de connaissances</button>
         </div>
       </div>
@@ -556,8 +567,12 @@ document.addEventListener("keydown", (e)=>{
 /* =========================================================
    STATE
 ========================================================= */
-let currentWsId = DATA.workspaces[0] ? DATA.workspaces[0].id : null;
-let currentTab = "tasks";
+let currentWsId = (function(){
+  const saved = localStorage.getItem("sensitache.lastWsId");
+  if(saved && DATA.workspaces.find(w=>w.id===saved)) return saved;
+  return DATA.workspaces[0] ? DATA.workspaces[0].id : null;
+})();
+let currentTab = localStorage.getItem("sensitache.lastTab") || "tasks";
 let openTaskId = null;
 
 /* =========================================================
@@ -930,9 +945,10 @@ function sortCategory(t){
   if(recurrenceIsDue(t)) return 2;
   if(t.today) return 3;
   if(t.urgent) return 4;
-  return 5;
+  if(t.quick) return 5;
+  return 6;
 }
-const CATEGORY_LABEL = {1:"Rappel", 2:"Récurrence", 3:"Aujourd'hui", 4:"Urgent", 5:"Le reste"};
+const CATEGORY_LABEL = {1:"Rappel", 2:"Récurrence", 3:"Aujourd'hui", 4:"Urgent", 5:"Rapide", 6:"Le reste"};
 function addDays(dateStr, n){ const d=new Date(dateStr+"T00:00:00"); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
 function addYears(dateStr, n){ const d=new Date(dateStr+"T00:00:00"); d.setFullYear(d.getFullYear()+n); return d.toISOString().slice(0,10); }
 function nthWeekdayOfMonth(year, month, weekday, nth){
@@ -1009,7 +1025,8 @@ function iconSvg(name){
     clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
     recur:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12a8 8 0 0114-5.3M20 12a8 8 0 01-14 5.3"/><path d="M18 3v4h-4M6 21v-4h4"/></svg>',
     book:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 012-2h12v16H6a2 2 0 00-2 2V5z"/><path d="M18 3v16"/></svg>',
-    link:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 15l6-6M10 6l1-1a4 4 0 116 6l-1 1M14 18l-1 1a4 4 0 11-6-6l1-1"/></svg>'
+    link:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 15l6-6M10 6l1-1a4 4 0 116 6l-1 1M14 18l-1 1a4 4 0 11-6-6l1-1"/></svg>',
+    bolt:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>'
   };
   return icons[name]||"";
 }
@@ -1018,6 +1035,8 @@ function iconSvg(name){
    MAIN CONTENT DISPATCH
 ========================================================= */
 function renderMain(){
+  if(currentWsId) localStorage.setItem("sensitache.lastWsId", currentWsId);
+  localStorage.setItem("sensitache.lastTab", currentTab);
   const ws = DATA.workspaces.find(w=>w.id===currentWsId);
   document.getElementById("wsTitle").textContent = ws ? ((ws.icon?ws.icon+" ":"")+ws.name) : "Aucun espace";
   const el = document.getElementById("mainContent");
@@ -1116,7 +1135,7 @@ function createAndOpenNewTask(){
   snapshot();
   const t = {
     id: uid("task"), workspaceId: currentWsId, title: "", description:"",
-    assignedTo: [DATA.currentUserId], today:false, urgent:false, knowledge:false,
+    assignedTo: [DATA.currentUserId], today:false, urgent:false, quick:false, knowledge:false,
     reminderDate:null, recurrence:null, done:false, doneAt:null,
     attachments:[], process:null, createdAt:Date.now(), updatedAt:Date.now()
   };
@@ -1128,13 +1147,13 @@ function createAndOpenNewTask(){
 function renderTaskRow(t){
   const row = document.createElement("div");
   row.className = "task-row";
-  const collabs = taskCollaborators(t);
   const today = todayStr();
   let badges = "";
   if(t.reminderDate) badges += `<span class="badge clock" title="Rappel : ${t.reminderDate}">${iconSvg("clock")}</span>`;
   if(t.recurrence) badges += `<span class="badge recur" title="Récurrence">${iconSvg("recur")}</span>`;
   if(t.today) badges += `<span class="badge flame" title="Aujourd'hui">${iconSvg("flame")}</span>`;
   if(t.urgent) badges += `<span class="badge urgent" title="Urgent">${iconSvg("target")}</span>`;
+  if(t.quick) badges += `<span class="badge quick" title="Rapide">${iconSvg("bolt")}</span>`;
   if(t.knowledge) badges += `<span class="badge knowledge" title="Base de connaissances">${iconSvg("book")}</span>`;
   if(t.process) badges += `<span class="badge proc" title="Processus associé">${iconSvg("link")}</span>`;
   if(t.attachments && t.attachments.length) badges += `<span class="badge attach" title="Documents joints">${t.attachments.length}📎</span>`;
@@ -1142,10 +1161,6 @@ function renderTaskRow(t){
     <div class="task-check" data-check></div>
     <div class="task-title">${escapeHtml(t.title)}</div>
     <div class="badges">${badges}</div>
-    <div class="assignee-chip" style="width:auto;max-width:150px;">
-      <div style="display:flex;align-items:center;">${assigneeAvatarsHtml(t)}</div>
-      ${collabs.length===1 ? `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(collabs[0].name)}</span>` : (collabs.length>1 ? `<span style="font-size:11px;color:var(--text-sub);">${collabs.length} pers.</span>` : "")}
-    </div>
   `;
   row.querySelector("[data-check]").addEventListener("click", (e)=>{ e.stopPropagation(); toggleTaskDone(t); });
   row.addEventListener("click", ()=> openTaskDrawer(t.id));
@@ -1268,6 +1283,7 @@ function openTaskDrawer(id){
   document.getElementById("taskDescInput").value = t.description||"";
   document.getElementById("chipToday").classList.toggle("on", !!t.today);
   document.getElementById("chipUrgent").classList.toggle("on", !!t.urgent);
+  document.getElementById("chipQuick").classList.toggle("on", !!t.quick);
   document.getElementById("chipKnowledge").classList.toggle("on", !!t.knowledge);
   document.getElementById("reminderInput").value = t.reminderDate||"";
   document.getElementById("recurFreq").value = t.recurrence ? t.recurrence.freq : "";
@@ -1290,6 +1306,8 @@ function openTaskDrawer(id){
   removeInlineProcessPreview();
 }
 function closeDrawer(){
+  const t = curTask();
+  if(t && (!t.assignedTo || t.assignedTo.length===0)){ t.assignedTo = [DATA.currentUserId]; t.updatedAt = Date.now(); saveData(); }
   document.getElementById("overlayBg").classList.remove("show");
   document.getElementById("drawer").classList.remove("show");
   document.getElementById("drawer").classList.remove("fullscreen");
@@ -1393,6 +1411,10 @@ document.getElementById("chipUrgent").addEventListener("click", e=>{
   const t = curTask(); if(!t) return; snapshot(); t.urgent = !t.urgent; t.updatedAt=Date.now(); saveData();
   e.target.classList.toggle("on", t.urgent);
 });
+document.getElementById("chipQuick").addEventListener("click", e=>{
+  const t = curTask(); if(!t) return; snapshot(); t.quick = !t.quick; t.updatedAt=Date.now(); saveData();
+  e.target.classList.toggle("on", t.quick);
+});
 document.getElementById("chipKnowledge").addEventListener("click", e=>{
   const t = curTask(); if(!t) return; snapshot(); t.knowledge = !t.knowledge; t.updatedAt=Date.now(); saveData();
   e.target.classList.toggle("on", t.knowledge);
@@ -1410,7 +1432,6 @@ function renderAssignChips(t){
     chip.innerHTML = `<span class="avatar" style="background:${c.color};width:20px;height:20px;font-size:9px;">${escapeHtml(c.name.slice(0,2).toUpperCase())}</span>${escapeHtml(c.name)}<span data-remove="${c.id}" style="cursor:pointer;color:var(--text-sub);margin-left:2px;">✕</span>`;
     chip.querySelector("[data-remove]").addEventListener("click", ()=>{
       t.assignedTo = (t.assignedTo||[]).filter(id=>id!==c.id);
-      if(t.assignedTo.length===0) t.assignedTo = [DATA.currentUserId];
       t.updatedAt = Date.now(); saveData(); renderAssignChips(t);
     });
     wrap.appendChild(chip);
@@ -2209,7 +2230,7 @@ function procAssignShapeToCollaborator(shape, collabId){
       const nt = {
         id: uid("task"), workspaceId: parentTask ? parentTask.workspaceId : currentWsId,
         title, description: parentTask ? ("Étape du processus « "+parentTask.title+" »") : "",
-        assignedTo: [collabId], today:false, urgent:false, knowledge:false,
+        assignedTo: [collabId], today:false, urgent:false, quick:false, knowledge:false,
         reminderDate:null, recurrence:null, done:false, doneAt:null,
         attachments:[], process:null, createdAt:Date.now(), updatedAt:Date.now(),
         linkedFromTaskId: parentTask ? parentTask.id : null, linkedShapeId: shape.id
@@ -2246,6 +2267,7 @@ function procShowFloatToolbarForShape(id){
     <input type="color" class="swatch-input" id="pftColor" value="${shape.color&&shape.color.startsWith('#')?shape.color:'#ffd966'}">
     <select id="pftTag" title="Affecter un collaborateur : crée automatiquement une tâche pour lui dans SensiTâche" style="font-size:12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg-panel-2);color:var(--text);">${collabOpts}</select>
     ${shape.linkedTaskId ? '<button class="btn small" id="pftDetail">📝 Détail</button><button class="btn small" id="pftOpenTask">Ouvrir la tâche →</button>' : ''}
+    <button class="btn small" id="pftFix" title="Corriger les fautes">✓</button>
     <button class="btn small" id="pftLink">Lien</button>
     <button class="btn small danger" id="pftDelete">Suppr.</button>
   `;
@@ -2255,6 +2277,33 @@ function procShowFloatToolbarForShape(id){
   });
   bar.querySelector("#pftTag").addEventListener("change", e=>{
     procAssignShapeToCollaborator(shape, e.target.value || null);
+  });
+  bar.querySelector("#pftFix").addEventListener("pointerdown", async e=>{
+    e.stopPropagation();
+    const fixBtn = e.currentTarget;
+    const contentEl = document.querySelector('.pshape[data-id="'+id+'"] .pshapeContent');
+    const plainText = stripHtml(shape.content||"").trim();
+    if(!plainText){ alert("Cette forme n'a pas de texte à corriger."); return; }
+    const original = fixBtn.textContent;
+    fixBtn.textContent = "…"; fixBtn.disabled = true;
+    try{
+      const result = await callClaudeText(plainText, "fix");
+      shape.content = escapeHtml(result);
+      contentEl.innerHTML = shape.content;
+      saveData();
+      if(shape.linkedTaskId){
+        const lt = DATA.tasks.find(t=>t.id===shape.linkedTaskId);
+        if(lt){ lt.title = result; lt.updatedAt = Date.now(); saveData(); }
+      }
+    }catch(err){
+      if(err.message && err.message.includes("Aucune clé API")){
+        if(confirm(err.message+"\nOuvrir les paramètres maintenant ?")) showAIModal();
+      } else {
+        alert("Échec : "+err.message);
+      }
+    }finally{
+      fixBtn.textContent = original; fixBtn.disabled = false;
+    }
   });
   const openBtn = bar.querySelector("#pftOpenTask");
   if(openBtn) openBtn.addEventListener("pointerdown", e=>{ e.stopPropagation(); procOpenLinkedTask(shape.linkedTaskId); });
@@ -3272,6 +3321,32 @@ async function runDescriptionAI(mode){
 }
 document.getElementById("btnDescFix").addEventListener("click", ()=> runDescriptionAI("fix"));
 document.getElementById("btnDescRephrase").addEventListener("click", ()=> runDescriptionAI("rephrase"));
+async function runTitleFix(){
+  const t = curTask(); if(!t) return;
+  const btn = document.getElementById("btnTitleFix");
+  const input = document.getElementById("taskTitleInput");
+  const text = input.value.trim();
+  if(!text){ alert("Écris d'abord un titre."); return; }
+  const originalLabel = btn.textContent;
+  btn.textContent = "…"; btn.disabled = true;
+  try{
+    const result = await callClaudeText(text, "fix");
+    snapshot();
+    input.value = result;
+    t.title = result;
+    t.updatedAt = Date.now();
+    saveData(); renderSidebar();
+  }catch(e){
+    if(e.message && e.message.includes("Aucune clé API")){
+      if(confirm(e.message+"\nOuvrir les paramètres maintenant ?")) showAIModal();
+    } else {
+      alert("Échec : "+e.message);
+    }
+  }finally{
+    btn.textContent = originalLabel; btn.disabled = false;
+  }
+}
+document.getElementById("btnTitleFix").addEventListener("click", runTitleFix);
 
 /* =========================================================================
    QUICK ADD — used by the floating "+" button, the installed app's icon
@@ -3309,6 +3384,7 @@ function openQuickAddModal(prefill){
         <div class="chiprow" style="margin-bottom:12px;">
           <button class="btn chip small flame" id="qaChipToday">🔥 Aujourd'hui</button>
           <button class="btn chip small urgent" id="qaChipUrgent">🎯 Urgent</button>
+          <button class="btn chip small quick" id="qaChipQuick">⚡ Rapide</button>
           <button class="btn chip small knowledge" id="qaChipKnowledge">📚 Connaissance</button>
         </div>
         <label style="font-size:11px;color:var(--text-sub);display:block;margin-bottom:4px;">Affectation</label>
@@ -3332,9 +3408,10 @@ function openQuickAddModal(prefill){
     box.style.display = isHidden ? "block" : "none";
     e.currentTarget.textContent = isHidden ? "− Moins d'options" : "+ Plus d'options";
   });
-  let qaToday=false, qaUrgent=false, qaKnowledge=false;
+  let qaToday=false, qaUrgent=false, qaQuick=false, qaKnowledge=false;
   overlay.querySelector("#qaChipToday").addEventListener("click", e=>{ qaToday=!qaToday; e.currentTarget.classList.toggle("on", qaToday); });
   overlay.querySelector("#qaChipUrgent").addEventListener("click", e=>{ qaUrgent=!qaUrgent; e.currentTarget.classList.toggle("on", qaUrgent); });
+  overlay.querySelector("#qaChipQuick").addEventListener("click", e=>{ qaQuick=!qaQuick; e.currentTarget.classList.toggle("on", qaQuick); });
   overlay.querySelector("#qaChipKnowledge").addEventListener("click", e=>{ qaKnowledge=!qaKnowledge; e.currentTarget.classList.toggle("on", qaKnowledge); });
   let qaAssignedTo = [DATA.currentUserId];
   function renderQaAssignChips(){
@@ -3426,7 +3503,7 @@ function openQuickAddModal(prefill){
     const t = {
       id: uid("task"), workspaceId: wsId, title, description: overlay.querySelector("#qaDesc").value.trim(),
       assignedTo: qaAssignedTo.length ? qaAssignedTo : [DATA.currentUserId],
-      today: qaToday, urgent: qaUrgent, knowledge: qaKnowledge,
+      today: qaToday, urgent: qaUrgent, quick: qaQuick, knowledge: qaKnowledge,
       reminderDate: overlay.querySelector("#qaReminder").value || null,
       recurrence:null, done:false, doneAt:null,
       attachments: attMetas,
@@ -3534,6 +3611,7 @@ window.addEventListener("beforeinstallprompt", (e)=>{
   deferredInstallPrompt = e;
 });
 renderSidebar();
+document.querySelectorAll(".tab").forEach(x=> x.classList.toggle("active", x.dataset.tab===currentTab));
 if(purgeOldTrash()>0) saveData();
 renderMain();
 updateDriveIndicator();
