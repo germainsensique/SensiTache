@@ -396,11 +396,6 @@
         <button class="btn" id="btnOpenProcess" style="width:100%;justify-content:center;">🧩 Créer un nouveau processus</button>
       </div>
 
-      <div class="field-row">
-        <div class="field-label">Applications liées</div>
-        <div id="linkedAppsList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;"></div>
-        <button class="btn" id="btnAddLinkedApp" style="width:100%;justify-content:center;">🔗 Lier une application</button>
-      </div>
 
       <div class="field-row">
         <div class="field-label">Documents joints</div>
@@ -761,7 +756,6 @@ function showSettingsModal(){
         <button class="btn" id="setCollabs" style="justify-content:flex-start;">👥 Collaborateurs</button>
         <button class="btn" id="setBackups" style="justify-content:flex-start;">🗄️ Sauvegardes automatiques…</button>
         <button class="btn" id="setTrashRetention" style="justify-content:flex-start;">🗑️ Rétention de la Corbeille…</button>
-        <button class="btn" id="setIntegrationPrompt" style="justify-content:flex-start;">🔗 Prompt d'intégration pour une nouvelle appli…</button>
         <button class="btn" id="setUndo" style="justify-content:flex-start;">↩ Annuler la dernière action</button>
         <button class="btn" id="setExport" style="justify-content:flex-start;">⬇️ Exporter la sauvegarde</button>
         <button class="btn" id="setImport" style="justify-content:flex-start;">⬆️ Importer une sauvegarde</button>
@@ -808,7 +802,6 @@ function showSettingsModal(){
   overlay.querySelector("#setCollabs").addEventListener("click", ()=>{ overlay.remove(); showCollabManagerModal(); });
   overlay.querySelector("#setBackups").addEventListener("click", ()=>{ overlay.remove(); showBackupsModal(); });
   overlay.querySelector("#setTrashRetention").addEventListener("click", ()=>{ overlay.remove(); showTrashRetentionModal(); });
-  overlay.querySelector("#setIntegrationPrompt").addEventListener("click", ()=>{ overlay.remove(); showIntegrationPromptModal(); });
   overlay.querySelector("#setUndo").addEventListener("click", ()=>{ undo(); overlay.remove(); });
   overlay.querySelector("#setExport").addEventListener("click", ()=>{ exportAllData(); overlay.remove(); });
   overlay.querySelector("#setImport").addEventListener("click", ()=>{ document.getElementById("importAllFile").click(); overlay.remove(); });
@@ -1341,7 +1334,6 @@ function openTaskDrawer(id){
 
   renderAttachList(t);
   renderProcessLinkRow(t);
-  renderLinkedAppsList(t);
   document.getElementById("drawer").classList.remove("fullscreen");
   setFullscreenIcon(false);
   removeInlineProcessPreview();
@@ -2050,46 +2042,6 @@ function renderProcessLinkRow(t){
   } else {
     row.innerHTML = "";
   }
-}
-function renderLinkedAppsList(t){
-  const wrap = document.getElementById("linkedAppsList");
-  if(!wrap) return;
-  wrap.innerHTML = "";
-  (t.linkedApps||[]).forEach(app=>{
-    const row = document.createElement("div");
-    row.style.cssText = "display:flex;align-items:center;gap:6px;";
-    row.innerHTML = `<button class="btn" style="flex:1;justify-content:space-between;overflow:hidden;" data-open><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🔗 ${escapeHtml(app.name)}</span><span style="color:var(--text-sub);font-size:11px;flex-shrink:0;">Ouvrir →</span></button>
-      <button class="btn small danger" data-del>✕</button>`;
-    row.querySelector("[data-open]").addEventListener("click", ()=> openLinkedApp(t, app));
-    row.querySelector("[data-del]").addEventListener("click", ()=>{
-      if(!confirm("Retirer le lien vers « "+app.name+" » ? (l'application elle-même n'est pas supprimée, juste le lien.)")) return;
-      snapshot();
-      t.linkedApps = t.linkedApps.filter(a=>a.id!==app.id);
-      t.updatedAt = Date.now(); saveData(); renderLinkedAppsList(t);
-    });
-    wrap.appendChild(row);
-  });
-}
-document.getElementById("btnAddLinkedApp").addEventListener("click", ()=>{
-  const t = curTask(); if(!t) return;
-  const url = prompt("Adresse (URL) de l'application (par ex. une page GitHub Pages) :");
-  if(!url || !url.trim()) return;
-  const name = prompt("Nom à afficher pour ce lien :", "Application") || "Application";
-  if(!t.linkedApps) t.linkedApps = [];
-  snapshot();
-  t.linkedApps.push({id:uid("app"), name:name.trim(), url:url.trim()});
-  t.updatedAt = Date.now(); saveData(); renderLinkedAppsList(t);
-});
-function openLinkedApp(t, app){
-  // Round-trip: pass along where to come back to (this exact page) and
-  // which task this is, so the other app can offer a "← Retour" link if
-  // it's been set up to read these parameters (see the companion prompt).
-  let target;
-  try{ target = new URL(app.url); }catch(e){ alert("Adresse invalide : "+app.url); return; }
-  target.searchParams.set("sensitacheReturn", location.href.split("?")[0]);
-  target.searchParams.set("sensitacheTaskId", t.id);
-  target.searchParams.set("sensitacheTaskTitle", t.title||"");
-  window.open(target.toString(), "_blank");
 }
 document.getElementById("btnOpenProcess").addEventListener("click", ()=>{
   const t = curTask(); if(!t) return;
@@ -3309,172 +3261,6 @@ function showTrashRetentionModal(){
   overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
 }
 
-const INTEGRATION_PROMPT_TEXT_HOSTED = `Je veux que tu ajoutes à cette application deux choses, en suivant exactement le
-même mécanisme que dans mon autre application "SensiTâche" (un gestionnaire de
-tâches que j'ai fait développer séparément).
-
-## 1. Aller-retour avec SensiTâche
-
-Quand j'ouvre cette appli depuis SensiTâche, elle reçoit dans l'adresse (URL)
-ces paramètres :
-- sensitacheReturn : l'adresse à laquelle revenir
-- sensitacheTaskId : l'identifiant de la tâche d'origine
-- sensitacheTaskTitle : le titre de cette tâche
-
-Au chargement de la page, lis ces paramètres avec URLSearchParams. S'ils sont
-présents :
-- Affiche un bouton ou lien fixe, discret, quelque part en haut de l'écran :
-  "← Retour à [titre de la tâche]" (utilise sensitacheTaskTitle, sinon juste
-  "← Retour à SensiTâche").
-- Au clic, navigue vers sensitacheReturn en ajoutant
-  ?sensitacheTaskId=<la valeur reçue> à la fin, pour que SensiTâche rouvre
-  directement la bonne tâche à l'arrivée.
-- Si ces paramètres sont absents, n'affiche rien de spécial : l'appli doit
-  fonctionner normalement en dehors de ce contexte.
-
-## 2. Sauvegarde sur Google Drive, centralisée avec SensiTâche
-
-Ajoute la même sauvegarde Google Drive que SensiTâche, avec les mêmes
-principes :
-
-- Connexion OAuth côté client avec Google Identity Services
-  (https://accounts.google.com/gsi/client), scope
-  https://www.googleapis.com/auth/drive.file uniquement (jamais un accès
-  plus large au Drive).
-- Un champ dans les réglages de l'appli pour coller son propre identifiant
-  client OAuth (xxxx.apps.googleusercontent.com), stocké dans le
-  localStorage de cette appli.
-- Le jeton de connexion obtenu reste uniquement en mémoire (jamais dans le
-  localStorage), par sécurité — il faut donc parfois recliquer
-  "Se connecter" après expiration (environ 1h).
-- Un dossier Drive partagé avec SensiTâche : utilise le dossier nommé
-  exactement SensiTache (celui déjà utilisé par mon appli SensiTâche, à
-  la racine de mon Drive). Ne propose pas de champ pour changer ce nom sauf
-  si je te le demande — au moment de sauvegarder, cherche un dossier Drive
-  nommé SensiTache (requête
-  mimeType='application/vnd.google-apps.folder' and name='SensiTache') ;
-  s'il n'existe pas, crée-le à la racine. Utilise son identifiant comme
-  parents lors de la création du fichier de sauvegarde de cette appli, pour
-  qu'il atterrisse dans le même dossier que le reste de mes sauvegardes.
-- Un seul fichier de sauvegarde par appli, nommé de façon reconnaissable
-  (par exemple nom-de-cette-appli-sauvegarde-drive.json), retrouvé par
-  recherche du nom exact dans ce dossier (pas par ID stocké en dur, pour que
-  ça fonctionne même après un changement d'appareil).
-- Fusion, jamais écrasement : avant chaque sauvegarde automatique, va
-  chercher la version actuelle sur Drive, fusionne-la avec les données
-  locales (les éléments les plus récemment modifiés gagnent — utilise un
-  champ updatedAt sur chaque enregistrement pour comparer), puis renvoie le
-  résultat fusionné. Ne remplace jamais purement et simplement le fichier
-  distant par la version locale.
-- Sauvegarde automatique : à chaque modification, avec un court délai
-  (une demi-seconde environ) pour regrouper les changements rapprochés, sans
-  bloquer l'appli en attendant que ça parte.
-- Affiche quelque part un petit indicateur visuel simple (point vert/gris)
-  montrant si la connexion Drive est active, sans bloquer l'utilisation de
-  l'appli si elle ne l'est pas.
-
-Garde tout ça au même niveau de simplicité que le reste de cette appli — pas
-besoin de reproduire les fonctionnalités plus avancées de SensiTâche
-(sauvegardes quotidiennes/hebdomadaires séparées, etc.) sauf si je te le
-demande explicitement.
-
-## 3. Continuité des données lors des mises à jour de l'appli
-
-Je vais régulièrement te redemander des mises à jour de cette appli, et
-remplacer l'ancien fichier par le nouveau sur mon hébergement. Il faut que ça
-ne fasse jamais perdre mes données existantes, ni locales ni sur Drive.
-Respecte ces règles à chaque mise à jour, même quand je ne le redemande pas
-explicitement :
-
-- Ne renomme jamais la clé utilisée dans localStorage
-  (localStorage.getItem/setItem) d'une version à l'autre, ni le nom du
-  fichier de sauvegarde Drive une fois choisi. Le fichier remplacé garde le
-  même nom/emplacement, donc localStorage n'est jamais effacé par une mise
-  à jour tant que je remplace le fichier au même endroit — mais si le nom de
-  la clé change dans le code, les anciennes données deviennent invisibles
-  même si elles sont toujours là.
-- Si tu dois changer la structure des données (ajouter un champ,
-  réorganiser un objet), écris toujours une petite migration au chargement :
-  charge les données existantes telles quelles, puis complète les champs
-  manquants avec une valeur par défaut raisonnable (if(!data.champ)
-  data.champ = ...), au lieu de supposer que la nouvelle structure est déjà
-  là. Ne réécris jamais le chargement des données en partant d'une page
-  blanche.
-- Le fichier de sauvegarde Drive est retrouvé par une recherche sur son nom
-  exact (pas un identifiant codé en dur) — garde ce nom strictement identique
-  d'une version à l'autre.
-- Avant toute mise à jour un peu conséquente (changement de structure de
-  données notamment), rappelle-moi de faire un export manuel de mes données
-  actuelles depuis l'appli (si elle a un bouton Exporter) par simple mesure
-  de sécurité, en plus de la sauvegarde Drive automatique.`;
-
-const INTEGRATION_PROMPT_TEXT_ATTACHED = `Cette application va être jointe directement à une tâche dans SensiTâche
-(comme une pièce jointe), pas hébergée en ligne séparément — elle sera ouverte
-depuis SensiTâche via une fenêtre qui reste ouverte derrière elle. Ajoute juste
-ceci :
-
-- Au chargement de la page, vérifie si window.opener existe (ce sera le cas
-  quand elle est ouverte depuis SensiTâche).
-- Si oui, affiche un petit bouton discret, fixe en haut de l'écran :
-  "✕ Fermer et revenir à SensiTâche". Au clic, appelle window.close() — ça
-  suffit, SensiTâche est toujours ouverte juste derrière.
-- Si window.opener n'existe pas (l'appli est ouverte autrement), n'affiche
-  rien de spécial.
-- Si cette appli a besoin de garder des données d'une utilisation à l'autre
-  (localStorage), utilise un nom de clé bien distinct et préfixé (par exemple
-  "monapp.donnees", pas juste "data") : comme elle est ouverte depuis
-  SensiTâche, elle partage techniquement le même espace de stockage que
-  SensiTâche dans ce navigateur, donc un nom trop générique risquerait
-  d'entrer en conflit avec les données de SensiTâche elle-même.
-- Pas besoin de connexion Google Drive ni de gestion de sauvegarde ici : le
-  fichier de cette appli est déjà sauvegardé automatiquement par SensiTâche
-  elle-même, comme n'importe quelle pièce jointe.`;
-
-function showIntegrationPromptModal(){
-  let variant = "hosted";
-  const overlay = document.createElement("div");
-  overlay.className = "modal-overlay";
-  overlay.innerHTML = `
-    <div class="modal" style="width:560px;max-height:82vh;overflow-y:auto;">
-      <h2>🔗 Prompt d'intégration pour une nouvelle appli</h2>
-      <div style="display:flex;gap:6px;margin-bottom:10px;">
-        <button class="btn small" id="ipTabHosted" style="flex:1;justify-content:center;">Appli hébergée en ligne</button>
-        <button class="btn small" id="ipTabAttached" style="flex:1;justify-content:center;">Appli jointe à une tâche</button>
-      </div>
-      <p id="ipDesc" style="font-size:12.5px;color:var(--text-sub);"></p>
-      <textarea id="ipText" readonly style="width:100%;min-height:320px;font-size:11.5px;line-height:1.5;border:1px solid var(--border-soft);border-radius:8px;padding:10px 12px;background:var(--bg-app);color:var(--text-main);margin:12px 0;white-space:pre-wrap;"></textarea>
-      <div class="modal-actions">
-        <button class="btn ghost" id="ipClose">Fermer</button>
-        <button class="btn primary" id="ipCopy">📋 Copier le prompt</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-  function renderVariant(){
-    const isHosted = variant==="hosted";
-    overlay.querySelector("#ipTabHosted").classList.toggle("primary", isHosted);
-    overlay.querySelector("#ipTabAttached").classList.toggle("primary", !isHosted);
-    overlay.querySelector("#ipText").value = isHosted ? INTEGRATION_PROMPT_TEXT_HOSTED : INTEGRATION_PROMPT_TEXT_ATTACHED;
-    overlay.querySelector("#ipDesc").textContent = isHosted
-      ? "Pour une appli mise en ligne (GitHub Pages ou autre) et liée via son adresse dans une tâche."
-      : "Pour une appli jointe directement au fichier d'une tâche (pièce jointe .html), sans hébergement séparé.";
-  }
-  renderVariant();
-  overlay.querySelector("#ipTabHosted").addEventListener("click", ()=>{ variant="hosted"; renderVariant(); });
-  overlay.querySelector("#ipTabAttached").addEventListener("click", ()=>{ variant="attached"; renderVariant(); });
-  overlay.querySelector("#ipCopy").addEventListener("click", async ()=>{
-    const btn = overlay.querySelector("#ipCopy");
-    const text = variant==="hosted" ? INTEGRATION_PROMPT_TEXT_HOSTED : INTEGRATION_PROMPT_TEXT_ATTACHED;
-    try{
-      await navigator.clipboard.writeText(text);
-      btn.textContent = "✅ Copié !";
-      setTimeout(()=>{ btn.textContent = "📋 Copier le prompt"; }, 2000);
-    }catch(e){
-      alert("Impossible de copier automatiquement — sélectionne le texte ci-dessus et copie-le manuellement (Ctrl+C).");
-    }
-  });
-  overlay.querySelector("#ipClose").addEventListener("click", ()=> overlay.remove());
-  overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
-}
 
 async function writeDriveBackup(){
   if(!driveClientId) return;
@@ -4049,21 +3835,6 @@ window.addEventListener("popstate", ()=>{
     return;
   }
 });
-
-(function handleIncomingAppReturn(){
-  const params = new URLSearchParams(location.search);
-  const taskId = params.get("sensitacheTaskId");
-  if(!taskId) return;
-  const t = DATA.tasks.find(x=>x.id===taskId);
-  history.replaceState(null, "", location.pathname); // clean the URL so a later refresh doesn't retrigger this
-  if(!t) return;
-  if(t.workspaceId !== currentWsId){
-    currentWsId = t.workspaceId; currentTab = "tasks";
-    document.querySelectorAll(".tab").forEach(x=> x.classList.toggle("active", x.dataset.tab==="tasks"));
-    renderSidebar(); renderMain();
-  }
-  openTaskDrawer(taskId);
-})();
 
 (function restoreOpenTask(){
   const savedTaskId = localStorage.getItem("sensitache.openTaskId");
