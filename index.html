@@ -959,7 +959,7 @@ function sortCategory(t){
   if(t.quick) return 5;
   return 6;
 }
-const CATEGORY_LABEL = {1:"Rappel", 2:"Récurrence", 3:"Aujourd'hui", 4:"Urgent", 5:"Rapide", 6:"Prioritaire"};
+const CATEGORY_LABEL = {1:"Rappel", 2:"Récurrence", 3:"Aujourd'hui", 4:"Urgent", 5:"Rapide", 6:"Non prioritaire"};
 function addDays(dateStr, n){ const d=new Date(dateStr+"T00:00:00"); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
 function addYears(dateStr, n){ const d=new Date(dateStr+"T00:00:00"); d.setFullYear(d.getFullYear()+n); return d.toISOString().slice(0,10); }
 function nthWeekdayOfMonth(year, month, weekday, nth){
@@ -1108,7 +1108,7 @@ function renderTasksGroupedList(){
     fillCol(left, 5, "Rapide");
     fillCol(right, 4, "Urgences");
     fillCol(right, 2, "Récurrence");
-    fillCol(right, 6, "Prioritaire");
+    fillCol(right, 6, "Non prioritaire");
   }
 }
 
