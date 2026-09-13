@@ -301,6 +301,7 @@
       <div class="tab" data-tab="search">Rechercher</div>
       <div class="tab" data-tab="archive">Corbeille</div>
       <div class="tab" data-tab="recurrence">Récurrences</div>
+      <div class="tab" data-tab="reminders">Rappels</div>
     </div>
     <div class="main-content" id="mainContent"></div>
   </div>
@@ -533,7 +534,10 @@ function saveData(){
   scheduleAutoBackup();
 }
 function uid(p){ return (p||"id")+"_"+Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4); }
-function todayStr(){ return new Date().toISOString().slice(0,10); }
+function todayStr(){
+  const d = new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
 
 let DATA = loadData();
 if(!DATA){
@@ -1055,6 +1059,7 @@ function renderMain(){
   if(currentTab==="tasks") renderTasksTab(el);
   else if(currentTab==="collab") renderCollabTab(el);
   else if(currentTab==="recurrence") renderRecurrenceTab(el);
+  else if(currentTab==="reminders") renderRemindersTab(el);
   else if(currentTab==="knowledge") renderKnowledgeTab(el);
   else if(currentTab==="archive") renderArchiveTab(el);
   else if(currentTab==="search") renderSearchTab(el);
@@ -1262,6 +1267,33 @@ function renderRecurrenceTab(el){
       e.stopPropagation();
       if(due) toggleTaskDone(t);
     });
+    row.addEventListener("click", ()=> openTaskDrawer(t.id));
+    el.appendChild(row);
+  });
+}
+
+/* ---------- REMINDERS TAB ---------- */
+function renderRemindersTab(el){
+  const today = todayStr();
+  const tasks = activeTasks().filter(t=> t.reminderDate).sort((a,b)=> a.reminderDate.localeCompare(b.reminderDate));
+  if(tasks.length===0){ el.innerHTML = '<div class="empty-hint">Aucun rappel programmé. Ouvre une tâche et règle le champ Rappel.</div>'; return; }
+  el.innerHTML = "";
+  tasks.forEach(t=>{
+    const due = t.reminderDate<=today;
+    const row = document.createElement("div");
+    row.className = "task-row";
+    row.innerHTML = `
+      <div class="task-check" data-check></div>
+      <span class="badge clock" title="Rappel">${iconSvg("clock")}</span>
+      <div class="task-title">${escapeHtml(t.title)}</div>
+      <div class="badges">
+        <span style="font-size:11px;color:${due?'var(--clock)':'var(--text-sub)'};font-weight:${due?'700':'400'};">${due ? "Rappel dû — " : "Prévu le "}${t.reminderDate}</span>
+      </div>
+      <div class="assignee-chip" style="width:auto;">
+        <div style="display:flex;align-items:center;">${assigneeAvatarsHtml(t)}</div>
+      </div>
+    `;
+    row.querySelector("[data-check]").addEventListener("click", (e)=>{ e.stopPropagation(); toggleTaskDone(t); });
     row.addEventListener("click", ()=> openTaskDrawer(t.id));
     el.appendChild(row);
   });
