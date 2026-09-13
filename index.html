@@ -515,8 +515,8 @@ let driveClientId = localStorage.getItem("sensitache.driveClientId") || "";
 let driveAccessToken = null;
 let driveTokenExpiry = 0;
 let driveFileId = localStorage.getItem("sensitache.driveFileId") || null;
+const DRIVE_FOLDER_NAME = "SensiTache";
 let driveFolderId = localStorage.getItem("sensitache.driveFolderId") || null;
-let driveFolderName = localStorage.getItem("sensitache.driveFolderName") || "";
 let driveTokenClient = null;
 let driveLastSyncAt = localStorage.getItem("sensitache.driveLastSync") ? Number(localStorage.getItem("sensitache.driveLastSync")) : null;
 
@@ -2859,6 +2859,10 @@ async function moveFileToFolder(token, fileId, folderId){
 }
 async function driveFindOrCreateFile(token){
   if(driveFileId) return driveFileId;
+  if(!driveFolderId){
+    driveFolderId = await ensureDriveFolder(token, DRIVE_FOLDER_NAME);
+    localStorage.setItem("sensitache.driveFolderId", driveFolderId);
+  }
   const folderClause = driveFolderId ? " and '"+driveFolderId+"' in parents" : "";
   const q = encodeURIComponent("name='"+DRIVE_FILENAME+"' and trashed=false"+folderClause);
   const res = await fetch("https://www.googleapis.com/drive/v3/files?q="+q+"&spaces=drive&fields=files(id,name)", {
@@ -3380,7 +3384,7 @@ async function refreshDriveDiag(){
     const data = await res.json();
     const email = data.user ? data.user.emailAddress : "?";
     el.style.display = "block";
-    el.innerHTML = "Compte connecté : <b style=\"color:var(--text-main);\">"+escapeHtml(email)+"</b><br>ID du fichier de sauvegarde : <code>"+escapeHtml(driveFileId||"(pas encore créé)")+"</code><br>Dossier : <b style=\"color:var(--text-main);\">"+(driveFolderName?escapeHtml(driveFolderName):"racine du Drive")+"</b>"
+    el.innerHTML = "Compte connecté : <b style=\"color:var(--text-main);\">"+escapeHtml(email)+"</b><br>ID du fichier de sauvegarde : <code>"+escapeHtml(driveFileId||"(pas encore créé)")+"</code><br>Dossier : <b style=\"color:var(--text-main);\">"+escapeHtml(DRIVE_FOLDER_NAME)+"</b>"
       + "<br><span style='font-size:10.5px;'>Compare ces deux informations sur tous tes appareils — si le compte ou l'ID diffère, ils ne se synchronisent pas ensemble.</span>";
   }catch(e){ el.style.display = "none"; }
 }
@@ -3415,10 +3419,7 @@ function showDriveModal(){
       <input type="text" id="driveClientIdInput" placeholder="xxxxxxxx.apps.googleusercontent.com" value="${escapeHtml(driveClientId)}" style="width:100%;border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;background:var(--bg-app);color:var(--text-main);font-size:12.5px;">
       <div id="driveStatus" style="font-size:12px;color:var(--text-sub);margin:10px 0;"></div>
       <div id="driveDiag" style="font-size:11.5px;color:var(--text-sub);background:var(--bg-app);border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;margin-bottom:10px;display:none;"></div>
-      <label style="font-size:12px;color:var(--text-sub);display:block;margin:14px 0 5px;">📁 Dossier Drive pour les sauvegardes (optionnel)</label>
-      <input type="text" id="driveFolderInput" placeholder="Ex. Sauvegardes SensiTâche" value="${escapeHtml(driveFolderName)}" style="width:100%;border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;background:var(--bg-app);color:var(--text-main);font-size:12.5px;margin-bottom:6px;">
-      <p style="font-size:11px;color:var(--text-sub);margin:0 0 8px;">Si un nom est indiqué, toutes les nouvelles sauvegardes (et le fichier de synchro s'il existe déjà ailleurs) seront rangées dans ce dossier au lieu de la racine de ton Drive. Laisse vide pour revenir à la racine.</p>
-      <button class="btn small" id="driveSetFolder" style="width:100%;justify-content:center;margin-bottom:6px;">Enregistrer / déplacer vers ce dossier</button>
+      <p style="font-size:11px;color:var(--text-sub);margin:0 0 10px;">📁 Toutes les sauvegardes sont rangées dans un dossier nommé « SensiTache » à la racine de ton Drive, créé automatiquement.</p>
       <div class="modal-actions" style="flex-wrap:wrap;">
         <button class="btn small" id="driveSaveId">Enregistrer l'identifiant</button>
         <button class="btn small primary" id="driveConnectBtn">Se connecter</button>
@@ -3430,30 +3431,6 @@ function showDriveModal(){
   document.body.appendChild(overlay);
   updateDriveStatus();
   refreshDriveDiag();
-  overlay.querySelector("#driveSetFolder").addEventListener("click", async ()=>{
-    const btn = overlay.querySelector("#driveSetFolder");
-    const name = overlay.querySelector("#driveFolderInput").value.trim();
-    if(!(driveAccessToken && Date.now() < driveTokenExpiry)){ alert("Connecte-toi d'abord à Drive."); return; }
-    btn.textContent = "…"; btn.disabled = true;
-    try{
-      const token = await driveGetToken();
-      if(!name){
-        driveFolderId = null; driveFolderName = "";
-        localStorage.removeItem("sensitache.driveFolderId");
-        localStorage.removeItem("sensitache.driveFolderName");
-        alert("Dossier retiré — les prochaines sauvegardes iront à la racine du Drive.");
-      } else {
-        const folderId = await ensureDriveFolder(token, name);
-        driveFolderId = folderId; driveFolderName = name;
-        localStorage.setItem("sensitache.driveFolderId", folderId);
-        localStorage.setItem("sensitache.driveFolderName", name);
-        if(driveFileId) await moveFileToFolder(token, driveFileId, folderId);
-        alert("Dossier « "+name+" » prêt — les sauvegardes iront désormais ici.");
-      }
-      refreshDriveDiag();
-    }catch(err){ alert("Échec : "+err.message); }
-    finally{ btn.textContent = "Enregistrer / déplacer vers ce dossier"; btn.disabled = false; }
-  });
   overlay.querySelector("#driveSaveId").addEventListener("click", ()=>{
     driveClientId = overlay.querySelector("#driveClientIdInput").value.trim();
     localStorage.setItem("sensitache.driveClientId", driveClientId);
