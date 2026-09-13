@@ -1798,6 +1798,7 @@ function renderAttachList(t){
     row.innerHTML = `<span class="aicon">${iconMap[a.type]}</span><span class="aname">${escapeHtml(a.name)}</span>
       <button class="btn small" data-open>${a.type==="email" ? "Aperçu" : (a.type==="app" ? "Lancer →" : "Ouvrir")}</button>
       ${a.type==="email" ? '<button class="btn small" data-download title="Télécharger le fichier .eml original">⬇️</button>' : ''}
+      ${a.type==="app" ? '<button class="btn small" data-replace title="Remplacer par une version mise à jour du fichier">🔄</button>' : ''}
       <button class="btn small danger" data-del>✕</button>`;
     row.querySelector("[data-open]").addEventListener("click", async ()=>{
       if(a.type==="email"){
@@ -1819,6 +1820,8 @@ function renderAttachList(t){
       link.href = dataUrl; link.download = a.name;
       document.body.appendChild(link); link.click(); link.remove();
     });
+    const replaceBtn = row.querySelector("[data-replace]");
+    if(replaceBtn) replaceBtn.addEventListener("click", ()=> replaceAttachmentFile(t, a));
     row.querySelector("[data-del]").addEventListener("click", ()=>{
       if(!confirm("Supprimer ce document ?")) return;
       snapshot();
@@ -1829,6 +1832,41 @@ function renderAttachList(t){
     });
     wrap.appendChild(row);
   });
+}
+function replaceAttachmentFile(t, a){
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = a.type==="app" ? ".html,.htm" : "";
+  input.onchange = async (e)=>{
+    const file = e.target.files[0]; if(!file) return;
+    let dataUrl;
+    if(file.type.startsWith("image/")) dataUrl = await compressImageFile(file);
+    if(!dataUrl){
+      dataUrl = await new Promise(resolve=>{
+        const r = new FileReader(); r.onload=()=>resolve(r.result); r.onerror=()=>resolve(null); r.readAsDataURL(file);
+      });
+    }
+    if(!dataUrl){ alert("Impossible de lire ce fichier."); return; }
+    snapshot();
+    await attachPut(a.id, dataUrl); // overwrite in place — same attachment, same position in the list
+    a.name = file.name;
+    t.updatedAt = Date.now();
+    saveData(); renderAttachList(t);
+    // Push the updated content to the existing Drive copy too (or create one if there wasn't one yet)
+    if(a.driveFileId && driveClientId && driveAccessToken && Date.now() < driveTokenExpiry){
+      try{
+        const token = await driveGetToken();
+        const blob = await (await fetch(dataUrl)).blob();
+        await fetch("https://www.googleapis.com/upload/drive/v3/files/"+a.driveFileId+"?uploadType=media", {
+          method:"PATCH", headers:{Authorization:"Bearer "+token, "Content-Type": blob.type||"application/octet-stream"},
+          body: blob
+        });
+      }catch(err){ console.warn("Échec de la mise à jour Drive de la pièce jointe :", err); }
+    } else {
+      uploadAttachmentToDrive(a, dataUrl, t);
+    }
+  };
+  input.click();
 }
 
 /* ---- reliable file opening: browsers block navigating a new tab straight to a
@@ -3268,17 +3306,8 @@ function showTrashRetentionModal(){
 }
 
 const APP_PROMPT_TEXT = `Cette application va être jointe directement à une tâche dans SensiTâche
-(comme une pièce jointe), pas hébergée en ligne séparément — elle sera ouverte
-depuis SensiTâche via une fenêtre qui reste ouverte derrière elle. Ajoute juste
-ceci :
+(comme une pièce jointe), pas hébergée en ligne séparément.
 
-- Au chargement de la page, vérifie si window.opener existe (ce sera le cas
-  quand elle est ouverte depuis SensiTâche).
-- Si oui, affiche un petit bouton discret, fixe en haut de l'écran :
-  "✕ Fermer et revenir à SensiTâche". Au clic, appelle window.close() — ça
-  suffit, SensiTâche est toujours ouverte juste derrière.
-- Si window.opener n'existe pas (l'appli est ouverte autrement), n'affiche
-  rien de spécial.
 - Si cette appli a besoin de garder des données d'une utilisation à l'autre
   (localStorage), utilise un nom de clé bien distinct et préfixé (par exemple
   "monapp.donnees", pas juste "data") : comme elle est ouverte depuis
