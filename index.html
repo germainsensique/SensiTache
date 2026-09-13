@@ -750,15 +750,16 @@ function showSettingsModal(){
       </div>
       <button class="btn small" id="setNewWs" style="width:100%;justify-content:center;margin-bottom:16px;">+ Nouvel espace</button>
       <div style="display:flex;flex-direction:column;gap:6px;">
-        ${showInstall ? '<button class="btn primary" id="setInstall" style="justify-content:flex-start;">📲 Installer l’application</button><p id="setInstallHint" style="font-size:11.5px;color:var(--text-sub);margin:-2px 0 4px;"></p>' : ''}
-        <button class="btn" id="setDrive" style="justify-content:flex-start;">☁️ Google Drive…</button>
-        <button class="btn" id="setAI" style="justify-content:flex-start;">🤖 Assistant IA (correction/reformulation)…</button>
-        <button class="btn" id="setCollabs" style="justify-content:flex-start;">👥 Collaborateurs</button>
-        <button class="btn" id="setBackups" style="justify-content:flex-start;">🗄️ Sauvegardes automatiques…</button>
-        <button class="btn" id="setTrashRetention" style="justify-content:flex-start;">🗑️ Rétention de la Corbeille…</button>
-        <button class="btn" id="setUndo" style="justify-content:flex-start;">↩ Annuler la dernière action</button>
-        <button class="btn" id="setExport" style="justify-content:flex-start;">⬇️ Exporter la sauvegarde</button>
-        <button class="btn" id="setImport" style="justify-content:flex-start;">⬆️ Importer une sauvegarde</button>
+        ${showInstall ? '<button class="btn primary" id="setInstall" style="justify-content:flex-start;gap:10px;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/></svg> Installer l’application</button><p id="setInstallHint" style="font-size:11.5px;color:var(--text-sub);margin:-2px 0 4px;"></p>' : ''}
+        <button class="btn" id="setDrive" style="justify-content:flex-start;gap:10px;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg> Google Drive…</button>
+        <button class="btn" id="setAI" style="justify-content:flex-start;gap:10px;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg> Assistant IA (correction/reformulation)…</button>
+        <button class="btn" id="setCollabs" style="justify-content:flex-start;gap:10px;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c0-3.3 2.9-5.8 6.5-5.8s6.5 2.5 6.5 5.8"/><circle cx="17.5" cy="8.5" r="2.4"/><path d="M16 14.6c2.8.2 5 2.3 5 5.4"/></svg> Collaborateurs</button>
+        <button class="btn" id="setBackups" style="justify-content:flex-start;gap:10px;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="6" rx="1.3"/><rect x="3" y="14" width="18" height="6" rx="1.3"/><circle cx="7" cy="7" r=".6" fill="currentColor" stroke="none"/><circle cx="7" cy="17" r=".6" fill="currentColor" stroke="none"/></svg> Sauvegardes automatiques…</button>
+        <button class="btn" id="setTrashRetention" style="justify-content:flex-start;gap:10px;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg> Rétention de la Corbeille…</button>
+        <button class="btn" id="setAppPrompt" style="justify-content:flex-start;gap:10px;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 15l6-6M10 6l1-1a4 4 0 116 6l-1 1M14 18l-1 1a4 4 0 11-6-6l1-1"/></svg> Prompt pour appli jointe à une tâche…</button>
+        <button class="btn" id="setUndo" style="justify-content:flex-start;gap:10px;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg> Annuler la dernière action</button>
+        <button class="btn" id="setExport" style="justify-content:flex-start;gap:10px;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M4 21h16"/></svg> Exporter la sauvegarde</button>
+        <button class="btn" id="setImport" style="justify-content:flex-start;gap:10px;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9m0 0-4 4m4-4 4 4"/><path d="M4 3h16"/></svg> Importer une sauvegarde</button>
       </div>
       <div class="modal-actions"><button class="btn ghost" id="setClose">Fermer</button></div>
     </div>`;
@@ -802,6 +803,7 @@ function showSettingsModal(){
   overlay.querySelector("#setCollabs").addEventListener("click", ()=>{ overlay.remove(); showCollabManagerModal(); });
   overlay.querySelector("#setBackups").addEventListener("click", ()=>{ overlay.remove(); showBackupsModal(); });
   overlay.querySelector("#setTrashRetention").addEventListener("click", ()=>{ overlay.remove(); showTrashRetentionModal(); });
+  overlay.querySelector("#setAppPrompt").addEventListener("click", ()=>{ overlay.remove(); showAppPromptModal(); });
   overlay.querySelector("#setUndo").addEventListener("click", ()=>{ undo(); overlay.remove(); });
   overlay.querySelector("#setExport").addEventListener("click", ()=>{ exportAllData(); overlay.remove(); });
   overlay.querySelector("#setImport").addEventListener("click", ()=>{ document.getElementById("importAllFile").click(); overlay.remove(); });
@@ -3258,6 +3260,56 @@ function showTrashRetentionModal(){
       alert(deletedCount+" tâche"+(deletedCount>1?"s":"")+" de la Corbeille dépassant désormais la limite "+(deletedCount>1?"ont":"a")+" été supprimée"+(deletedCount>1?"s":"")+" définitivement.");
     }
   });
+  overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
+}
+
+const APP_PROMPT_TEXT = `Cette application va être jointe directement à une tâche dans SensiTâche
+(comme une pièce jointe), pas hébergée en ligne séparément — elle sera ouverte
+depuis SensiTâche via une fenêtre qui reste ouverte derrière elle. Ajoute juste
+ceci :
+
+- Au chargement de la page, vérifie si window.opener existe (ce sera le cas
+  quand elle est ouverte depuis SensiTâche).
+- Si oui, affiche un petit bouton discret, fixe en haut de l'écran :
+  "✕ Fermer et revenir à SensiTâche". Au clic, appelle window.close() — ça
+  suffit, SensiTâche est toujours ouverte juste derrière.
+- Si window.opener n'existe pas (l'appli est ouverte autrement), n'affiche
+  rien de spécial.
+- Si cette appli a besoin de garder des données d'une utilisation à l'autre
+  (localStorage), utilise un nom de clé bien distinct et préfixé (par exemple
+  "monapp.donnees", pas juste "data") : comme elle est ouverte depuis
+  SensiTâche, elle partage techniquement le même espace de stockage que
+  SensiTâche dans ce navigateur, donc un nom trop générique risquerait
+  d'entrer en conflit avec les données de SensiTâche elle-même.
+- Pas besoin de connexion Google Drive ni de gestion de sauvegarde ici : le
+  fichier de cette appli est déjà sauvegardé automatiquement par SensiTâche
+  elle-même, comme n'importe quelle pièce jointe.`;
+
+function showAppPromptModal(){
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal" style="width:540px;max-height:82vh;overflow-y:auto;">
+      <h2>Prompt pour appli jointe à une tâche</h2>
+      <p style="font-size:12.5px;color:var(--text-sub);">Colle ce texte tel quel dans une conversation Claude à propos d'une de tes autres applis HTML, avant de la joindre à une tâche en pièce jointe.</p>
+      <textarea readonly style="width:100%;min-height:280px;font-size:11.5px;line-height:1.5;border:1px solid var(--border-soft);border-radius:8px;padding:10px 12px;background:var(--bg-app);color:var(--text-main);margin:12px 0;white-space:pre-wrap;">${escapeHtml(APP_PROMPT_TEXT)}</textarea>
+      <div class="modal-actions">
+        <button class="btn ghost" id="apClose">Fermer</button>
+        <button class="btn primary" id="apCopy">Copier le prompt</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector("#apCopy").addEventListener("click", async ()=>{
+    const btn = overlay.querySelector("#apCopy");
+    try{
+      await navigator.clipboard.writeText(APP_PROMPT_TEXT);
+      btn.textContent = "✅ Copié !";
+      setTimeout(()=>{ btn.textContent = "Copier le prompt"; }, 2000);
+    }catch(e){
+      alert("Impossible de copier automatiquement — sélectionne le texte ci-dessus et copie-le manuellement (Ctrl+C).");
+    }
+  });
+  overlay.querySelector("#apClose").addEventListener("click", ()=> overlay.remove());
   overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
 }
 
