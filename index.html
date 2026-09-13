@@ -404,7 +404,7 @@
 
       <div class="field-row">
         <div class="field-label">Documents joints</div>
-        <input type="file" id="attachInput" style="display:none" multiple accept=".eml,.msg,image/*,application/pdf">
+        <input type="file" id="attachInput" style="display:none" multiple accept=".eml,.msg,.html,.htm,image/*,application/pdf">
         <button class="btn small" id="btnAddAttach">+ Joindre un document (email, image, PDF)</button>
         <div class="attach-list" id="attachList" style="margin-top:10px;"></div>
       </div>
@@ -1613,6 +1613,7 @@ function detectAttachType(name){
   if(["eml","msg"].includes(ext)) return "email";
   if(["jpg","jpeg","png","gif","webp","svg"].includes(ext)) return "image";
   if(ext==="pdf") return "pdf";
+  if(["html","htm"].includes(ext)) return "app";
   return "other";
 }
 /* Photos from a phone camera are often 3-8 Mo — far too heavy to pile up in
@@ -1797,11 +1798,11 @@ function renderAttachList(t){
   const wrap = document.getElementById("attachList");
   wrap.innerHTML = "";
   (t.attachments||[]).forEach(a=>{
-    const iconMap = {email:"✉️", image:"🖼️", pdf:"📄", other:"📎"};
+    const iconMap = {email:"✉️", image:"🖼️", pdf:"📄", app:"💻", other:"📎"};
     const row = document.createElement("div");
     row.className = "attach-item";
     row.innerHTML = `<span class="aicon">${iconMap[a.type]}</span><span class="aname">${escapeHtml(a.name)}</span>
-      <button class="btn small" data-open>${a.type==="email" ? "Aperçu" : "Ouvrir"}</button>
+      <button class="btn small" data-open>${a.type==="email" ? "Aperçu" : (a.type==="app" ? "Lancer →" : "Ouvrir")}</button>
       ${a.type==="email" ? '<button class="btn small" data-download title="Télécharger le fichier .eml original">⬇️</button>' : ''}
       <button class="btn small danger" data-del>✕</button>`;
     row.querySelector("[data-open]").addEventListener("click", async ()=>{
@@ -3308,7 +3309,7 @@ function showTrashRetentionModal(){
   overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
 }
 
-const INTEGRATION_PROMPT_TEXT = `Je veux que tu ajoutes à cette application deux choses, en suivant exactement le
+const INTEGRATION_PROMPT_TEXT_HOSTED = `Je veux que tu ajoutes à cette application deux choses, en suivant exactement le
 même mécanisme que dans mon autre application "SensiTâche" (un gestionnaire de
 tâches que j'ai fait développer séparément).
 
@@ -3407,24 +3408,64 @@ explicitement :
   actuelles depuis l'appli (si elle a un bouton Exporter) par simple mesure
   de sécurité, en plus de la sauvegarde Drive automatique.`;
 
+const INTEGRATION_PROMPT_TEXT_ATTACHED = `Cette application va être jointe directement à une tâche dans SensiTâche
+(comme une pièce jointe), pas hébergée en ligne séparément — elle sera ouverte
+depuis SensiTâche via une fenêtre qui reste ouverte derrière elle. Ajoute juste
+ceci :
+
+- Au chargement de la page, vérifie si window.opener existe (ce sera le cas
+  quand elle est ouverte depuis SensiTâche).
+- Si oui, affiche un petit bouton discret, fixe en haut de l'écran :
+  "✕ Fermer et revenir à SensiTâche". Au clic, appelle window.close() — ça
+  suffit, SensiTâche est toujours ouverte juste derrière.
+- Si window.opener n'existe pas (l'appli est ouverte autrement), n'affiche
+  rien de spécial.
+- Si cette appli a besoin de garder des données d'une utilisation à l'autre
+  (localStorage), utilise un nom de clé bien distinct et préfixé (par exemple
+  "monapp.donnees", pas juste "data") : comme elle est ouverte depuis
+  SensiTâche, elle partage techniquement le même espace de stockage que
+  SensiTâche dans ce navigateur, donc un nom trop générique risquerait
+  d'entrer en conflit avec les données de SensiTâche elle-même.
+- Pas besoin de connexion Google Drive ni de gestion de sauvegarde ici : le
+  fichier de cette appli est déjà sauvegardé automatiquement par SensiTâche
+  elle-même, comme n'importe quelle pièce jointe.`;
+
 function showIntegrationPromptModal(){
+  let variant = "hosted";
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.innerHTML = `
     <div class="modal" style="width:560px;max-height:82vh;overflow-y:auto;">
       <h2>🔗 Prompt d'intégration pour une nouvelle appli</h2>
-      <p style="font-size:12.5px;color:var(--text-sub);">Colle ce texte tel quel dans une conversation Claude à propos d'une de tes autres applis HTML, pour qu'elle communique avec SensiTâche et sauvegarde au même endroit sur ton Drive.</p>
-      <textarea readonly style="width:100%;min-height:320px;font-size:11.5px;line-height:1.5;border:1px solid var(--border-soft);border-radius:8px;padding:10px 12px;background:var(--bg-app);color:var(--text-main);margin:12px 0;white-space:pre-wrap;">${escapeHtml(INTEGRATION_PROMPT_TEXT)}</textarea>
+      <div style="display:flex;gap:6px;margin-bottom:10px;">
+        <button class="btn small" id="ipTabHosted" style="flex:1;justify-content:center;">Appli hébergée en ligne</button>
+        <button class="btn small" id="ipTabAttached" style="flex:1;justify-content:center;">Appli jointe à une tâche</button>
+      </div>
+      <p id="ipDesc" style="font-size:12.5px;color:var(--text-sub);"></p>
+      <textarea id="ipText" readonly style="width:100%;min-height:320px;font-size:11.5px;line-height:1.5;border:1px solid var(--border-soft);border-radius:8px;padding:10px 12px;background:var(--bg-app);color:var(--text-main);margin:12px 0;white-space:pre-wrap;"></textarea>
       <div class="modal-actions">
         <button class="btn ghost" id="ipClose">Fermer</button>
         <button class="btn primary" id="ipCopy">📋 Copier le prompt</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
+  function renderVariant(){
+    const isHosted = variant==="hosted";
+    overlay.querySelector("#ipTabHosted").classList.toggle("primary", isHosted);
+    overlay.querySelector("#ipTabAttached").classList.toggle("primary", !isHosted);
+    overlay.querySelector("#ipText").value = isHosted ? INTEGRATION_PROMPT_TEXT_HOSTED : INTEGRATION_PROMPT_TEXT_ATTACHED;
+    overlay.querySelector("#ipDesc").textContent = isHosted
+      ? "Pour une appli mise en ligne (GitHub Pages ou autre) et liée via son adresse dans une tâche."
+      : "Pour une appli jointe directement au fichier d'une tâche (pièce jointe .html), sans hébergement séparé.";
+  }
+  renderVariant();
+  overlay.querySelector("#ipTabHosted").addEventListener("click", ()=>{ variant="hosted"; renderVariant(); });
+  overlay.querySelector("#ipTabAttached").addEventListener("click", ()=>{ variant="attached"; renderVariant(); });
   overlay.querySelector("#ipCopy").addEventListener("click", async ()=>{
     const btn = overlay.querySelector("#ipCopy");
+    const text = variant==="hosted" ? INTEGRATION_PROMPT_TEXT_HOSTED : INTEGRATION_PROMPT_TEXT_ATTACHED;
     try{
-      await navigator.clipboard.writeText(INTEGRATION_PROMPT_TEXT);
+      await navigator.clipboard.writeText(text);
       btn.textContent = "✅ Copié !";
       setTimeout(()=>{ btn.textContent = "📋 Copier le prompt"; }, 2000);
     }catch(e){
