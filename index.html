@@ -397,6 +397,12 @@
       </div>
 
       <div class="field-row">
+        <div class="field-label">Applications liées</div>
+        <div id="linkedAppsList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;"></div>
+        <button class="btn" id="btnAddLinkedApp" style="width:100%;justify-content:center;">🔗 Lier une application</button>
+      </div>
+
+      <div class="field-row">
         <div class="field-label">Documents joints</div>
         <input type="file" id="attachInput" style="display:none" multiple accept=".eml,.msg,image/*,application/pdf">
         <button class="btn small" id="btnAddAttach">+ Joindre un document (email, image, PDF)</button>
@@ -514,6 +520,8 @@ let driveClientId = localStorage.getItem("sensitache.driveClientId") || "";
 let driveAccessToken = null;
 let driveTokenExpiry = 0;
 let driveFileId = localStorage.getItem("sensitache.driveFileId") || null;
+let driveFolderId = localStorage.getItem("sensitache.driveFolderId") || null;
+let driveFolderName = localStorage.getItem("sensitache.driveFolderName") || "";
 let driveTokenClient = null;
 let driveLastSyncAt = localStorage.getItem("sensitache.driveLastSync") ? Number(localStorage.getItem("sensitache.driveLastSync")) : null;
 
@@ -753,6 +761,7 @@ function showSettingsModal(){
         <button class="btn" id="setCollabs" style="justify-content:flex-start;">👥 Collaborateurs</button>
         <button class="btn" id="setBackups" style="justify-content:flex-start;">🗄️ Sauvegardes automatiques…</button>
         <button class="btn" id="setTrashRetention" style="justify-content:flex-start;">🗑️ Rétention de la Corbeille…</button>
+        <button class="btn" id="setIntegrationPrompt" style="justify-content:flex-start;">🔗 Prompt d'intégration pour une nouvelle appli…</button>
         <button class="btn" id="setUndo" style="justify-content:flex-start;">↩ Annuler la dernière action</button>
         <button class="btn" id="setExport" style="justify-content:flex-start;">⬇️ Exporter la sauvegarde</button>
         <button class="btn" id="setImport" style="justify-content:flex-start;">⬆️ Importer une sauvegarde</button>
@@ -799,6 +808,7 @@ function showSettingsModal(){
   overlay.querySelector("#setCollabs").addEventListener("click", ()=>{ overlay.remove(); showCollabManagerModal(); });
   overlay.querySelector("#setBackups").addEventListener("click", ()=>{ overlay.remove(); showBackupsModal(); });
   overlay.querySelector("#setTrashRetention").addEventListener("click", ()=>{ overlay.remove(); showTrashRetentionModal(); });
+  overlay.querySelector("#setIntegrationPrompt").addEventListener("click", ()=>{ overlay.remove(); showIntegrationPromptModal(); });
   overlay.querySelector("#setUndo").addEventListener("click", ()=>{ undo(); overlay.remove(); });
   overlay.querySelector("#setExport").addEventListener("click", ()=>{ exportAllData(); overlay.remove(); });
   overlay.querySelector("#setImport").addEventListener("click", ()=>{ document.getElementById("importAllFile").click(); overlay.remove(); });
@@ -1331,6 +1341,7 @@ function openTaskDrawer(id){
 
   renderAttachList(t);
   renderProcessLinkRow(t);
+  renderLinkedAppsList(t);
   document.getElementById("drawer").classList.remove("fullscreen");
   setFullscreenIcon(false);
   removeInlineProcessPreview();
@@ -1706,7 +1717,7 @@ async function uploadAttachmentToDrive(attMeta, dataUrl, task){
     const blob = await (await fetch(dataUrl)).blob();
     const createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
       method:"POST", headers:{Authorization:"Bearer "+token, "Content-Type":"application/json"},
-      body: JSON.stringify({name:"sensitache-attachment-"+attMeta.id+"-"+attMeta.name})
+      body: JSON.stringify(driveFolderId ? {name:"sensitache-attachment-"+attMeta.id+"-"+attMeta.name, parents:[driveFolderId]} : {name:"sensitache-attachment-"+attMeta.id+"-"+attMeta.name})
     });
     const created = await createRes.json();
     if(!created.id) return;
@@ -2038,6 +2049,46 @@ function renderProcessLinkRow(t){
   } else {
     row.innerHTML = "";
   }
+}
+function renderLinkedAppsList(t){
+  const wrap = document.getElementById("linkedAppsList");
+  if(!wrap) return;
+  wrap.innerHTML = "";
+  (t.linkedApps||[]).forEach(app=>{
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;align-items:center;gap:6px;";
+    row.innerHTML = `<button class="btn" style="flex:1;justify-content:space-between;overflow:hidden;" data-open><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🔗 ${escapeHtml(app.name)}</span><span style="color:var(--text-sub);font-size:11px;flex-shrink:0;">Ouvrir →</span></button>
+      <button class="btn small danger" data-del>✕</button>`;
+    row.querySelector("[data-open]").addEventListener("click", ()=> openLinkedApp(t, app));
+    row.querySelector("[data-del]").addEventListener("click", ()=>{
+      if(!confirm("Retirer le lien vers « "+app.name+" » ? (l'application elle-même n'est pas supprimée, juste le lien.)")) return;
+      snapshot();
+      t.linkedApps = t.linkedApps.filter(a=>a.id!==app.id);
+      t.updatedAt = Date.now(); saveData(); renderLinkedAppsList(t);
+    });
+    wrap.appendChild(row);
+  });
+}
+document.getElementById("btnAddLinkedApp").addEventListener("click", ()=>{
+  const t = curTask(); if(!t) return;
+  const url = prompt("Adresse (URL) de l'application (par ex. une page GitHub Pages) :");
+  if(!url || !url.trim()) return;
+  const name = prompt("Nom à afficher pour ce lien :", "Application") || "Application";
+  if(!t.linkedApps) t.linkedApps = [];
+  snapshot();
+  t.linkedApps.push({id:uid("app"), name:name.trim(), url:url.trim()});
+  t.updatedAt = Date.now(); saveData(); renderLinkedAppsList(t);
+});
+function openLinkedApp(t, app){
+  // Round-trip: pass along where to come back to (this exact page) and
+  // which task this is, so the other app can offer a "← Retour" link if
+  // it's been set up to read these parameters (see the companion prompt).
+  let target;
+  try{ target = new URL(app.url); }catch(e){ alert("Adresse invalide : "+app.url); return; }
+  target.searchParams.set("sensitacheReturn", location.href.split("?")[0]);
+  target.searchParams.set("sensitacheTaskId", t.id);
+  target.searchParams.set("sensitacheTaskTitle", t.title||"");
+  window.open(target.toString(), "_blank");
 }
 document.getElementById("btnOpenProcess").addEventListener("click", ()=>{
   const t = curTask(); if(!t) return;
@@ -2831,15 +2882,55 @@ async function driveGetToken(){
   if(driveAccessToken && Date.now() < driveTokenExpiry) return driveAccessToken;
   throw new Error("Session Google expirée — clique sur « Se connecter ».");
 }
+async function ensureDriveFolder(token, name){
+  const q = encodeURIComponent("name='"+name.replace(/'/g,"\\'")+"' and mimeType='application/vnd.google-apps.folder' and trashed=false");
+  const res = await fetch("https://www.googleapis.com/drive/v3/files?q="+q+"&spaces=drive&fields=files(id,name)", {headers:{Authorization:"Bearer "+token}});
+  const data = await res.json();
+  if(data.files && data.files.length>0) return data.files[0].id;
+  const createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
+    method:"POST", headers:{Authorization:"Bearer "+token, "Content-Type":"application/json"},
+    body: JSON.stringify({name, mimeType:"application/vnd.google-apps.folder"})
+  });
+  const created = await createRes.json();
+  if(!created.id) throw new Error("Création du dossier Drive impossible.");
+  return created.id;
+}
+async function moveFileToFolder(token, fileId, folderId){
+  const info = await (await fetch("https://www.googleapis.com/drive/v3/files/"+fileId+"?fields=parents", {headers:{Authorization:"Bearer "+token}})).json();
+  const oldParents = (info.parents||[]).join(",");
+  await fetch("https://www.googleapis.com/drive/v3/files/"+fileId+"?addParents="+folderId+(oldParents?"&removeParents="+oldParents:""), {
+    method:"PATCH", headers:{Authorization:"Bearer "+token}
+  });
+}
 async function driveFindOrCreateFile(token){
   if(driveFileId) return driveFileId;
-  const q = encodeURIComponent("name='"+DRIVE_FILENAME+"' and trashed=false");
+  const folderClause = driveFolderId ? " and '"+driveFolderId+"' in parents" : "";
+  const q = encodeURIComponent("name='"+DRIVE_FILENAME+"' and trashed=false"+folderClause);
   const res = await fetch("https://www.googleapis.com/drive/v3/files?q="+q+"&spaces=drive&fields=files(id,name)", {
     headers: {Authorization:"Bearer "+token}
   });
   const data = await res.json();
   if(data.files && data.files.length>0){
     driveFileId = data.files[0].id;
+  } else if(driveFolderId){
+    // Not in the configured folder yet — check if it already exists elsewhere
+    // (e.g. created before a folder was set up) and move it in, instead of
+    // creating a confusing duplicate.
+    const qAny = encodeURIComponent("name='"+DRIVE_FILENAME+"' and trashed=false");
+    const resAny = await fetch("https://www.googleapis.com/drive/v3/files?q="+qAny+"&spaces=drive&fields=files(id,name)", {headers:{Authorization:"Bearer "+token}});
+    const dataAny = await resAny.json();
+    if(dataAny.files && dataAny.files.length>0){
+      driveFileId = dataAny.files[0].id;
+      await moveFileToFolder(token, driveFileId, driveFolderId);
+    } else {
+      const createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
+        method:"POST", headers:{Authorization:"Bearer "+token, "Content-Type":"application/json"},
+        body: JSON.stringify({name: DRIVE_FILENAME, mimeType:"application/json", parents:[driveFolderId]})
+      });
+      const created = await createRes.json();
+      if(!created.id) throw new Error("Création du fichier Drive impossible.");
+      driveFileId = created.id;
+    }
   } else {
     const createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
       method:"POST",
@@ -3032,7 +3123,7 @@ async function uploadBackupToDriveAsFile(entry, prefix, keepCount){
     const name = prefix+new Date(entry.ts).toISOString().replace(/[:.]/g,"-")+".json";
     const createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
       method:"POST", headers:{Authorization:"Bearer "+token, "Content-Type":"application/json"},
-      body: JSON.stringify({name, mimeType:"application/json"})
+      body: JSON.stringify(driveFolderId ? {name, mimeType:"application/json", parents:[driveFolderId]} : {name, mimeType:"application/json"})
     });
     const created = await createRes.json();
     if(!created.id) return;
@@ -3045,7 +3136,8 @@ async function uploadBackupToDriveAsFile(entry, prefix, keepCount){
 }
 async function cleanupOldDriveBackups(token, prefix, keepCount){
   try{
-    const q = encodeURIComponent("name contains '"+prefix+"' and trashed=false");
+    const folderClause = driveFolderId ? " and '"+driveFolderId+"' in parents" : "";
+    const q = encodeURIComponent("name contains '"+prefix+"' and trashed=false"+folderClause);
     const res = await fetch("https://www.googleapis.com/drive/v3/files?q="+q+"&spaces=drive&fields=files(id,name,createdTime)&orderBy=createdTime desc", {headers:{Authorization:"Bearer "+token}});
     const data = await res.json();
     const files = data.files||[];
@@ -3216,6 +3308,133 @@ function showTrashRetentionModal(){
   overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
 }
 
+const INTEGRATION_PROMPT_TEXT = `Je veux que tu ajoutes à cette application deux choses, en suivant exactement le
+même mécanisme que dans mon autre application "SensiTâche" (un gestionnaire de
+tâches que j'ai fait développer séparément).
+
+## 1. Aller-retour avec SensiTâche
+
+Quand j'ouvre cette appli depuis SensiTâche, elle reçoit dans l'adresse (URL)
+ces paramètres :
+- sensitacheReturn : l'adresse à laquelle revenir
+- sensitacheTaskId : l'identifiant de la tâche d'origine
+- sensitacheTaskTitle : le titre de cette tâche
+
+Au chargement de la page, lis ces paramètres avec URLSearchParams. S'ils sont
+présents :
+- Affiche un bouton ou lien fixe, discret, quelque part en haut de l'écran :
+  "← Retour à [titre de la tâche]" (utilise sensitacheTaskTitle, sinon juste
+  "← Retour à SensiTâche").
+- Au clic, navigue vers sensitacheReturn en ajoutant
+  ?sensitacheTaskId=<la valeur reçue> à la fin, pour que SensiTâche rouvre
+  directement la bonne tâche à l'arrivée.
+- Si ces paramètres sont absents, n'affiche rien de spécial : l'appli doit
+  fonctionner normalement en dehors de ce contexte.
+
+## 2. Sauvegarde sur Google Drive, centralisée avec SensiTâche
+
+Ajoute la même sauvegarde Google Drive que SensiTâche, avec les mêmes
+principes :
+
+- Connexion OAuth côté client avec Google Identity Services
+  (https://accounts.google.com/gsi/client), scope
+  https://www.googleapis.com/auth/drive.file uniquement (jamais un accès
+  plus large au Drive).
+- Un champ dans les réglages de l'appli pour coller son propre identifiant
+  client OAuth (xxxx.apps.googleusercontent.com), stocké dans le
+  localStorage de cette appli.
+- Le jeton de connexion obtenu reste uniquement en mémoire (jamais dans le
+  localStorage), par sécurité — il faut donc parfois recliquer
+  "Se connecter" après expiration (environ 1h).
+- Un dossier Drive partagé avec SensiTâche : utilise le dossier nommé
+  exactement SensiTache (celui déjà utilisé par mon appli SensiTâche, à
+  la racine de mon Drive). Ne propose pas de champ pour changer ce nom sauf
+  si je te le demande — au moment de sauvegarder, cherche un dossier Drive
+  nommé SensiTache (requête
+  mimeType='application/vnd.google-apps.folder' and name='SensiTache') ;
+  s'il n'existe pas, crée-le à la racine. Utilise son identifiant comme
+  parents lors de la création du fichier de sauvegarde de cette appli, pour
+  qu'il atterrisse dans le même dossier que le reste de mes sauvegardes.
+- Un seul fichier de sauvegarde par appli, nommé de façon reconnaissable
+  (par exemple nom-de-cette-appli-sauvegarde-drive.json), retrouvé par
+  recherche du nom exact dans ce dossier (pas par ID stocké en dur, pour que
+  ça fonctionne même après un changement d'appareil).
+- Fusion, jamais écrasement : avant chaque sauvegarde automatique, va
+  chercher la version actuelle sur Drive, fusionne-la avec les données
+  locales (les éléments les plus récemment modifiés gagnent — utilise un
+  champ updatedAt sur chaque enregistrement pour comparer), puis renvoie le
+  résultat fusionné. Ne remplace jamais purement et simplement le fichier
+  distant par la version locale.
+- Sauvegarde automatique : à chaque modification, avec un court délai
+  (une demi-seconde environ) pour regrouper les changements rapprochés, sans
+  bloquer l'appli en attendant que ça parte.
+- Affiche quelque part un petit indicateur visuel simple (point vert/gris)
+  montrant si la connexion Drive est active, sans bloquer l'utilisation de
+  l'appli si elle ne l'est pas.
+
+Garde tout ça au même niveau de simplicité que le reste de cette appli — pas
+besoin de reproduire les fonctionnalités plus avancées de SensiTâche
+(sauvegardes quotidiennes/hebdomadaires séparées, etc.) sauf si je te le
+demande explicitement.
+
+## 3. Continuité des données lors des mises à jour de l'appli
+
+Je vais régulièrement te redemander des mises à jour de cette appli, et
+remplacer l'ancien fichier par le nouveau sur mon hébergement. Il faut que ça
+ne fasse jamais perdre mes données existantes, ni locales ni sur Drive.
+Respecte ces règles à chaque mise à jour, même quand je ne le redemande pas
+explicitement :
+
+- Ne renomme jamais la clé utilisée dans localStorage
+  (localStorage.getItem/setItem) d'une version à l'autre, ni le nom du
+  fichier de sauvegarde Drive une fois choisi. Le fichier remplacé garde le
+  même nom/emplacement, donc localStorage n'est jamais effacé par une mise
+  à jour tant que je remplace le fichier au même endroit — mais si le nom de
+  la clé change dans le code, les anciennes données deviennent invisibles
+  même si elles sont toujours là.
+- Si tu dois changer la structure des données (ajouter un champ,
+  réorganiser un objet), écris toujours une petite migration au chargement :
+  charge les données existantes telles quelles, puis complète les champs
+  manquants avec une valeur par défaut raisonnable (if(!data.champ)
+  data.champ = ...), au lieu de supposer que la nouvelle structure est déjà
+  là. Ne réécris jamais le chargement des données en partant d'une page
+  blanche.
+- Le fichier de sauvegarde Drive est retrouvé par une recherche sur son nom
+  exact (pas un identifiant codé en dur) — garde ce nom strictement identique
+  d'une version à l'autre.
+- Avant toute mise à jour un peu conséquente (changement de structure de
+  données notamment), rappelle-moi de faire un export manuel de mes données
+  actuelles depuis l'appli (si elle a un bouton Exporter) par simple mesure
+  de sécurité, en plus de la sauvegarde Drive automatique.`;
+
+function showIntegrationPromptModal(){
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal" style="width:560px;max-height:82vh;overflow-y:auto;">
+      <h2>🔗 Prompt d'intégration pour une nouvelle appli</h2>
+      <p style="font-size:12.5px;color:var(--text-sub);">Colle ce texte tel quel dans une conversation Claude à propos d'une de tes autres applis HTML, pour qu'elle communique avec SensiTâche et sauvegarde au même endroit sur ton Drive.</p>
+      <textarea readonly style="width:100%;min-height:320px;font-size:11.5px;line-height:1.5;border:1px solid var(--border-soft);border-radius:8px;padding:10px 12px;background:var(--bg-app);color:var(--text-main);margin:12px 0;white-space:pre-wrap;">${escapeHtml(INTEGRATION_PROMPT_TEXT)}</textarea>
+      <div class="modal-actions">
+        <button class="btn ghost" id="ipClose">Fermer</button>
+        <button class="btn primary" id="ipCopy">📋 Copier le prompt</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector("#ipCopy").addEventListener("click", async ()=>{
+    const btn = overlay.querySelector("#ipCopy");
+    try{
+      await navigator.clipboard.writeText(INTEGRATION_PROMPT_TEXT);
+      btn.textContent = "✅ Copié !";
+      setTimeout(()=>{ btn.textContent = "📋 Copier le prompt"; }, 2000);
+    }catch(e){
+      alert("Impossible de copier automatiquement — sélectionne le texte ci-dessus et copie-le manuellement (Ctrl+C).");
+    }
+  });
+  overlay.querySelector("#ipClose").addEventListener("click", ()=> overlay.remove());
+  overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
+}
+
 async function writeDriveBackup(){
   if(!driveClientId) return;
   try{
@@ -3282,7 +3501,7 @@ async function refreshDriveDiag(){
     const data = await res.json();
     const email = data.user ? data.user.emailAddress : "?";
     el.style.display = "block";
-    el.innerHTML = "Compte connecté : <b style=\"color:var(--text-main);\">"+escapeHtml(email)+"</b><br>ID du fichier de sauvegarde : <code>"+escapeHtml(driveFileId||"(pas encore créé)")+"</code>"
+    el.innerHTML = "Compte connecté : <b style=\"color:var(--text-main);\">"+escapeHtml(email)+"</b><br>ID du fichier de sauvegarde : <code>"+escapeHtml(driveFileId||"(pas encore créé)")+"</code><br>Dossier : <b style=\"color:var(--text-main);\">"+(driveFolderName?escapeHtml(driveFolderName):"racine du Drive")+"</b>"
       + "<br><span style='font-size:10.5px;'>Compare ces deux informations sur tous tes appareils — si le compte ou l'ID diffère, ils ne se synchronisent pas ensemble.</span>";
   }catch(e){ el.style.display = "none"; }
 }
@@ -3317,6 +3536,10 @@ function showDriveModal(){
       <input type="text" id="driveClientIdInput" placeholder="xxxxxxxx.apps.googleusercontent.com" value="${escapeHtml(driveClientId)}" style="width:100%;border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;background:var(--bg-app);color:var(--text-main);font-size:12.5px;">
       <div id="driveStatus" style="font-size:12px;color:var(--text-sub);margin:10px 0;"></div>
       <div id="driveDiag" style="font-size:11.5px;color:var(--text-sub);background:var(--bg-app);border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;margin-bottom:10px;display:none;"></div>
+      <label style="font-size:12px;color:var(--text-sub);display:block;margin:14px 0 5px;">📁 Dossier Drive pour les sauvegardes (optionnel)</label>
+      <input type="text" id="driveFolderInput" placeholder="Ex. Sauvegardes SensiTâche" value="${escapeHtml(driveFolderName)}" style="width:100%;border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;background:var(--bg-app);color:var(--text-main);font-size:12.5px;margin-bottom:6px;">
+      <p style="font-size:11px;color:var(--text-sub);margin:0 0 8px;">Si un nom est indiqué, toutes les nouvelles sauvegardes (et le fichier de synchro s'il existe déjà ailleurs) seront rangées dans ce dossier au lieu de la racine de ton Drive. Laisse vide pour revenir à la racine.</p>
+      <button class="btn small" id="driveSetFolder" style="width:100%;justify-content:center;margin-bottom:6px;">Enregistrer / déplacer vers ce dossier</button>
       <div class="modal-actions" style="flex-wrap:wrap;">
         <button class="btn small" id="driveSaveId">Enregistrer l'identifiant</button>
         <button class="btn small primary" id="driveConnectBtn">Se connecter</button>
@@ -3328,6 +3551,30 @@ function showDriveModal(){
   document.body.appendChild(overlay);
   updateDriveStatus();
   refreshDriveDiag();
+  overlay.querySelector("#driveSetFolder").addEventListener("click", async ()=>{
+    const btn = overlay.querySelector("#driveSetFolder");
+    const name = overlay.querySelector("#driveFolderInput").value.trim();
+    if(!(driveAccessToken && Date.now() < driveTokenExpiry)){ alert("Connecte-toi d'abord à Drive."); return; }
+    btn.textContent = "…"; btn.disabled = true;
+    try{
+      const token = await driveGetToken();
+      if(!name){
+        driveFolderId = null; driveFolderName = "";
+        localStorage.removeItem("sensitache.driveFolderId");
+        localStorage.removeItem("sensitache.driveFolderName");
+        alert("Dossier retiré — les prochaines sauvegardes iront à la racine du Drive.");
+      } else {
+        const folderId = await ensureDriveFolder(token, name);
+        driveFolderId = folderId; driveFolderName = name;
+        localStorage.setItem("sensitache.driveFolderId", folderId);
+        localStorage.setItem("sensitache.driveFolderName", name);
+        if(driveFileId) await moveFileToFolder(token, driveFileId, folderId);
+        alert("Dossier « "+name+" » prêt — les sauvegardes iront désormais ici.");
+      }
+      refreshDriveDiag();
+    }catch(err){ alert("Échec : "+err.message); }
+    finally{ btn.textContent = "Enregistrer / déplacer vers ce dossier"; btn.disabled = false; }
+  });
   overlay.querySelector("#driveSaveId").addEventListener("click", ()=>{
     driveClientId = overlay.querySelector("#driveClientIdInput").value.trim();
     localStorage.setItem("sensitache.driveClientId", driveClientId);
@@ -3761,6 +4008,21 @@ window.addEventListener("popstate", ()=>{
     return;
   }
 });
+
+(function handleIncomingAppReturn(){
+  const params = new URLSearchParams(location.search);
+  const taskId = params.get("sensitacheTaskId");
+  if(!taskId) return;
+  const t = DATA.tasks.find(x=>x.id===taskId);
+  history.replaceState(null, "", location.pathname); // clean the URL so a later refresh doesn't retrigger this
+  if(!t) return;
+  if(t.workspaceId !== currentWsId){
+    currentWsId = t.workspaceId; currentTab = "tasks";
+    document.querySelectorAll(".tab").forEach(x=> x.classList.toggle("active", x.dataset.tab==="tasks"));
+    renderSidebar(); renderMain();
+  }
+  openTaskDrawer(taskId);
+})();
 
 (function restoreOpenTask(){
   const savedTaskId = localStorage.getItem("sensitache.openTaskId");
