@@ -377,6 +377,14 @@
               <option value="0">Dimanche</option>
             </select>
           </div>
+          <div id="recurMonthlyModeRow" style="display:none;margin-bottom:8px;">
+            <label style="font-size:11px;color:var(--text-sub);display:block;margin-bottom:4px;">Quel jour du mois</label>
+            <select id="recurMonthlyMode" class="fieldselect">
+              <option value="weekday">Un jour de la semaine précis</option>
+              <option value="first">1er jour du mois</option>
+              <option value="last">Dernier jour du mois</option>
+            </select>
+          </div>
           <div id="recurWeekOfMonthRow" style="display:none;margin-bottom:8px;">
             <label style="font-size:11px;color:var(--text-sub);display:block;margin-bottom:4px;">Semaine du mois</label>
             <select id="recurWeekOfMonth" class="fieldselect">
@@ -536,6 +544,13 @@ function saveData(){
 function uid(p){ return (p||"id")+"_"+Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4); }
 function todayStr(){
   const d = new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+// Same fix as todayStr(): .toISOString() converts to UTC, which silently
+// shifts a local midnight Date back a day for any timezone ahead of UTC
+// (like France). Every date-arithmetic helper must format via local getters
+// instead, or recurrences compute one day early.
+function dateToStr(d){
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 }
 
@@ -964,8 +979,8 @@ function sortCategory(t){
   return 6;
 }
 const CATEGORY_LABEL = {1:"Rappel", 2:"Récurrence", 3:"Aujourd'hui", 4:"Urgent", 5:"Rapide", 6:"Non prioritaire"};
-function addDays(dateStr, n){ const d=new Date(dateStr+"T00:00:00"); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
-function addYears(dateStr, n){ const d=new Date(dateStr+"T00:00:00"); d.setFullYear(d.getFullYear()+n); return d.toISOString().slice(0,10); }
+function addDays(dateStr, n){ const d=new Date(dateStr+"T00:00:00"); d.setDate(d.getDate()+n); return dateToStr(d); }
+function addYears(dateStr, n){ const d=new Date(dateStr+"T00:00:00"); d.setFullYear(d.getFullYear()+n); return dateToStr(d); }
 function nthWeekdayOfMonth(year, month, weekday, nth){
   nth = Number(nth);
   if(nth===-1){
@@ -983,14 +998,14 @@ function nthWeekdayOfMonth(year, month, weekday, nth){
 function nextWeekdayOnOrAfter(dateStr, weekday){
   const d = new Date(dateStr+"T00:00:00");
   while(d.getDay()!==Number(weekday)) d.setDate(d.getDate()+1);
-  return d.toISOString().slice(0,10);
+  return dateToStr(d);
 }
 function nextMonthlyOccurrenceOnOrAfter(dateStr, weekday, nth){
   const start = new Date(dateStr+"T00:00:00");
   let year=start.getFullYear(), month=start.getMonth();
   for(let i=0;i<24;i++){
     const candidate = nthWeekdayOfMonth(year, month, Number(weekday), nth);
-    if(candidate && candidate.getTime()>=start.getTime()) return candidate.toISOString().slice(0,10);
+    if(candidate && candidate.getTime()>=start.getTime()) return dateToStr(candidate);
     month++; if(month>11){ month=0; year++; }
   }
   return dateStr;
@@ -1001,21 +1016,46 @@ function advanceMonthlyByWeekday(currentDateStr, weekday, nth){
   for(let i=0;i<24;i++){
     month++; if(month>11){ month=0; year++; }
     const candidate = nthWeekdayOfMonth(year, month, Number(weekday), nth);
-    if(candidate) return candidate.toISOString().slice(0,10);
+    if(candidate) return dateToStr(candidate);
   }
   return currentDateStr;
+}
+function fixedDayOfMonth(year, month, mode){
+  return mode==="first" ? new Date(year, month, 1) : new Date(year, month+1, 0);
+}
+function nextMonthlyFixedDayOnOrAfter(dateStr, mode){
+  const start = new Date(dateStr+"T00:00:00");
+  let year=start.getFullYear(), month=start.getMonth();
+  for(let i=0;i<24;i++){
+    const candidate = fixedDayOfMonth(year, month, mode);
+    if(candidate.getTime()>=start.getTime()) return dateToStr(candidate);
+    month++; if(month>11){ month=0; year++; }
+  }
+  return dateStr;
+}
+function advanceMonthlyFixedDay(currentDateStr, mode){
+  const d = new Date(currentDateStr+"T00:00:00");
+  let year=d.getFullYear(), month=d.getMonth()+1;
+  if(month>11){ month=0; year++; }
+  return dateToStr(fixedDayOfMonth(year, month, mode));
 }
 function computeInitialNextDue(r){
   const start = r.startDate || todayStr();
   if(r.freq==="weekly") return nextWeekdayOnOrAfter(start, r.weekday);
-  if(r.freq==="monthly") return nextMonthlyOccurrenceOnOrAfter(start, r.weekday, r.weekOfMonth);
+  if(r.freq==="monthly"){
+    if(r.monthlyMode==="first"||r.monthlyMode==="last") return nextMonthlyFixedDayOnOrAfter(start, r.monthlyMode);
+    return nextMonthlyOccurrenceOnOrAfter(start, r.weekday, r.weekOfMonth);
+  }
   return start; // daily & yearly start right on the chosen date
 }
 function advanceRecurrence(r){
   const base = r.nextDue || r.startDate || todayStr();
   if(r.freq==="daily") return addDays(base,1);
   if(r.freq==="weekly") return addDays(base,7);
-  if(r.freq==="monthly") return advanceMonthlyByWeekday(base, r.weekday, r.weekOfMonth);
+  if(r.freq==="monthly"){
+    if(r.monthlyMode==="first"||r.monthlyMode==="last") return advanceMonthlyFixedDay(base, r.monthlyMode);
+    return advanceMonthlyByWeekday(base, r.weekday, r.weekOfMonth);
+  }
   if(r.freq==="yearly") return addYears(base,1);
   return base;
 }
@@ -1026,7 +1066,11 @@ function describeRecurrence(r){
   const at = r.time ? " à "+r.time : "";
   if(r.freq==="daily") return "Tous les jours"+at;
   if(r.freq==="weekly") return "Toutes les semaines, le "+FR_WEEKDAYS[r.weekday]+at;
-  if(r.freq==="monthly") return "Tous les mois, le "+NTH_LABEL[r.weekOfMonth]+" "+FR_WEEKDAYS[r.weekday]+at;
+  if(r.freq==="monthly"){
+    if(r.monthlyMode==="first") return "Tous les mois, le 1er jour du mois"+at;
+    if(r.monthlyMode==="last") return "Tous les mois, le dernier jour du mois"+at;
+    return "Tous les mois, le "+NTH_LABEL[r.weekOfMonth]+" "+FR_WEEKDAYS[r.weekday]+at;
+  }
   if(r.freq==="yearly"){
     const d = new Date((r.startDate||todayStr())+"T00:00:00");
     return "Tous les ans, le "+d.toLocaleDateString("fr-FR",{day:"numeric",month:"long"})+at;
@@ -1358,7 +1402,8 @@ function openTaskDrawer(id){
   document.getElementById("recurTime").value = t.recurrence ? (t.recurrence.time||"09:00") : "";
   document.getElementById("recurWeekday").value = t.recurrence && t.recurrence.weekday!==undefined ? t.recurrence.weekday : new Date().getDay();
   document.getElementById("recurWeekOfMonth").value = t.recurrence && t.recurrence.weekOfMonth!==undefined ? t.recurrence.weekOfMonth : "1";
-  updateRecurFieldVisibility(t.recurrence ? t.recurrence.freq : "");
+  document.getElementById("recurMonthlyMode").value = t.recurrence && t.recurrence.monthlyMode ? t.recurrence.monthlyMode : "weekday";
+  updateRecurFieldVisibility(t.recurrence ? t.recurrence.freq : "", t.recurrence ? t.recurrence.monthlyMode : "weekday");
   updateRecurInfo(t);
   const meta = [];
   if(t.recurrence && t.recurrence.lastCompletedAt) meta.push("Dernière fois faite le "+new Date(t.recurrence.lastCompletedAt).toLocaleDateString("fr-FR"));
@@ -1556,10 +1601,12 @@ document.getElementById("btnAddAssignee").addEventListener("click", ()=>{
 document.getElementById("reminderInput").addEventListener("change", e=>{
   const t = curTask(); if(!t) return; t.reminderDate = e.target.value || null; t.updatedAt=Date.now(); saveData();
 });
-function updateRecurFieldVisibility(freq){
+function updateRecurFieldVisibility(freq, monthlyMode){
   document.getElementById("recurExtraFields").style.display = freq ? "block" : "none";
-  document.getElementById("recurWeekdayRow").style.display = (freq==="weekly"||freq==="monthly") ? "block" : "none";
-  document.getElementById("recurWeekOfMonthRow").style.display = (freq==="monthly") ? "block" : "none";
+  const isFixedMonthly = freq==="monthly" && (monthlyMode==="first"||monthlyMode==="last");
+  document.getElementById("recurMonthlyModeRow").style.display = (freq==="monthly") ? "block" : "none";
+  document.getElementById("recurWeekdayRow").style.display = (freq==="weekly"||(freq==="monthly"&&!isFixedMonthly)) ? "block" : "none";
+  document.getElementById("recurWeekOfMonthRow").style.display = (freq==="monthly"&&!isFixedMonthly) ? "block" : "none";
 }
 function updateRecurInfo(t){
   const info = document.getElementById("recurNextInfo");
@@ -1582,16 +1629,26 @@ document.getElementById("recurFreq").addEventListener("change", e=>{
     t.recurrence.startDate = t.recurrence.startDate || todayStr();
     if(t.recurrence.weekday===undefined) t.recurrence.weekday = new Date().getDay();
     if(t.recurrence.weekOfMonth===undefined) t.recurrence.weekOfMonth = "1";
+    if(!t.recurrence.monthlyMode) t.recurrence.monthlyMode = "weekday";
     if(!t.recurrence.time) t.recurrence.time = "09:00";
     document.getElementById("recurStartDate").value = t.recurrence.startDate;
     document.getElementById("recurTime").value = t.recurrence.time;
     document.getElementById("recurWeekday").value = t.recurrence.weekday;
     document.getElementById("recurWeekOfMonth").value = t.recurrence.weekOfMonth;
+    document.getElementById("recurMonthlyMode").value = t.recurrence.monthlyMode;
     recomputeRecurrenceNextDue(t);
   } else {
     t.recurrence = null;
   }
-  updateRecurFieldVisibility(freq);
+  updateRecurFieldVisibility(freq, t.recurrence && t.recurrence.monthlyMode);
+  updateRecurInfo(t);
+  t.updatedAt=Date.now(); saveData();
+});
+document.getElementById("recurMonthlyMode").addEventListener("change", e=>{
+  const t = curTask(); if(!t || !t.recurrence) return;
+  t.recurrence.monthlyMode = e.target.value;
+  recomputeRecurrenceNextDue(t);
+  updateRecurFieldVisibility(t.recurrence.freq, t.recurrence.monthlyMode);
   updateRecurInfo(t);
   t.updatedAt=Date.now(); saveData();
 });
