@@ -511,7 +511,7 @@ let corbeilleRetentionDays = Number(localStorage.getItem("sensitache.corbeilleRe
 let deferredInstallPrompt = null;
 const DRIVE_FILENAME = "sensitache-sauvegarde-drive.json";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
-let driveClientId = localStorage.getItem("sensitache.driveClientId") || "";
+let driveClientId = localStorage.getItem("sensitache.driveClientId") || "575977443231-sojgu8ar97bgq618b4bjri90on89e300.apps.googleusercontent.com";
 let driveAccessToken = null;
 let driveTokenExpiry = 0;
 let driveFileId = localStorage.getItem("sensitache.driveFileId") || null;
@@ -959,7 +959,7 @@ function sortCategory(t){
   if(t.quick) return 5;
   return 6;
 }
-const CATEGORY_LABEL = {1:"Rappel", 2:"Récurrence", 3:"Aujourd'hui", 4:"Urgent", 5:"Rapide", 6:"Le reste"};
+const CATEGORY_LABEL = {1:"Rappel", 2:"Récurrence", 3:"Aujourd'hui", 4:"Urgent", 5:"Rapide", 6:"Prioritaire"};
 function addDays(dateStr, n){ const d=new Date(dateStr+"T00:00:00"); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
 function addYears(dateStr, n){ const d=new Date(dateStr+"T00:00:00"); d.setFullYear(d.getFullYear()+n); return d.toISOString().slice(0,10); }
 function nthWeekdayOfMonth(year, month, weekday, nth){
@@ -1108,7 +1108,7 @@ function renderTasksGroupedList(){
     fillCol(left, 5, "Rapide");
     fillCol(right, 4, "Urgences");
     fillCol(right, 2, "Récurrence");
-    fillCol(right, 6, null); // "le reste" intentionally shown without a header
+    fillCol(right, 6, "Prioritaire");
   }
 }
 
@@ -3306,17 +3306,53 @@ function showTrashRetentionModal(){
 }
 
 const APP_PROMPT_TEXT = `Cette application va être jointe directement à une tâche dans SensiTâche
-(comme une pièce jointe), pas hébergée en ligne séparément.
+(comme une pièce jointe), pas hébergée en ligne séparément. Important : le
+fichier de cette appli est bien sauvegardé par SensiTâche (comme n'importe
+quelle pièce jointe), mais ça ne couvre que le CODE de l'appli — pas les
+données que je saisis en l'utilisant (mon plan, ma liste, mes réglages...).
+Ces données-là doivent être sauvegardées par l'appli elle-même. Respecte ces
+règles :
 
-- Si cette appli a besoin de garder des données d'une utilisation à l'autre
-  (localStorage), utilise un nom de clé bien distinct et préfixé (par exemple
-  "monapp.donnees", pas juste "data") : comme elle est ouverte depuis
-  SensiTâche, elle partage techniquement le même espace de stockage que
-  SensiTâche dans ce navigateur, donc un nom trop générique risquerait
-  d'entrer en conflit avec les données de SensiTâche elle-même.
-- Pas besoin de connexion Google Drive ni de gestion de sauvegarde ici : le
-  fichier de cette appli est déjà sauvegardé automatiquement par SensiTâche
-  elle-même, comme n'importe quelle pièce jointe.`;
+## 1. Sauvegarde locale — obligatoire, jamais optionnelle
+
+- Sauvegarde l'état de travail (tout ce que je peux modifier ou saisir) dans
+  localStorage, sous une clé bien distincte et préfixée avec le nom de cette
+  appli (par exemple "monapp.donnees", jamais un nom générique comme "data").
+  Comme cette appli est ouverte depuis SensiTâche, elle partage techniquement
+  le même espace de stockage que SensiTâche dans ce navigateur — un nom trop
+  générique risquerait d'entrer en conflit.
+- Cette sauvegarde locale doit fonctionner de façon totalement autonome,
+  sans dépendre d'une connexion internet ni d'aucun compte. Déclenche-la à
+  chaque modification (avec un court délai pour regrouper les changements
+  rapprochés), et recharge-la automatiquement à l'ouverture, avant le premier
+  rendu à l'écran.
+- Ne construis JAMAIS une appli où la seule sauvegarde possible dépend d'un
+  service externe (Google Drive ou autre) : si cette dépendance externe n'est
+  pas configurée ou ne fonctionne pas, l'appli doit quand même retenir mon
+  travail localement, sans rien perdre.
+
+## 2. Sauvegarde Google Drive — en plus, pas à la place
+
+Si en plus de la sauvegarde locale ci-dessus tu ajoutes une synchronisation
+Google Drive (utile si je change d'appareil ou si je vide un jour les
+données de ce navigateur), utilise directement cet identifiant client OAuth,
+déjà créé et prêt à l'emploi, sans me demander de le configurer :
+
+575977443231-sojgu8ar97bgq618b4bjri90on89e300.apps.googleusercontent.com
+
+- Scope \`https://www.googleapis.com/auth/drive.file\` uniquement.
+- Le jeton de connexion reste uniquement en mémoire (jamais dans le
+  localStorage).
+- Utilise le dossier Drive nommé exactement \`SensiTache\` à la racine de mon
+  Drive (le même que celui utilisé par SensiTâche) : cherche-le
+  (\`mimeType='application/vnd.google-apps.folder' and name='SensiTache'\`),
+  crée-le s'il n'existe pas, et donne au fichier de sauvegarde de cette appli
+  un nom bien reconnaissable (par exemple
+  \`nom-de-cette-appli-sauvegarde-drive.json\`).
+- Fusion, jamais écrasement : avant chaque sauvegarde automatique, récupère
+  la version actuelle sur Drive, fusionne-la avec les données locales (utilise
+  un champ \`updatedAt\` pour savoir laquelle est la plus récente), puis
+  renvoie le résultat fusionné.`;
 
 function showAppPromptModal(){
   const overlay = document.createElement("div");
