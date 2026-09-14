@@ -2998,7 +2998,20 @@ async function ensureDriveFolder(token, name){
   const q = encodeURIComponent("name='"+name.replace(/'/g,"\\'")+"' and mimeType='application/vnd.google-apps.folder' and trashed=false");
   const res = await fetch("https://www.googleapis.com/drive/v3/files?q="+q+"&spaces=drive&fields=files(id,name,createdTime)&orderBy=createdTime", {headers:{Authorization:"Bearer "+token}});
   const data = await res.json();
-  if(data.files && data.files.length>0) return data.files[0].id; // oldest first — if duplicates exist, everyone converges on the same one from now on
+  if(data.files && data.files.length>0){
+    const canonical = data.files[0].id; // oldest — everyone converges here
+    if(data.files.length>1){
+      // Two devices can still race to create the folder at the exact same
+      // moment (Drive has no lock to prevent that) — instead of promising
+      // it can never happen, make it self-healing: whichever device
+      // notices duplicates merges their contents into the oldest folder
+      // and removes the empties, so the count settles back to one.
+      for(let i=1;i<data.files.length;i++){
+        await mergeDuplicateDriveFolder(token, data.files[i].id, canonical);
+      }
+    }
+    return canonical;
+  }
   const createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
     method:"POST", headers:{Authorization:"Bearer "+token, "Content-Type":"application/json"},
     body: JSON.stringify({name, mimeType:"application/vnd.google-apps.folder"})
@@ -3006,6 +3019,19 @@ async function ensureDriveFolder(token, name){
   const created = await createRes.json();
   if(!created.id) throw new Error("Création du dossier Drive impossible.");
   return created.id;
+}
+async function mergeDuplicateDriveFolder(token, dupFolderId, canonicalFolderId){
+  try{
+    const q = encodeURIComponent("'"+dupFolderId+"' in parents and trashed=false");
+    const res = await fetch("https://www.googleapis.com/drive/v3/files?q="+q+"&spaces=drive&fields=files(id)", {headers:{Authorization:"Bearer "+token}});
+    const data = await res.json();
+    for(const f of (data.files||[])){
+      await fetch("https://www.googleapis.com/drive/v3/files/"+f.id+"?addParents="+canonicalFolderId+"&removeParents="+dupFolderId, {
+        method:"PATCH", headers:{Authorization:"Bearer "+token}
+      });
+    }
+    await fetch("https://www.googleapis.com/drive/v3/files/"+dupFolderId, {method:"DELETE", headers:{Authorization:"Bearer "+token}});
+  }catch(e){ console.warn("Fusion d'un dossier Drive en double échouée :", e); }
 }
 let driveFolderEnsurePromise = null;
 // Every upload path (main file, attachments, backups) must call this before
