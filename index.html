@@ -346,6 +346,11 @@
       </div>
 
       <div class="field-row">
+        <div class="field-label">🎯 Date butoir</div>
+        <input type="date" class="fieldinput" id="dueDateInput">
+      </div>
+
+      <div class="field-row">
         <div class="field-label">🔁 Récurrence</div>
         <select id="recurFreq" class="fieldselect" style="margin-bottom:8px;">
           <option value="">Aucune</option>
@@ -1085,7 +1090,8 @@ function iconSvg(name){
     recur:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12a8 8 0 0114-5.3M20 12a8 8 0 01-14 5.3"/><path d="M18 3v4h-4M6 21v-4h4"/></svg>',
     book:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 012-2h12v16H6a2 2 0 00-2 2V5z"/><path d="M18 3v16"/></svg>',
     link:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 15l6-6M10 6l1-1a4 4 0 116 6l-1 1M14 18l-1 1a4 4 0 11-6-6l1-1"/></svg>',
-    bolt:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>'
+    bolt:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>',
+    flag:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 21V4"/><path d="M5 4h13l-3 4 3 4H5"/></svg>'
   };
   return icons[name]||"";
 }
@@ -1239,6 +1245,10 @@ function renderTaskRow(t){
   if(t.knowledge) badges += `<span class="badge knowledge" title="Base de connaissances">${iconSvg("book")}</span>`;
   if(t.process) badges += `<span class="badge proc" title="Processus associé">${iconSvg("link")}</span>`;
   if(t.attachments && t.attachments.length) badges += `<span class="badge attach" title="Documents joints">${t.attachments.length}📎</span>`;
+  if(t.dueDate){
+    const overdue = t.dueDate < todayStr();
+    badges += `<span class="badge" style="background:${overdue?'rgba(224,85,95,.2)':'rgba(255,255,255,.08)'};color:${overdue?'#F0838C':'var(--text-sub)'};" title="Date butoir : ${t.dueDate}">${iconSvg("flag")} ${t.dueDate}</span>`;
+  }
   row.innerHTML = `
     <div class="task-check" data-check></div>
     <div class="task-title">${escapeHtml(t.title)}</div>
@@ -1397,6 +1407,7 @@ function openTaskDrawer(id){
   document.getElementById("chipQuick").classList.toggle("on", !!t.quick);
   document.getElementById("chipKnowledge").classList.toggle("on", !!t.knowledge);
   document.getElementById("reminderInput").value = t.reminderDate||"";
+  document.getElementById("dueDateInput").value = t.dueDate||"";
   document.getElementById("recurFreq").value = t.recurrence ? t.recurrence.freq : "";
   document.getElementById("recurStartDate").value = t.recurrence ? (t.recurrence.startDate||"") : "";
   document.getElementById("recurTime").value = t.recurrence ? (t.recurrence.time||"09:00") : "";
@@ -1555,28 +1566,31 @@ function showAssignPicker(t){
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.innerHTML = `
-    <div class="modal" style="width:320px;">
+    <div class="modal" style="width:360px;">
       <h2>Affecter des collaborateurs</h2>
-      <div id="assignPickList" style="display:flex;flex-direction:column;gap:4px;margin-bottom:14px;max-height:280px;overflow-y:auto;"></div>
+      <div id="assignPickList" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;max-height:280px;overflow-y:auto;"></div>
       <button class="btn small" id="assignPickNew" style="width:100%;justify-content:center;margin-bottom:10px;">+ Nouveau collaborateur</button>
       <div class="modal-actions"><button class="btn primary" id="assignPickDone">OK</button></div>
     </div>`;
   document.body.appendChild(overlay);
+  function toggle(c){
+    t.assignedTo = t.assignedTo || [];
+    if(t.assignedTo.includes(c.id)) t.assignedTo = t.assignedTo.filter(id=>id!==c.id);
+    else t.assignedTo.push(c.id);
+    t.updatedAt = Date.now(); saveData(); renderAssignChips(t);
+    draw();
+  }
   function draw(){
     const wrap = overlay.querySelector("#assignPickList");
     wrap.innerHTML = "";
     DATA.collaborators.forEach(c=>{
       const checked = (t.assignedTo||[]).includes(c.id);
-      const row = document.createElement("label");
-      row.style.cssText = "display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px;border-radius:6px;";
-      row.innerHTML = `<input type="checkbox" ${checked?"checked":""}><span class="avatar" style="background:${c.color};width:20px;height:20px;font-size:9px;">${escapeHtml(c.name.slice(0,2).toUpperCase())}</span>${escapeHtml(c.name)}`;
-      row.querySelector("input").addEventListener("change", e=>{
-        t.assignedTo = t.assignedTo || [];
-        if(e.target.checked){ if(!t.assignedTo.includes(c.id)) t.assignedTo.push(c.id); }
-        else { t.assignedTo = t.assignedTo.filter(id=>id!==c.id); }
-        t.updatedAt = Date.now(); saveData(); renderAssignChips(t);
-      });
-      wrap.appendChild(row);
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.style.cssText = "display:flex;align-items:center;gap:6px;cursor:pointer;padding:6px 12px 6px 6px;border-radius:20px;font-size:13px;border:1.5px solid "+(checked?"var(--accent)":"var(--border-soft)")+";background:"+(checked?"rgba(122,146,255,.15)":"var(--bg-card)")+";color:var(--text-main);";
+      chip.innerHTML = `<span class="avatar" style="background:${c.color};width:22px;height:22px;font-size:9.5px;">${escapeHtml(c.name.slice(0,2).toUpperCase())}</span>${escapeHtml(c.name)}${checked?" ✓":""}`;
+      chip.addEventListener("click", ()=> toggle(c));
+      wrap.appendChild(chip);
     });
   }
   draw();
@@ -1600,6 +1614,9 @@ document.getElementById("btnAddAssignee").addEventListener("click", ()=>{
 });
 document.getElementById("reminderInput").addEventListener("change", e=>{
   const t = curTask(); if(!t) return; t.reminderDate = e.target.value || null; t.updatedAt=Date.now(); saveData();
+});
+document.getElementById("dueDateInput").addEventListener("change", e=>{
+  const t = curTask(); if(!t) return; t.dueDate = e.target.value || null; t.updatedAt=Date.now(); saveData(); renderMain();
 });
 function updateRecurFieldVisibility(freq, monthlyMode){
   document.getElementById("recurExtraFields").style.display = freq ? "block" : "none";
@@ -1798,6 +1815,7 @@ async function uploadAttachmentToDrive(attMeta, dataUrl, task){
   if(!(driveClientId && driveAccessToken && Date.now() < driveTokenExpiry)) return;
   try{
     const token = await driveGetToken();
+    await getDriveFolderId(token);
     const blob = await (await fetch(dataUrl)).blob();
     const createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
       method:"POST", headers:{Authorization:"Bearer "+token, "Content-Type":"application/json"},
@@ -2966,9 +2984,9 @@ async function driveGetToken(){
 }
 async function ensureDriveFolder(token, name){
   const q = encodeURIComponent("name='"+name.replace(/'/g,"\\'")+"' and mimeType='application/vnd.google-apps.folder' and trashed=false");
-  const res = await fetch("https://www.googleapis.com/drive/v3/files?q="+q+"&spaces=drive&fields=files(id,name)", {headers:{Authorization:"Bearer "+token}});
+  const res = await fetch("https://www.googleapis.com/drive/v3/files?q="+q+"&spaces=drive&fields=files(id,name,createdTime)&orderBy=createdTime", {headers:{Authorization:"Bearer "+token}});
   const data = await res.json();
-  if(data.files && data.files.length>0) return data.files[0].id;
+  if(data.files && data.files.length>0) return data.files[0].id; // oldest first — if duplicates exist, everyone converges on the same one from now on
   const createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
     method:"POST", headers:{Authorization:"Bearer "+token, "Content-Type":"application/json"},
     body: JSON.stringify({name, mimeType:"application/vnd.google-apps.folder"})
@@ -2976,6 +2994,22 @@ async function ensureDriveFolder(token, name){
   const created = await createRes.json();
   if(!created.id) throw new Error("Création du dossier Drive impossible.");
   return created.id;
+}
+let driveFolderEnsurePromise = null;
+// Every upload path (main file, attachments, backups) must call this before
+// creating anything — previously only the main sync file ensured the folder,
+// so an attachment or backup uploaded before that ever ran fell through to
+// Drive's root instead of the SensiTache folder.
+async function getDriveFolderId(token){
+  if(driveFolderId) return driveFolderId;
+  if(!driveFolderEnsurePromise){
+    driveFolderEnsurePromise = ensureDriveFolder(token, DRIVE_FOLDER_NAME).then(id=>{
+      driveFolderId = id;
+      localStorage.setItem("sensitache.driveFolderId", id);
+      return id;
+    }).finally(()=>{ driveFolderEnsurePromise = null; });
+  }
+  return driveFolderEnsurePromise;
 }
 async function moveFileToFolder(token, fileId, folderId){
   const info = await (await fetch("https://www.googleapis.com/drive/v3/files/"+fileId+"?fields=parents", {headers:{Authorization:"Bearer "+token}})).json();
@@ -2986,10 +3020,7 @@ async function moveFileToFolder(token, fileId, folderId){
 }
 async function driveFindOrCreateFile(token){
   if(driveFileId) return driveFileId;
-  if(!driveFolderId){
-    driveFolderId = await ensureDriveFolder(token, DRIVE_FOLDER_NAME);
-    localStorage.setItem("sensitache.driveFolderId", driveFolderId);
-  }
+  await getDriveFolderId(token);
   const folderClause = driveFolderId ? " and '"+driveFolderId+"' in parents" : "";
   const q = encodeURIComponent("name='"+DRIVE_FILENAME+"' and trashed=false"+folderClause);
   const res = await fetch("https://www.googleapis.com/drive/v3/files?q="+q+"&spaces=drive&fields=files(id,name)", {
@@ -3206,6 +3237,7 @@ async function uploadBackupToDriveAsFile(entry, prefix, keepCount){
   if(!(driveClientId && driveAccessToken && Date.now() < driveTokenExpiry)) return;
   try{
     const token = await driveGetToken();
+    await getDriveFolderId(token);
     const name = prefix+new Date(entry.ts).toISOString().replace(/[:.]/g,"-")+".json";
     const createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
       method:"POST", headers:{Authorization:"Bearer "+token, "Content-Type":"application/json"},
