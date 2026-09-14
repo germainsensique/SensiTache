@@ -1903,10 +1903,12 @@ function renderAttachList(t){
     const row = document.createElement("div");
     row.className = "attach-item";
     row.innerHTML = `<span class="aicon">${iconMap[a.type]}</span><span class="aname">${escapeHtml(a.name)}</span>
+      <span class="astatus" style="font-size:10.5px;color:var(--text-sub);white-space:nowrap;">…</span>
       <button class="btn small" data-open>${a.type==="email" ? "Aperçu" : (a.type==="app" ? "Lancer →" : "Ouvrir")}</button>
       ${a.type==="email" ? '<button class="btn small" data-download title="Télécharger le fichier .eml original">⬇️</button>' : ''}
       ${a.type==="app" ? '<button class="btn small" data-replace title="Remplacer par une version mise à jour du fichier">🔄</button>' : ''}
       <button class="btn small danger" data-del>✕</button>`;
+    refreshAttachStatus(row, a);
     row.querySelector("[data-open]").addEventListener("click", async ()=>{
       if(a.type==="email"){
         showEmailPreviewModal(a);
@@ -1918,6 +1920,7 @@ function renderAttachList(t){
       } else {
         openAttachmentBlob(a);
       }
+      refreshAttachStatus(row, a); // opening it may have just cached it locally — reflect that
     });
     const dlBtn = row.querySelector("[data-download]");
     if(dlBtn) dlBtn.addEventListener("click", async ()=>{
@@ -1939,6 +1942,15 @@ function renderAttachList(t){
     });
     wrap.appendChild(row);
   });
+}
+async function refreshAttachStatus(row, a){
+  const el = row.querySelector(".astatus");
+  if(!el) return;
+  if(a.dataUrl){ el.textContent = "✅ hors ligne"; el.style.color = "var(--knowledge)"; return; }
+  const cached = await attachGetLocal(a.id);
+  if(cached){ el.textContent = "✅ hors ligne"; el.style.color = "var(--knowledge)"; return; }
+  if(a.driveFileId){ el.textContent = "☁️ sur Drive"; el.style.color = "var(--text-sub)"; return; }
+  el.textContent = "⚠️ pas encore sauvegardé"; el.style.color = "#F0838C";
 }
 function replaceAttachmentFile(t, a){
   const input = document.createElement("input");
