@@ -341,7 +341,7 @@
       </div>
 
       <div class="field-row">
-        <div class="field-label">🕒 Rappel (fait remonter la tâche en haut de la liste)</div>
+        <div class="field-label">🕒 Rappel</div>
         <input type="date" class="fieldinput" id="reminderInput">
       </div>
 
@@ -969,8 +969,10 @@ function recurrenceIsDue(t){
 }
 function myVisibleTasks(){
   // "Ma liste de tâches" : uniquement mes tâches actives, hors Base de connaissances,
-  // et hors récurrences dont la prochaine échéance n'est pas encore arrivée
-  return activeTasks().filter(t=> !t.knowledge && (t.assignedTo||[]).includes(DATA.currentUserId) && !recurrenceNotDueYet(t));
+  // hors récurrences dont la prochaine échéance n'est pas encore arrivée,
+  // et hors rappels dont la date n'est pas encore arrivée (le rappel agit comme un filtre, pas juste un tri)
+  const today = todayStr();
+  return activeTasks().filter(t=> !t.knowledge && (t.assignedTo||[]).includes(DATA.currentUserId) && !recurrenceNotDueYet(t) && !(t.reminderDate && t.reminderDate>today));
 }
 function recurringTasks(){ return activeTasks().filter(t=> t.recurrence && t.recurrence.freq); }
 function sortCategory(t){
@@ -1612,7 +1614,7 @@ document.getElementById("btnAddAssignee").addEventListener("click", ()=>{
   const t = curTask(); if(t) showAssignPicker(t);
 });
 document.getElementById("reminderInput").addEventListener("change", e=>{
-  const t = curTask(); if(!t) return; t.reminderDate = e.target.value || null; t.updatedAt=Date.now(); saveData();
+  const t = curTask(); if(!t) return; t.reminderDate = e.target.value || null; t.updatedAt=Date.now(); saveData(); renderMain();
 });
 document.getElementById("dueDateInput").addEventListener("change", e=>{
   const t = curTask(); if(!t) return; t.dueDate = e.target.value || null; t.updatedAt=Date.now(); saveData(); renderMain();
@@ -1905,8 +1907,18 @@ function renderAttachList(t){
       <button class="btn small" data-open>${a.type==="email" ? "Aperçu" : (a.type==="app" ? "Lancer →" : "Ouvrir")}</button>
       ${a.type==="email" ? '<button class="btn small" data-download title="Télécharger le fichier .eml original">⬇️</button>' : ''}
       ${a.type==="app" ? '<button class="btn small" data-replace title="Remplacer par une version mise à jour du fichier">🔄</button>' : ''}
+      <button class="btn small" data-upload title="Sauvegarder sur Google Drive" style="display:none;">☁️↑</button>
       <button class="btn small danger" data-del>✕</button>`;
     refreshAttachStatus(row, a);
+    row.querySelector("[data-upload]").addEventListener("click", async (e)=>{
+      const btn = e.currentTarget;
+      const cached = await attachGetLocal(a.id);
+      if(!cached){ alert("Ce fichier n'est pas non plus présent sur cet appareil — impossible de l'envoyer depuis ici."); return; }
+      btn.disabled = true; btn.textContent = "…";
+      await uploadAttachmentToDrive(a, cached, t);
+      btn.disabled = false; btn.textContent = "☁️↑";
+      refreshAttachStatus(row, a);
+    });
     row.querySelector("[data-open]").addEventListener("click", async ()=>{
       if(a.type==="email"){
         showEmailPreviewModal(a);
@@ -1943,9 +1955,12 @@ function renderAttachList(t){
 }
 async function refreshAttachStatus(row, a){
   const el = row.querySelector(".astatus");
+  const uploadBtn = row.querySelector("[data-upload]");
   if(!el) return;
+  if(uploadBtn) uploadBtn.style.display = "none";
   if(a.dataUrl){ el.textContent = "✅ hors ligne"; el.style.color = "var(--knowledge)"; return; }
   const cached = await attachGetLocal(a.id);
+  if(cached && !a.driveFileId && uploadBtn) uploadBtn.style.display = "inline-flex";
   if(cached){ el.textContent = "✅ hors ligne"; el.style.color = "var(--knowledge)"; return; }
   if(a.driveFileId){ el.textContent = "☁️ sur Drive"; el.style.color = "var(--text-sub)"; return; }
   el.textContent = "⚠️ pas encore sauvegardé"; el.style.color = "#F0838C";
