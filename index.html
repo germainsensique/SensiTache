@@ -295,13 +295,7 @@
     </div>
     <div class="tabs" id="tabs">
       <button id="btnAddTask" title="Nouvelle tâche" style="width:28px;height:28px;flex-shrink:0;align-self:center;border-radius:50%;background:#ECEBE6;color:#15171C;border:none;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;margin-right:8px;">+</button>
-      <div class="tab active" data-tab="tasks">Tâches</div>
-      <div class="tab" data-tab="collab">Collaboration</div>
-      <div class="tab" data-tab="knowledge">Base de connaissances</div>
-      <div class="tab" data-tab="search">Rechercher</div>
-      <div class="tab" data-tab="archive">Corbeille</div>
-      <div class="tab" data-tab="recurrence">Récurrences</div>
-      <div class="tab" data-tab="reminders">Rappels</div>
+      <div id="tabsInner" style="display:contents;"></div>
     </div>
     <div class="main-content" id="mainContent"></div>
   </div>
@@ -918,13 +912,75 @@ function showCollabManagerModal(){
 /* =========================================================
    TABS
 ========================================================= */
-document.querySelectorAll(".tab").forEach(t=>{
-  t.addEventListener("click", ()=>{
-    currentTab = t.dataset.tab;
-    document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active", x===t));
-    renderMain();
+const TAB_DEFS = {
+  tasks: {label:"Tâches"},
+  collab: {label:"Collaboration"},
+  knowledge: {label:"Base de connaissances"},
+  search: {title:"Rechercher", icon:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>'},
+  archive: {title:"Corbeille", icon:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>'},
+  recurrence: {label:"Récurrences"},
+  reminders: {label:"Rappels"}
+};
+let tabOrder = (function(){
+  try{
+    const saved = JSON.parse(localStorage.getItem("sensitache.tabOrder"));
+    if(Array.isArray(saved) && saved.every(id=>TAB_DEFS[id])) return saved;
+  }catch(e){}
+  return Object.keys(TAB_DEFS);
+})();
+function renderTabsBar(){
+  const wrap = document.getElementById("tabsInner");
+  wrap.innerHTML = "";
+  tabOrder.forEach(id=>{
+    const def = TAB_DEFS[id]; if(!def) return;
+    const tab = document.createElement("div");
+    tab.className = "tab" + (id===currentTab ? " active" : "");
+    tab.dataset.tab = id;
+    if(def.title) tab.title = def.title;
+    tab.innerHTML = `<span class="tab-handle" style="cursor:grab;touch-action:none;padding:0 3px;opacity:.55;">⠿</span><span class="tab-label" style="display:inline-flex;align-items:center;">${def.icon || escapeHtml(def.label)}</span>`;
+    tab.addEventListener("click", ()=>{
+      if(tab.dataset.justDragged==="1"){ tab.dataset.justDragged=""; return; }
+      currentTab = id;
+      document.querySelectorAll(".tab").forEach(x=> x.classList.toggle("active", x===tab));
+      renderMain();
+    });
+    const handle = tab.querySelector(".tab-handle");
+    handle.addEventListener("pointerdown", e=>{
+      e.preventDefault(); e.stopPropagation();
+      let dragOverTab = null;
+      tab.style.opacity = "0.4";
+      const move = (ev)=>{
+        const tabs = Array.from(wrap.querySelectorAll(".tab"));
+        dragOverTab = tabs.find(x=>{
+          const r = x.getBoundingClientRect();
+          return ev.clientX >= r.left && ev.clientX <= r.right;
+        }) || null;
+        tabs.forEach(x=> x.style.borderLeft = (x===dragOverTab && x!==tab) ? "2px solid var(--accent)" : "");
+      };
+      const up = ()=>{
+        document.removeEventListener("pointermove", move);
+        document.removeEventListener("pointerup", up);
+        tab.style.opacity = "";
+        Array.from(wrap.querySelectorAll(".tab")).forEach(x=> x.style.borderLeft = "");
+        if(dragOverTab && dragOverTab!==tab){
+          const fromIdx = tabOrder.indexOf(id);
+          const toIdx = tabOrder.indexOf(dragOverTab.dataset.tab);
+          if(fromIdx>-1 && toIdx>-1){
+            tabOrder.splice(fromIdx,1);
+            tabOrder.splice(toIdx,0,id);
+            localStorage.setItem("sensitache.tabOrder", JSON.stringify(tabOrder));
+            tab.dataset.justDragged = "1";
+            renderTabsBar();
+          }
+        }
+      };
+      document.addEventListener("pointermove", move);
+      document.addEventListener("pointerup", up);
+    });
+    wrap.appendChild(tab);
   });
-});
+}
+renderTabsBar();
 document.getElementById("btnAddTask").addEventListener("click", ()=>{
   if(currentTab!=="tasks"){
     currentTab = "tasks";
