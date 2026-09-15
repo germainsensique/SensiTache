@@ -3512,8 +3512,21 @@ function showAppPromptModal(){
 }
 
 
+function isUserCurrentlyTyping(){
+  const el = document.activeElement;
+  return !!(el && (el.tagName==="INPUT" || el.tagName==="TEXTAREA" || (el.getAttribute && el.getAttribute("contenteditable")==="true")));
+}
 async function writeDriveBackup(){
   if(!driveClientId) return;
+  if(isUserCurrentlyTyping()){
+    // Merging while a keystroke is in flight can interleave what's being
+    // typed with the incoming remote copy (the exact cause of garbled/
+    // duplicated text people were seeing). Retry shortly instead of
+    // merging mid-edit — nothing is lost, it just waits a moment.
+    clearTimeout(backupDebounceTimer);
+    backupDebounceTimer = setTimeout(writeDriveBackup, 1500);
+    return;
+  }
   try{
     const token = await driveGetToken();
     const fileId = await driveFindOrCreateFile(token);
@@ -3530,6 +3543,10 @@ async function writeDriveBackup(){
           DATA = merged;
           localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
           if(!DATA.workspaces.find(w=>w.id===currentWsId)) currentWsId = DATA.workspaces[0] ? DATA.workspaces[0].id : null;
+          if(document.getElementById("procOverlay").classList.contains("show") && openTaskId){
+            const stillOpenTask = DATA.tasks.find(x=>x.id===openTaskId);
+            if(stillOpenTask && stillOpenTask.process) PROC = stillOpenTask.process;
+          }
           renderSidebar(); renderMain();
         }
       }
