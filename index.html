@@ -325,6 +325,12 @@
       </div>
 
       <div class="field-row">
+        <div class="field-label">Sous-tâches</div>
+        <div id="subtaskList" style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px;"></div>
+        <button class="btn small" id="btnAddSubtask" style="width:100%;justify-content:center;">+ Ajouter une sous-tâche</button>
+      </div>
+
+      <div class="field-row">
         <div class="field-label">Marqueurs</div>
         <div class="chiprow">
           <button class="btn chip small flame" id="chipToday">🔥 Aujourd'hui</button>
@@ -1131,7 +1137,13 @@ function renderTasksGroupedList(){
   }
   const buckets = {1:[],2:[],3:[],4:[],5:[],6:[]};
   tasks.forEach(t=> buckets[sortCategory(t)].push(t));
-  Object.keys(buckets).forEach(k=> buckets[k].sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)));
+  Object.keys(buckets).forEach(k=> buckets[k].sort((a,b)=>{
+    const ao=a.sortOrder, bo=b.sortOrder;
+    if(ao!==undefined && bo!==undefined) return ao-bo;
+    if(ao!==undefined) return -1;
+    if(bo!==undefined) return 1;
+    return (b.updatedAt||0)-(a.updatedAt||0);
+  }));
 
   if(isPhoneSize()){
     groupsEl.className = "";
@@ -1142,7 +1154,7 @@ function renderTasksGroupedList(){
       const label = document.createElement("div");
       label.className = "task-group-label"; label.textContent = CATEGORY_LABEL[cat];
       groupsEl.appendChild(label);
-      list.forEach(t=> groupsEl.appendChild(renderTaskRow(t)));
+      list.forEach(t=> groupsEl.appendChild(renderTaskRow(t, list)));
     });
   } else {
     groupsEl.className = "two-col-layout";
@@ -1157,7 +1169,7 @@ function renderTasksGroupedList(){
         l.className = "task-group-label"; l.textContent = label;
         container.appendChild(l);
       }
-      list.forEach(t=> container.appendChild(renderTaskRow(t)));
+      list.forEach(t=> container.appendChild(renderTaskRow(t, list)));
     }
     fillCol(left, 3, "Aujourd'hui");
     fillCol(left, 1, "Planifié");
@@ -1233,7 +1245,7 @@ function createAndOpenNewTask(){
   const titleInput = document.getElementById("taskTitleInput");
   titleInput.focus();
 }
-function renderTaskRow(t){
+function renderTaskRow(t, bucketList){
   const row = document.createElement("div");
   row.className = "task-row";
   const today = todayStr();
@@ -1250,11 +1262,57 @@ function renderTaskRow(t){
     const overdue = t.dueDate < todayStr();
     badges += `<span class="badge" style="background:${overdue?'rgba(224,85,95,.2)':'rgba(255,255,255,.08)'};color:${overdue?'#F0838C':'var(--text-sub)'};" title="Date butoir : ${t.dueDate}">${iconSvg("flag")} ${t.dueDate}</span>`;
   }
+  const nextSub = nextUndoneSubtask(t);
   row.innerHTML = `
+    ${bucketList ? '<span class="task-handle" style="cursor:grab;color:var(--text-sub);touch-action:none;padding:2px 4px;flex-shrink:0;">⠿</span>' : ''}
     <div class="task-check" data-check></div>
-    <div class="task-title">${escapeHtml(t.title)}</div>
+    <div class="task-title">${escapeHtml(t.title)}${nextSub ? ` <span class="subtask-inline" style="font-weight:400;color:var(--text-sub);font-size:12.5px;">— <span class="subtask-inline-check" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" style="pointer-events:none;">${escapeHtml(nextSub.text)}</span></span>` : ""}</div>
     <div class="badges">${badges}</div>
   `;
+  if(bucketList){
+    const handle = row.querySelector(".task-handle");
+    handle.addEventListener("pointerdown", e=>{
+      e.preventDefault(); e.stopPropagation();
+      const parent = row.parentElement;
+      let dragOverRow = null;
+      row.style.opacity = "0.5";
+      const move = (ev)=>{
+        const rows = Array.from(parent.querySelectorAll(".task-row"));
+        dragOverRow = rows.find(r=>{
+          const rect = r.getBoundingClientRect();
+          return ev.clientY >= rect.top && ev.clientY <= rect.bottom;
+        }) || null;
+        rows.forEach(r=> r.style.borderTop = (r===dragOverRow && r!==row) ? "2px solid var(--accent)" : "");
+      };
+      const up = ()=>{
+        document.removeEventListener("pointermove", move);
+        document.removeEventListener("pointerup", up);
+        row.style.opacity = "";
+        Array.from(parent.querySelectorAll(".task-row")).forEach(r=> r.style.borderTop = "");
+        if(dragOverRow && dragOverRow!==row){
+          const overId = dragOverRow.dataset.taskId;
+          const fromIdx = bucketList.findIndex(x=>x.id===t.id);
+          const toIdx = bucketList.findIndex(x=>x.id===overId);
+          if(fromIdx>-1 && toIdx>-1){
+            const [moved] = bucketList.splice(fromIdx,1);
+            bucketList.splice(toIdx,0,moved);
+            bucketList.forEach((x,i)=>{ x.sortOrder = i; x.updatedAt = Date.now(); });
+            saveData(); renderTasksGroupedList();
+          }
+        }
+      };
+      document.addEventListener("pointermove", move);
+      document.addEventListener("pointerup", up);
+    });
+  }
+  row.dataset.taskId = t.id;
+  if(nextSub){
+    row.querySelector(".subtask-inline-check").addEventListener("click", (e)=>{
+      e.stopPropagation();
+      nextSub.done = true; nextSub.doneAt = Date.now();
+      t.updatedAt = Date.now(); saveData(); renderMain();
+    });
+  }
   row.querySelector("[data-check]").addEventListener("click", (e)=>{ e.stopPropagation(); toggleTaskDone(t); });
   row.addEventListener("click", ()=> openTaskDrawer(t.id));
   return row;
@@ -1424,6 +1482,7 @@ function openTaskDrawer(id){
   renderAssignChips(t);
 
   renderAttachList(t);
+  renderSubtaskList(t);
   renderProcessLinkRow(t);
   document.getElementById("drawer").classList.remove("fullscreen");
   setFullscreenIcon(false);
@@ -1895,6 +1954,85 @@ document.getElementById("attachInput").addEventListener("change", (e)=>{
   });
   e.target.value="";
 });
+function nextUndoneSubtask(t){
+  return (t.subtasks||[]).find(s=> !s.done) || null;
+}
+function renderSubtaskList(t){
+  const wrap = document.getElementById("subtaskList");
+  if(!wrap) return;
+  wrap.innerHTML = "";
+  let dragId = null, dragOverId = null;
+  (t.subtasks||[]).forEach(s=>{
+    const row = document.createElement("div");
+    row.className = "subtask-row";
+    row.dataset.id = s.id;
+    row.style.cssText = "display:flex;align-items:center;gap:6px;background:var(--bg-card);border:1px solid var(--border-soft);border-radius:8px;padding:6px 8px;";
+    row.innerHTML = `
+      <span class="subtask-handle" style="cursor:grab;color:var(--text-sub);touch-action:none;padding:2px 4px;">⠿</span>
+      <input type="checkbox" ${s.done?"checked":""} style="flex-shrink:0;">
+      <input type="text" value="${escapeHtml(s.text)}" style="flex:1;min-width:0;background:transparent;border:none;color:var(--text-main);font-size:13px;${s.done?'text-decoration:line-through;color:var(--text-sub);':''}">
+      <button class="btn small danger" data-del style="flex-shrink:0;">✕</button>
+    `;
+    row.querySelector('input[type="checkbox"]').addEventListener("change", e=>{
+      s.done = e.target.checked; s.doneAt = s.done ? Date.now() : null;
+      t.updatedAt = Date.now(); saveData(); renderSubtaskList(t); renderMain();
+    });
+    row.querySelector('input[type="text"]').addEventListener("change", e=>{
+      s.text = e.target.value.trim() || s.text; t.updatedAt = Date.now(); saveData(); renderMain();
+    });
+    row.querySelector("[data-del]").addEventListener("click", ()=>{
+      snapshot();
+      t.subtasks = t.subtasks.filter(x=>x.id!==s.id);
+      t.updatedAt = Date.now(); saveData(); renderSubtaskList(t); renderMain();
+    });
+    const handle = row.querySelector(".subtask-handle");
+    handle.addEventListener("pointerdown", e=>{
+      e.preventDefault();
+      dragId = s.id;
+      row.style.opacity = "0.5";
+      const move = (ev)=>{
+        const rows = Array.from(wrap.querySelectorAll(".subtask-row"));
+        const overRow = rows.find(r=>{
+          const rect = r.getBoundingClientRect();
+          return ev.clientY >= rect.top && ev.clientY <= rect.bottom;
+        });
+        dragOverId = overRow ? overRow.dataset.id : null;
+        rows.forEach(r=> r.style.borderTop = (r.dataset.id===dragOverId && dragOverId!==dragId) ? "2px solid var(--accent)" : "1px solid var(--border-soft)");
+      };
+      const up = ()=>{
+        document.removeEventListener("pointermove", move);
+        document.removeEventListener("pointerup", up);
+        if(dragOverId && dragOverId!==dragId){
+          const list = t.subtasks;
+          const fromIdx = list.findIndex(x=>x.id===dragId);
+          const toIdx = list.findIndex(x=>x.id===dragOverId);
+          if(fromIdx>-1 && toIdx>-1){
+            const [moved] = list.splice(fromIdx,1);
+            list.splice(toIdx,0,moved);
+            t.updatedAt = Date.now(); saveData(); renderMain();
+          }
+        }
+        dragId=null; dragOverId=null;
+        renderSubtaskList(t);
+      };
+      document.addEventListener("pointermove", move);
+      document.addEventListener("pointerup", up);
+    });
+    wrap.appendChild(row);
+  });
+}
+document.getElementById("btnAddSubtask").addEventListener("click", ()=>{
+  const t = curTask(); if(!t) return;
+  if(!t.subtasks) t.subtasks = [];
+  const s = {id:uid("sub"), text:"", done:false};
+  t.subtasks.push(s);
+  t.updatedAt = Date.now(); saveData(); renderSubtaskList(t); renderMain();
+  requestAnimationFrame(()=>{
+    const wrap = document.getElementById("subtaskList");
+    const last = wrap.querySelector('.subtask-row:last-child input[type="text"]');
+    if(last) last.focus();
+  });
+});
 function renderAttachList(t){
   const wrap = document.getElementById("attachList");
   wrap.innerHTML = "";
@@ -1909,6 +2047,7 @@ function renderAttachList(t){
       ${a.type==="app" ? '<button class="btn small" data-replace title="Remplacer par une version mise à jour du fichier">🔄</button>' : ''}
       <button class="btn small" data-upload title="Sauvegarder sur Google Drive" style="display:none;">☁️↑</button>
       <button class="btn small" data-fetchdrive title="Télécharger depuis Drive sur cet appareil" style="display:none;">⬇️☁️</button>
+      <button class="btn small" data-searchdrive title="Chercher ce fichier sur Drive par son nom (si l'identifiant a été perdu)" style="display:none;">🔍☁️</button>
       <button class="btn small danger" data-del>✕</button>`;
     refreshAttachStatus(row, a);
     row.querySelector("[data-upload]").addEventListener("click", async (e)=>{
@@ -1926,6 +2065,31 @@ function renderAttachList(t){
       const dataUrl = await getAttachmentDataUrl(a); // fetches from Drive and caches locally
       btn.disabled = false; btn.textContent = "⬇️☁️";
       if(!dataUrl){ alert("Échec du téléchargement depuis Drive — vérifie ta connexion."); return; }
+      refreshAttachStatus(row, a);
+    });
+    row.querySelector("[data-searchdrive]").addEventListener("click", async (e)=>{
+      const btn = e.currentTarget;
+      if(!(driveClientId && driveAccessToken && Date.now() < driveTokenExpiry)){ alert("Connecte-toi d'abord à Drive."); return; }
+      btn.disabled = true; btn.textContent = "…";
+      try{
+        const token = await driveGetToken();
+        // The attachment's own id is stable and embedded in the Drive file
+        // name from the moment it was first uploaded (from any device) —
+        // so even with no driveFileId recorded here, searching by that id
+        // finds it if it exists anywhere on Drive.
+        const q = encodeURIComponent("name contains 'sensitache-attachment-"+a.id+"-' and trashed=false");
+        const res = await fetch("https://www.googleapis.com/drive/v3/files?q="+q+"&spaces=drive&fields=files(id,name)", {headers:{Authorization:"Bearer "+token}});
+        const data = await res.json();
+        if(data.files && data.files.length>0){
+          a.driveFileId = data.files[0].id;
+          t.updatedAt = Date.now(); saveData();
+          const dataUrl = await getAttachmentDataUrl(a);
+          if(!dataUrl){ alert("Fichier trouvé sur Drive mais impossible à télécharger — réessaie."); }
+        } else {
+          alert("Aucun fichier correspondant trouvé sur Drive — il n'a peut-être jamais fini de s'envoyer depuis l'appareil d'origine. Utilise « 🔄 Remplacer » depuis l'appareil qui a encore le fichier en local.");
+        }
+      }catch(err){ alert("Échec de la recherche : "+err.message); }
+      btn.disabled = false; btn.textContent = "🔍☁️";
       refreshAttachStatus(row, a);
     });
     row.querySelector("[data-open]").addEventListener("click", async ()=>{
@@ -1966,13 +2130,16 @@ async function refreshAttachStatus(row, a){
   const el = row.querySelector(".astatus");
   const uploadBtn = row.querySelector("[data-upload]");
   const fetchBtn = row.querySelector("[data-fetchdrive]");
+  const searchBtn = row.querySelector("[data-searchdrive]");
   if(!el) return;
   if(uploadBtn) uploadBtn.style.display = "none";
   if(fetchBtn) fetchBtn.style.display = "none";
+  if(searchBtn) searchBtn.style.display = "none";
   if(a.dataUrl){ el.textContent = "✅ hors ligne"; el.style.color = "var(--knowledge)"; return; }
   const cached = await attachGetLocal(a.id);
   if(cached && !a.driveFileId && uploadBtn) uploadBtn.style.display = "inline-flex";
   if(!cached && a.driveFileId && fetchBtn) fetchBtn.style.display = "inline-flex";
+  if(!cached && !a.driveFileId && searchBtn) searchBtn.style.display = "inline-flex";
   if(cached){ el.textContent = "✅ hors ligne"; el.style.color = "var(--knowledge)"; return; }
   if(a.driveFileId){ el.textContent = "☁️ sur Drive"; el.style.color = "var(--text-sub)"; return; }
   el.textContent = "⚠️ pas encore sauvegardé"; el.style.color = "#F0838C";
