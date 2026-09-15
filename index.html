@@ -1971,6 +1971,7 @@ function renderSubtaskList(t){
       <span class="subtask-handle" style="cursor:grab;color:var(--text-sub);touch-action:none;padding:2px 4px;">⠿</span>
       <input type="checkbox" ${s.done?"checked":""} style="flex-shrink:0;">
       <input type="text" value="${escapeHtml(s.text)}" style="flex:1;min-width:0;background:transparent;border:none;color:var(--text-main);font-size:13px;${s.done?'text-decoration:line-through;color:var(--text-sub);':''}">
+      ${s.done && s.doneAt ? '<span style="font-size:10.5px;color:var(--text-sub);white-space:nowrap;flex-shrink:0;">'+new Date(s.doneAt).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"2-digit"})+'</span>' : ''}
       <button class="btn small danger" data-del style="flex-shrink:0;">✕</button>
     `;
     row.querySelector('input[type="checkbox"]').addEventListener("change", e=>{
