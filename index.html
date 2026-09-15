@@ -531,6 +531,7 @@ let driveTokenExpiry = 0;
 let driveFileId = localStorage.getItem("sensitache.driveFileId") || null;
 let driveTokenClient = null;
 let driveLastSyncAt = localStorage.getItem("sensitache.driveLastSync") ? Number(localStorage.getItem("sensitache.driveLastSync")) : null;
+let driveLastSyncError = null;
 
 function loadData(){
   try{
@@ -3001,7 +3002,20 @@ async function moveFileToRoot(token, fileId, currentParents){
   }catch(e){ /* not critical — the file still syncs fine wherever it is, found by name */ }
 }
 async function driveFindOrCreateFile(token){
-  if(driveFileId) return driveFileId;
+  if(driveFileId){
+    // Don't blindly trust a cached id — if it was deleted or made
+    // inaccessible (e.g. during the recent folder cleanup), every write
+    // would otherwise fail silently forever with no visible sign why.
+    try{
+      const check = await fetch("https://www.googleapis.com/drive/v3/files/"+driveFileId+"?fields=id,trashed", {headers:{Authorization:"Bearer "+token}});
+      if(check.ok){
+        const info = await check.json();
+        if(!info.trashed) return driveFileId;
+      }
+    }catch(e){ /* fall through to a fresh search below */ }
+    driveFileId = null;
+    localStorage.removeItem("sensitache.driveFileId");
+  }
   // Searching by name with no folder restriction finds the file wherever it
   // currently is (including inside a leftover SensiTache folder from
   // before), so nothing is lost — it's just tidied back to root once found.
@@ -3494,7 +3508,8 @@ async function writeDriveBackup(){
     });
     driveLastSyncAt = Date.now();
     localStorage.setItem("sensitache.driveLastSync", String(driveLastSyncAt));
-  }catch(e){ console.warn("Échec de la sauvegarde Drive :", e); }
+    driveLastSyncError = null;
+  }catch(e){ driveLastSyncError = e.message||String(e); console.warn("Échec de la sauvegarde Drive :", e); }
   updateDriveStatus();
 }
 async function driveImport(){
@@ -3541,6 +3556,7 @@ function updateDriveStatus(){
   if(!el) return;
   if(!driveClientId){ el.textContent = "Pas encore configuré."; return; }
   if(!driveAccessToken || Date.now()>=driveTokenExpiry){ el.innerHTML = "⚠️ Non connecté — clique sur « Se connecter »."; return; }
+  if(driveLastSyncError){ el.innerHTML = "⚠️ Dernière synchro échouée : "+escapeHtml(driveLastSyncError); return; }
   el.textContent = "✅ Connecté" + (driveLastSyncAt ? " · dernière synchro : "+new Date(driveLastSyncAt).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}) : " · pas encore synchronisé");
 }
 function showDriveModal(){
