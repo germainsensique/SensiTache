@@ -2023,13 +2023,36 @@ function renderSubtaskList(t){
     row.className = "subtask-row";
     row.dataset.id = s.id;
     row.style.cssText = "display:flex;align-items:center;gap:6px;background:var(--bg-card);border:1px solid var(--border-soft);border-radius:8px;padding:6px 8px;";
+    const c = s.assignedTo ? collabById(s.assignedTo) : null;
     row.innerHTML = `
       <span class="subtask-handle" style="cursor:grab;color:var(--text-sub);touch-action:none;padding:2px 4px;">⠿</span>
       <input type="checkbox" ${s.done?"checked":""} style="flex-shrink:0;">
       <input type="text" value="${escapeHtml(s.text)}" style="flex:1;min-width:0;background:transparent;border:none;color:var(--text-main);font-size:13px;${s.done?'text-decoration:line-through;color:var(--text-sub);':''}">
+      <span class="subtask-avatar" title="${c?escapeHtml(c.name):'Non affecté'}" style="flex-shrink:0;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:700;cursor:pointer;background:${c?c.color:'var(--bg-app)'};border:1px solid ${c?c.color:'var(--border-soft)'};color:${c?'#15171C':'var(--text-sub)'};">${c?escapeHtml(c.name.slice(0,2).toUpperCase()):'—'}</span>
       ${s.done && s.doneAt ? '<span style="font-size:10.5px;color:var(--text-sub);white-space:nowrap;flex-shrink:0;">'+new Date(s.doneAt).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"2-digit"})+'</span>' : ''}
       <button class="btn small danger" data-del style="flex-shrink:0;">✕</button>
     `;
+    row.querySelector(".subtask-avatar").addEventListener("click", (e)=>{
+      e.stopPropagation();
+      const menu = document.createElement("div");
+      menu.style.cssText = "position:fixed;z-index:300;background:var(--bg-card);border:1px solid var(--border-soft);border-radius:8px;padding:5px;box-shadow:0 8px 24px rgba(0,0,0,.4);min-width:150px;";
+      const r = e.currentTarget.getBoundingClientRect();
+      menu.style.left = r.left+"px"; menu.style.top = (r.bottom+4)+"px";
+      menu.innerHTML = `<div data-pick="" style="padding:6px 8px;border-radius:5px;cursor:pointer;font-size:12.5px;">— Non affecté</div>` +
+        DATA.collaborators.map(cc=>`<div data-pick="${cc.id}" style="padding:6px 8px;border-radius:5px;cursor:pointer;font-size:12.5px;display:flex;align-items:center;gap:6px;"><span style="width:16px;height:16px;border-radius:50%;background:${cc.color};flex-shrink:0;"></span>${escapeHtml(cc.name)}</div>`).join("");
+      document.body.appendChild(menu);
+      menu.querySelectorAll("[data-pick]").forEach(opt=>{
+        opt.addEventListener("mouseenter", ()=> opt.style.background="var(--bg-app)");
+        opt.addEventListener("mouseleave", ()=> opt.style.background="");
+        opt.addEventListener("click", ()=>{
+          s.assignedTo = opt.dataset.pick || null;
+          t.updatedAt = Date.now(); saveData(); renderSubtaskList(t);
+          menu.remove();
+        });
+      });
+      const closeMenu = (ev)=>{ if(!menu.contains(ev.target)){ menu.remove(); document.removeEventListener("pointerdown", closeMenu); } };
+      setTimeout(()=> document.addEventListener("pointerdown", closeMenu), 0);
+    });
     row.querySelector('input[type="checkbox"]').addEventListener("change", e=>{
       s.done = e.target.checked; s.doneAt = s.done ? Date.now() : null;
       t.updatedAt = Date.now(); saveData(); renderSubtaskList(t); renderMain();
