@@ -529,8 +529,6 @@ let driveClientId = localStorage.getItem("sensitache.driveClientId") || "5759774
 let driveAccessToken = null;
 let driveTokenExpiry = 0;
 let driveFileId = localStorage.getItem("sensitache.driveFileId") || null;
-const DRIVE_FOLDER_NAME = "SensiTache";
-let driveFolderId = localStorage.getItem("sensitache.driveFolderId") || null;
 let driveTokenClient = null;
 let driveLastSyncAt = localStorage.getItem("sensitache.driveLastSync") ? Number(localStorage.getItem("sensitache.driveLastSync")) : null;
 
@@ -1815,11 +1813,10 @@ async function uploadAttachmentToDrive(attMeta, dataUrl, task){
   if(!(driveClientId && driveAccessToken && Date.now() < driveTokenExpiry)) return;
   try{
     const token = await driveGetToken();
-    await getDriveFolderId(token);
     const blob = await (await fetch(dataUrl)).blob();
     const createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
       method:"POST", headers:{Authorization:"Bearer "+token, "Content-Type":"application/json"},
-      body: JSON.stringify(driveFolderId ? {name:"sensitache-attachment-"+attMeta.id+"-"+attMeta.name, parents:[driveFolderId]} : {name:"sensitache-attachment-"+attMeta.id+"-"+attMeta.name})
+      body: JSON.stringify({name:"sensitache-attachment-"+attMeta.id+"-"+attMeta.name})
     });
     const created = await createRes.json();
     if(!created.id) return;
@@ -2994,98 +2991,28 @@ async function driveGetToken(){
   if(driveAccessToken && Date.now() < driveTokenExpiry) return driveAccessToken;
   throw new Error("Session Google expirée — clique sur « Se connecter ».");
 }
-async function ensureDriveFolder(token, name){
-  const q = encodeURIComponent("name='"+name.replace(/'/g,"\\'")+"' and mimeType='application/vnd.google-apps.folder' and trashed=false");
-  const res = await fetch("https://www.googleapis.com/drive/v3/files?q="+q+"&spaces=drive&fields=files(id,name,createdTime)&orderBy=createdTime", {headers:{Authorization:"Bearer "+token}});
-  const data = await res.json();
-  if(data.files && data.files.length>0){
-    const canonical = data.files[0].id; // oldest — everyone converges here
-    if(data.files.length>1){
-      // Two devices can still race to create the folder at the exact same
-      // moment (Drive has no lock to prevent that) — instead of promising
-      // it can never happen, make it self-healing: whichever device
-      // notices duplicates merges their contents into the oldest folder
-      // and removes the empties, so the count settles back to one.
-      for(let i=1;i<data.files.length;i++){
-        await mergeDuplicateDriveFolder(token, data.files[i].id, canonical);
-      }
-    }
-    return canonical;
-  }
-  const createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
-    method:"POST", headers:{Authorization:"Bearer "+token, "Content-Type":"application/json"},
-    body: JSON.stringify({name, mimeType:"application/vnd.google-apps.folder"})
-  });
-  const created = await createRes.json();
-  if(!created.id) throw new Error("Création du dossier Drive impossible.");
-  return created.id;
-}
-async function mergeDuplicateDriveFolder(token, dupFolderId, canonicalFolderId){
+async function moveFileToRoot(token, fileId, currentParents){
+  const oldParents = (currentParents||[]).join(",");
+  if(!oldParents) return; // already at root
   try{
-    const q = encodeURIComponent("'"+dupFolderId+"' in parents and trashed=false");
-    const res = await fetch("https://www.googleapis.com/drive/v3/files?q="+q+"&spaces=drive&fields=files(id)", {headers:{Authorization:"Bearer "+token}});
-    const data = await res.json();
-    for(const f of (data.files||[])){
-      await fetch("https://www.googleapis.com/drive/v3/files/"+f.id+"?addParents="+canonicalFolderId+"&removeParents="+dupFolderId, {
-        method:"PATCH", headers:{Authorization:"Bearer "+token}
-      });
-    }
-    await fetch("https://www.googleapis.com/drive/v3/files/"+dupFolderId, {method:"DELETE", headers:{Authorization:"Bearer "+token}});
-  }catch(e){ console.warn("Fusion d'un dossier Drive en double échouée :", e); }
-}
-let driveFolderEnsurePromise = null;
-// Every upload path (main file, attachments, backups) must call this before
-// creating anything — previously only the main sync file ensured the folder,
-// so an attachment or backup uploaded before that ever ran fell through to
-// Drive's root instead of the SensiTache folder.
-async function getDriveFolderId(token){
-  if(driveFolderId) return driveFolderId;
-  if(!driveFolderEnsurePromise){
-    driveFolderEnsurePromise = ensureDriveFolder(token, DRIVE_FOLDER_NAME).then(id=>{
-      driveFolderId = id;
-      localStorage.setItem("sensitache.driveFolderId", id);
-      return id;
-    }).finally(()=>{ driveFolderEnsurePromise = null; });
-  }
-  return driveFolderEnsurePromise;
-}
-async function moveFileToFolder(token, fileId, folderId){
-  const info = await (await fetch("https://www.googleapis.com/drive/v3/files/"+fileId+"?fields=parents", {headers:{Authorization:"Bearer "+token}})).json();
-  const oldParents = (info.parents||[]).join(",");
-  await fetch("https://www.googleapis.com/drive/v3/files/"+fileId+"?addParents="+folderId+(oldParents?"&removeParents="+oldParents:""), {
-    method:"PATCH", headers:{Authorization:"Bearer "+token}
-  });
+    await fetch("https://www.googleapis.com/drive/v3/files/"+fileId+"?addParents=root&removeParents="+oldParents, {
+      method:"PATCH", headers:{Authorization:"Bearer "+token}
+    });
+  }catch(e){ /* not critical — the file still syncs fine wherever it is, found by name */ }
 }
 async function driveFindOrCreateFile(token){
   if(driveFileId) return driveFileId;
-  await getDriveFolderId(token);
-  const folderClause = driveFolderId ? " and '"+driveFolderId+"' in parents" : "";
-  const q = encodeURIComponent("name='"+DRIVE_FILENAME+"' and trashed=false"+folderClause);
-  const res = await fetch("https://www.googleapis.com/drive/v3/files?q="+q+"&spaces=drive&fields=files(id,name)", {
+  // Searching by name with no folder restriction finds the file wherever it
+  // currently is (including inside a leftover SensiTache folder from
+  // before), so nothing is lost — it's just tidied back to root once found.
+  const q = encodeURIComponent("name='"+DRIVE_FILENAME+"' and trashed=false");
+  const res = await fetch("https://www.googleapis.com/drive/v3/files?q="+q+"&spaces=drive&fields=files(id,name,parents)", {
     headers: {Authorization:"Bearer "+token}
   });
   const data = await res.json();
   if(data.files && data.files.length>0){
     driveFileId = data.files[0].id;
-  } else if(driveFolderId){
-    // Not in the configured folder yet — check if it already exists elsewhere
-    // (e.g. created before a folder was set up) and move it in, instead of
-    // creating a confusing duplicate.
-    const qAny = encodeURIComponent("name='"+DRIVE_FILENAME+"' and trashed=false");
-    const resAny = await fetch("https://www.googleapis.com/drive/v3/files?q="+qAny+"&spaces=drive&fields=files(id,name)", {headers:{Authorization:"Bearer "+token}});
-    const dataAny = await resAny.json();
-    if(dataAny.files && dataAny.files.length>0){
-      driveFileId = dataAny.files[0].id;
-      await moveFileToFolder(token, driveFileId, driveFolderId);
-    } else {
-      const createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
-        method:"POST", headers:{Authorization:"Bearer "+token, "Content-Type":"application/json"},
-        body: JSON.stringify({name: DRIVE_FILENAME, mimeType:"application/json", parents:[driveFolderId]})
-      });
-      const created = await createRes.json();
-      if(!created.id) throw new Error("Création du fichier Drive impossible.");
-      driveFileId = created.id;
-    }
+    moveFileToRoot(token, driveFileId, data.files[0].parents); // best-effort tidy-up, fire-and-forget
   } else {
     const createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
       method:"POST",
@@ -3275,11 +3202,10 @@ async function uploadBackupToDriveAsFile(entry, prefix, keepCount){
   if(!(driveClientId && driveAccessToken && Date.now() < driveTokenExpiry)) return;
   try{
     const token = await driveGetToken();
-    await getDriveFolderId(token);
     const name = prefix+new Date(entry.ts).toISOString().replace(/[:.]/g,"-")+".json";
     const createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
       method:"POST", headers:{Authorization:"Bearer "+token, "Content-Type":"application/json"},
-      body: JSON.stringify(driveFolderId ? {name, mimeType:"application/json", parents:[driveFolderId]} : {name, mimeType:"application/json"})
+      body: JSON.stringify({name, mimeType:"application/json"})
     });
     const created = await createRes.json();
     if(!created.id) return;
@@ -3292,8 +3218,7 @@ async function uploadBackupToDriveAsFile(entry, prefix, keepCount){
 }
 async function cleanupOldDriveBackups(token, prefix, keepCount){
   try{
-    const folderClause = driveFolderId ? " and '"+driveFolderId+"' in parents" : "";
-    const q = encodeURIComponent("name contains '"+prefix+"' and trashed=false"+folderClause);
+    const q = encodeURIComponent("name contains '"+prefix+"' and trashed=false");
     const res = await fetch("https://www.googleapis.com/drive/v3/files?q="+q+"&spaces=drive&fields=files(id,name,createdTime)&orderBy=createdTime desc", {headers:{Authorization:"Bearer "+token}});
     const data = await res.json();
     const files = data.files||[];
@@ -3502,12 +3427,10 @@ déjà créé et prêt à l'emploi, sans me demander de le configurer :
 - Scope \`https://www.googleapis.com/auth/drive.file\` uniquement.
 - Le jeton de connexion reste uniquement en mémoire (jamais dans le
   localStorage).
-- Utilise le dossier Drive nommé exactement \`SensiTache\` à la racine de mon
-  Drive (le même que celui utilisé par SensiTâche) : cherche-le
-  (\`mimeType='application/vnd.google-apps.folder' and name='SensiTache'\`),
-  crée-le s'il n'existe pas, et donne au fichier de sauvegarde de cette appli
-  un nom bien reconnaissable (par exemple
-  \`nom-de-cette-appli-sauvegarde-drive.json\`).
+- Crée un fichier à la racine de mon Drive, avec un nom bien reconnaissable
+  et distinct de celui de SensiTâche (par exemple
+  \`nom-de-cette-appli-sauvegarde-drive.json\`), retrouvé par recherche de ce
+  nom exact (pas un identifiant codé en dur).
 - Fusion, jamais écrasement : avant chaque sauvegarde automatique, récupère
   la version actuelle sur Drive, fusionne-la avec les données locales (utilise
   un champ \`updatedAt\` pour savoir laquelle est la plus récente), puis
@@ -3608,7 +3531,7 @@ async function refreshDriveDiag(){
     const data = await res.json();
     const email = data.user ? data.user.emailAddress : "?";
     el.style.display = "block";
-    el.innerHTML = "Compte connecté : <b style=\"color:var(--text-main);\">"+escapeHtml(email)+"</b><br>ID du fichier de sauvegarde : <code>"+escapeHtml(driveFileId||"(pas encore créé)")+"</code><br>Dossier : <b style=\"color:var(--text-main);\">"+escapeHtml(DRIVE_FOLDER_NAME)+"</b>"
+    el.innerHTML = "Compte connecté : <b style=\"color:var(--text-main);\">"+escapeHtml(email)+"</b><br>ID du fichier de sauvegarde : <code>"+escapeHtml(driveFileId||"(pas encore créé)")+"</code>"
       + "<br><span style='font-size:10.5px;'>Compare ces deux informations sur tous tes appareils — si le compte ou l'ID diffère, ils ne se synchronisent pas ensemble.</span>";
   }catch(e){ el.style.display = "none"; }
 }
@@ -3643,7 +3566,7 @@ function showDriveModal(){
       <input type="text" id="driveClientIdInput" placeholder="xxxxxxxx.apps.googleusercontent.com" value="${escapeHtml(driveClientId)}" style="width:100%;border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;background:var(--bg-app);color:var(--text-main);font-size:12.5px;">
       <div id="driveStatus" style="font-size:12px;color:var(--text-sub);margin:10px 0;"></div>
       <div id="driveDiag" style="font-size:11.5px;color:var(--text-sub);background:var(--bg-app);border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;margin-bottom:10px;display:none;"></div>
-      <p style="font-size:11px;color:var(--text-sub);margin:0 0 10px;">📁 Toutes les sauvegardes sont rangées dans un dossier nommé « SensiTache » à la racine de ton Drive, créé automatiquement.</p>
+      <p style="font-size:11px;color:var(--text-sub);margin:0 0 10px;">📁 Les sauvegardes sont rangées à la racine de ton Drive (fichiers commençant par « sensitache- »).</p>
       <div class="modal-actions" style="flex-wrap:wrap;">
         <button class="btn small" id="driveSaveId">Enregistrer l'identifiant</button>
         <button class="btn small primary" id="driveConnectBtn">Se connecter</button>
@@ -4148,7 +4071,7 @@ setInterval(updateDriveIndicator, 30000);
 // from another app on the phone, or back to this browser tab on the PC).
 setInterval(()=>{
   if(driveClientId && driveAccessToken && Date.now() < driveTokenExpiry) writeDriveBackup();
-}, 45000);
+}, 15000);
 document.addEventListener("visibilitychange", ()=>{
   if(document.visibilityState==="visible"){
     maybeCreateFrequentSnapshot();
