@@ -2363,6 +2363,12 @@ function renderProcShapes(){
     content.className = "pshapeContent";
     content.innerHTML = shape.content||"";
     content.addEventListener("dblclick", e=>{ e.stopPropagation(); content.setAttribute("contenteditable","true"); content.focus(); });
+    content.addEventListener("keydown", e=>{
+      if(e.key==="Enter"){
+        e.preventDefault();
+        document.execCommand("insertLineBreak");
+      }
+    });
     content.addEventListener("blur", ()=>{
       content.removeAttribute("contenteditable");
       shape.content = content.innerHTML;
