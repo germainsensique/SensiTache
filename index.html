@@ -2487,7 +2487,7 @@ function procShowFloatToolbarForShape(id){
   const shape = PROC.shapes.find(s=>s.id===id); if(!shape) return;
   const bar = document.createElement("div");
   bar.className="pfloat-toolbar"; bar.id="procFloatToolbar";
-  bar.style.left=shape.x+"px"; bar.style.top=(shape.y-46)+"px";
+  bar.style.left=shape.x+"px"; bar.style.top=(shape.y-150)+"px";
   bar.style.flexWrap="wrap"; bar.style.maxWidth="290px";
   bar.style.flexDirection="column"; bar.style.alignItems="stretch";
   const collabOpts = `<option value="">Aucun collaborateur</option>` + DATA.collaborators.map(c=>`<option value="${c.id}" ${shape.collabTag===c.id?"selected":""}>${escapeHtml(c.name)}</option>`).join("");
@@ -2643,7 +2643,7 @@ document.addEventListener("pointermove", e=>{
       const el=document.querySelector('.pshape[data-id="'+shape.id+'"]');
       if(el){ el.style.left=shape.x+"px"; el.style.top=shape.y+"px"; }
       const bar=document.getElementById("procFloatToolbar");
-      if(bar){ bar.style.left=shape.x+"px"; bar.style.top=(shape.y-46)+"px"; }
+      if(bar){ bar.style.left=shape.x+"px"; bar.style.top=(shape.y-150)+"px"; }
       procUpdateArrowsForShape(shape.id);
     } else if(procDragState.mode==="resize"){
       shape.w=Math.max(70,procDragState.startW+dx); shape.h=Math.max(50,procDragState.startH+dy);
