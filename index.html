@@ -1908,6 +1908,7 @@ function renderAttachList(t){
       ${a.type==="email" ? '<button class="btn small" data-download title="Télécharger le fichier .eml original">⬇️</button>' : ''}
       ${a.type==="app" ? '<button class="btn small" data-replace title="Remplacer par une version mise à jour du fichier">🔄</button>' : ''}
       <button class="btn small" data-upload title="Sauvegarder sur Google Drive" style="display:none;">☁️↑</button>
+      <button class="btn small" data-fetchdrive title="Télécharger depuis Drive sur cet appareil" style="display:none;">⬇️☁️</button>
       <button class="btn small danger" data-del>✕</button>`;
     refreshAttachStatus(row, a);
     row.querySelector("[data-upload]").addEventListener("click", async (e)=>{
@@ -1917,6 +1918,14 @@ function renderAttachList(t){
       btn.disabled = true; btn.textContent = "…";
       await uploadAttachmentToDrive(a, cached, t);
       btn.disabled = false; btn.textContent = "☁️↑";
+      refreshAttachStatus(row, a);
+    });
+    row.querySelector("[data-fetchdrive]").addEventListener("click", async (e)=>{
+      const btn = e.currentTarget;
+      btn.disabled = true; btn.textContent = "…";
+      const dataUrl = await getAttachmentDataUrl(a); // fetches from Drive and caches locally
+      btn.disabled = false; btn.textContent = "⬇️☁️";
+      if(!dataUrl){ alert("Échec du téléchargement depuis Drive — vérifie ta connexion."); return; }
       refreshAttachStatus(row, a);
     });
     row.querySelector("[data-open]").addEventListener("click", async ()=>{
@@ -1956,11 +1965,14 @@ function renderAttachList(t){
 async function refreshAttachStatus(row, a){
   const el = row.querySelector(".astatus");
   const uploadBtn = row.querySelector("[data-upload]");
+  const fetchBtn = row.querySelector("[data-fetchdrive]");
   if(!el) return;
   if(uploadBtn) uploadBtn.style.display = "none";
+  if(fetchBtn) fetchBtn.style.display = "none";
   if(a.dataUrl){ el.textContent = "✅ hors ligne"; el.style.color = "var(--knowledge)"; return; }
   const cached = await attachGetLocal(a.id);
   if(cached && !a.driveFileId && uploadBtn) uploadBtn.style.display = "inline-flex";
+  if(!cached && a.driveFileId && fetchBtn) fetchBtn.style.display = "inline-flex";
   if(cached){ el.textContent = "✅ hors ligne"; el.style.color = "var(--knowledge)"; return; }
   if(a.driveFileId){ el.textContent = "☁️ sur Drive"; el.style.color = "var(--text-sub)"; return; }
   el.textContent = "⚠️ pas encore sauvegardé"; el.style.color = "#F0838C";
