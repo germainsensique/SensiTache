@@ -541,11 +541,25 @@ function loadData(){
   }catch(e){ console.warn("lecture impossible", e); return null; }
 }
 function saveData(){
+  lastLocalEditAt = Date.now();
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); }
   catch(e){ alert("Impossible d'enregistrer (stockage plein ?). Exporte ta sauvegarde régulièrement.\n"+e.message); }
   scheduleAutoBackup();
 }
 function uid(p){ return (p||"id")+"_"+Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4); }
+// Pointer-based drag-reorder (subtasks, task list, tabs) all share this: if
+// a pointerup ever fails to fire cleanly (common on mobile — an interrupted
+// touch, a scroll taking over mid-gesture), the old listeners could stay
+// attached to document and fire later on an unrelated click, corrupting
+// whatever list is being reordered at that point. Every drag start now
+// force-cleans any previous session first, and always listens for
+// pointercancel too, so a leak can never survive past the next drag.
+let __activeDragCleanup = null;
+function startDragSession(cleanupFn){
+  if(__activeDragCleanup){ try{ __activeDragCleanup(); }catch(e){} }
+  __activeDragCleanup = cleanupFn;
+}
+function endDragSession(){ __activeDragCleanup = null; }
 function todayStr(){
   const d = new Date();
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
@@ -606,6 +620,7 @@ let currentWsId = (function(){
 let currentTab = localStorage.getItem("sensitache.lastTab") || "tasks";
 let openTaskId = null;
 let suppressNextPopstate = false;
+let lastLocalEditAt = 0;
 
 /* =========================================================
    SIDEBAR
@@ -1154,7 +1169,8 @@ function iconSvg(name){
     book:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 012-2h12v16H6a2 2 0 00-2 2V5z"/><path d="M18 3v16"/></svg>',
     link:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 15l6-6M10 6l1-1a4 4 0 116 6l-1 1M14 18l-1 1a4 4 0 11-6-6l1-1"/></svg>',
     bolt:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>',
-    flag:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 21V4"/><path d="M5 4h13l-3 4 3 4H5"/></svg>'
+    flag:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 21V4"/><path d="M5 4h13l-3 4 3 4H5"/></svg>',
+    note:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h5"/></svg>'
   };
   return icons[name]||"";
 }
@@ -1301,7 +1317,7 @@ function createAndOpenNewTask(){
   const titleInput = document.getElementById("taskTitleInput");
   titleInput.focus();
 }
-function renderTaskRow(t, bucketList){
+function renderTaskRow(t, bucketList, forCollabId){
   const row = document.createElement("div");
   row.className = "task-row";
   const today = todayStr();
@@ -1313,12 +1329,15 @@ function renderTaskRow(t, bucketList){
   if(t.quick) badges += `<span class="badge quick" title="Rapide">${iconSvg("bolt")}</span>`;
   if(t.knowledge) badges += `<span class="badge knowledge" title="Base de connaissances">${iconSvg("book")}</span>`;
   if(t.process) badges += `<span class="badge proc" title="Processus associé">${iconSvg("link")}</span>`;
+  if(t.description && t.description.trim()) badges += `<span class="badge" style="background:rgba(255,255,255,.08);color:var(--text-sub);" title="Cette tâche a une description">${iconSvg("note")}</span>`;
   if(t.attachments && t.attachments.length) badges += `<span class="badge attach" title="Documents joints">${t.attachments.length}📎</span>`;
   if(t.dueDate){
     const overdue = t.dueDate < todayStr();
     badges += `<span class="badge" style="background:${overdue?'rgba(224,85,95,.2)':'rgba(255,255,255,.08)'};color:${overdue?'#F0838C':'var(--text-sub)'};" title="Date butoir : ${t.dueDate}">${iconSvg("flag")} ${t.dueDate}</span>`;
   }
-  const nextSub = nextUndoneSubtask(t);
+  const nextSub = forCollabId
+    ? ((t.subtasks||[]).find(s=> !s.done && s.assignedTo===forCollabId) || nextUndoneSubtask(t))
+    : nextUndoneSubtask(t);
   row.innerHTML = `
     ${bucketList ? '<span class="task-handle" style="cursor:grab;color:var(--text-sub);touch-action:none;padding:2px 4px;flex-shrink:0;">⠿</span>' : ''}
     <div class="task-check" data-check></div>
@@ -1343,6 +1362,8 @@ function renderTaskRow(t, bucketList){
       const up = ()=>{
         document.removeEventListener("pointermove", move);
         document.removeEventListener("pointerup", up);
+        document.removeEventListener("pointercancel", up);
+        endDragSession();
         row.style.opacity = "";
         Array.from(parent.querySelectorAll(".task-row")).forEach(r=> r.style.borderTop = "");
         if(dragOverRow && dragOverRow!==row){
@@ -1353,12 +1374,14 @@ function renderTaskRow(t, bucketList){
             const [moved] = bucketList.splice(fromIdx,1);
             bucketList.splice(toIdx,0,moved);
             bucketList.forEach((x,i)=>{ x.sortOrder = i; x.updatedAt = Date.now(); });
-            saveData(); renderTasksGroupedList();
+            saveData(); renderMain();
           }
         }
       };
+      startDragSession(up);
       document.addEventListener("pointermove", move);
       document.addEventListener("pointerup", up);
+      document.addEventListener("pointercancel", up);
     });
   }
   row.dataset.taskId = t.id;
@@ -1394,7 +1417,9 @@ function renderCollabTab(el){
   const tasks = activeTasks().filter(t=>!recurrenceNotDueYet(t));
   const byCollab = {};
   tasks.forEach(t=>{
-    (t.assignedTo||[]).forEach(cid=>{
+    const collabIds = new Set(t.assignedTo||[]);
+    (t.subtasks||[]).forEach(s=>{ if(s.assignedTo && !s.done) collabIds.add(s.assignedTo); });
+    collabIds.forEach(cid=>{
       if(cid===DATA.currentUserId) return;
       (byCollab[cid] = byCollab[cid]||[]).push(t);
     });
@@ -1407,7 +1432,14 @@ function renderCollabTab(el){
     const group = document.createElement("div");
     group.className = "collab-group";
     group.innerHTML = `<div class="collab-head"><span class="avatar" style="background:${c.color}">${escapeHtml(c.name.slice(0,2).toUpperCase())}</span> ${escapeHtml(c.name)} <span style="color:var(--text-sub);font-weight:400;">(${list.length})</span></div>`;
-    list.sort((a,b)=>sortCategory(a)-sortCategory(b)).forEach(t=> group.appendChild(renderTaskRow(t)));
+    list.sort((a,b)=>{
+      const ao=a.sortOrder, bo=b.sortOrder;
+      if(ao!==undefined && bo!==undefined) return ao-bo;
+      if(ao!==undefined) return -1;
+      if(bo!==undefined) return 1;
+      return sortCategory(a)-sortCategory(b);
+    });
+    list.forEach(t=> group.appendChild(renderTaskRow(t, list, c.id)));
     el.appendChild(group);
   });
 }
@@ -1673,7 +1705,7 @@ function renderAssignChips(t){
     chip.innerHTML = `<span class="avatar" style="background:${c.color};width:20px;height:20px;font-size:9px;">${escapeHtml(c.name.slice(0,2).toUpperCase())}</span>${escapeHtml(c.name)}<span data-remove="${c.id}" style="cursor:pointer;color:var(--text-sub);margin-left:2px;">✕</span>`;
     chip.querySelector("[data-remove]").addEventListener("click", ()=>{
       t.assignedTo = (t.assignedTo||[]).filter(id=>id!==c.id);
-      t.updatedAt = Date.now(); saveData(); renderAssignChips(t);
+      t.updatedAt = Date.now(); saveData(); renderAssignChips(t); renderMain();
     });
     wrap.appendChild(chip);
   });
@@ -2057,8 +2089,8 @@ function renderSubtaskList(t){
       s.done = e.target.checked; s.doneAt = s.done ? Date.now() : null;
       t.updatedAt = Date.now(); saveData(); renderSubtaskList(t); renderMain();
     });
-    row.querySelector('input[type="text"]').addEventListener("change", e=>{
-      s.text = e.target.value.trim() || s.text; t.updatedAt = Date.now(); saveData(); renderMain();
+    row.querySelector('input[type="text"]').addEventListener("input", e=>{
+      s.text = e.target.value; t.updatedAt = Date.now(); saveData();
     });
     row.querySelector("[data-del]").addEventListener("click", ()=>{
       snapshot();
@@ -2082,6 +2114,8 @@ function renderSubtaskList(t){
       const up = ()=>{
         document.removeEventListener("pointermove", move);
         document.removeEventListener("pointerup", up);
+        document.removeEventListener("pointercancel", up);
+        endDragSession();
         if(dragOverId && dragOverId!==dragId){
           const list = t.subtasks;
           const fromIdx = list.findIndex(x=>x.id===dragId);
@@ -2095,8 +2129,10 @@ function renderSubtaskList(t){
         dragId=null; dragOverId=null;
         renderSubtaskList(t);
       };
+      startDragSession(up);
       document.addEventListener("pointermove", move);
       document.addEventListener("pointerup", up);
+      document.addEventListener("pointercancel", up);
     });
     wrap.appendChild(row);
   });
@@ -3765,11 +3801,12 @@ function isUserCurrentlyTyping(){
 }
 async function writeDriveBackup(){
   if(!driveClientId) return;
-  if(isUserCurrentlyTyping()){
-    // Merging while a keystroke is in flight can interleave what's being
-    // typed with the incoming remote copy (the exact cause of garbled/
-    // duplicated text people were seeing). Retry shortly instead of
-    // merging mid-edit — nothing is lost, it just waits a moment.
+  if(isUserCurrentlyTyping() || (Date.now() - lastLocalEditAt < 2000)){
+    // Merging too soon after any local change — not just mid-keystroke, but
+    // also right after clicking a checkbox, an assignment avatar, etc. —
+    // can pull in a remote copy that doesn't yet reflect what was just
+    // changed here, making the edit appear to silently revert. Give the
+    // debounced push a couple of seconds to actually land on Drive first.
     clearTimeout(backupDebounceTimer);
     backupDebounceTimer = setTimeout(writeDriveBackup, 1500);
     return;
