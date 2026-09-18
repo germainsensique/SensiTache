@@ -319,6 +319,11 @@
       </div>
 
       <div class="field-row">
+        <div class="field-label">📁 Espace de travail</div>
+        <select id="taskWorkspaceSelect" class="fieldselect" style="width:100%;"></select>
+      </div>
+
+      <div class="field-row">
         <div class="field-label">Sous-tâches</div>
         <div id="subtaskList" style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px;"></div>
         <button class="btn small" id="btnAddSubtask" style="width:100%;justify-content:center;">+ Ajouter une sous-tâche</button>
@@ -1549,6 +1554,8 @@ function openTaskDrawer(id){
   document.getElementById("drawer").classList.add("show");
   document.getElementById("taskTitleInput").value = t.title;
   document.getElementById("taskDescInput").value = t.description||"";
+  const wsSelDrawer = document.getElementById("taskWorkspaceSelect");
+  wsSelDrawer.innerHTML = DATA.workspaces.map(w=>`<option value="${w.id}" ${w.id===t.workspaceId?"selected":""}>${escapeHtml((w.icon?w.icon+" ":"")+w.name)}</option>`).join("");
   document.getElementById("chipToday").classList.toggle("on", !!t.today);
   document.getElementById("chipUrgent").classList.toggle("on", !!t.urgent);
   document.getElementById("chipQuick").classList.toggle("on", !!t.quick);
@@ -1759,6 +1766,15 @@ function showAssignPicker(t){
 }
 document.getElementById("btnAddAssignee").addEventListener("click", ()=>{
   const t = curTask(); if(t) showAssignPicker(t);
+});
+document.getElementById("taskWorkspaceSelect").addEventListener("change", e=>{
+  const t = curTask(); if(!t) return;
+  const newWsId = e.target.value;
+  if(!newWsId || newWsId===t.workspaceId) return;
+  t.workspaceId = newWsId; t.updatedAt = Date.now(); saveData();
+  currentWsId = newWsId; currentTab = "tasks";
+  localStorage.setItem("sensitache.lastWsId", currentWsId);
+  renderSidebar(); renderMain();
 });
 document.getElementById("reminderInput").addEventListener("change", e=>{
   const t = curTask(); if(!t) return; t.reminderDate = e.target.value || null; t.updatedAt=Date.now(); saveData(); renderMain();
