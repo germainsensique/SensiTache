@@ -1495,20 +1495,28 @@ function assigneeNamesForTask(t){
 function buildCollabEmailText(){
   const ids = Array.from(collabEmailSelected);
   const tasks = ids.map(id=> DATA.tasks.find(t=>t.id===id)).filter(Boolean);
-  const groups = { today: [], urgent: [], other: [] };
+  const groups = { p1: [], p2: [], p3: [] };
   tasks.forEach(t=>{
-    if(t.today) groups.today.push(t);
-    else if(t.urgent) groups.urgent.push(t);
-    else groups.other.push(t);
+    if(t.today) groups.p1.push(t);
+    else if(t.urgent) groups.p2.push(t);
+    else groups.p3.push(t);
   });
   const lineFor = t=>{
     const names = assigneeNamesForTask(t).join(", ");
-    return "- " + t.title + (names ? " (" + names + ")" : "");
+    let line = "- " + t.title;
+    if(names) line += " (" + names + ")";
+    if(t.dueDate) line += " — échéance : " + t.dueDate.split("-").reverse().join("/");
+    const subLines = (t.subtasks||[]).filter(s=>!s.done).map(s=>{
+      const sc = s.assignedTo ? DATA.collaborators.find(c=>c.id===s.assignedTo) : null;
+      return "    · " + s.text + (sc ? " (" + sc.name + ")" : "");
+    });
+    if(subLines.length) line += "\n" + subLines.join("\n");
+    return line;
   };
   const sections = [];
-  if(groups.today.length) sections.push("Aujourd'hui :\n" + groups.today.map(lineFor).join("\n"));
-  if(groups.urgent.length) sections.push("Urgent :\n" + groups.urgent.map(lineFor).join("\n"));
-  if(groups.other.length) sections.push("Autres tâches :\n" + groups.other.map(lineFor).join("\n"));
+  if(groups.p1.length) sections.push("Priorité 1 :\n" + groups.p1.map(lineFor).join("\n"));
+  if(groups.p2.length) sections.push("Priorité 2 :\n" + groups.p2.map(lineFor).join("\n"));
+  if(groups.p3.length) sections.push("Priorité 3 :\n" + groups.p3.map(lineFor).join("\n"));
   return sections.join("\n\n");
 }
 function showCollabEmailModal(){
