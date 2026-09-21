@@ -1506,6 +1506,7 @@ function buildCollabEmailText(){
     let line = "- " + t.title;
     if(names) line += " (" + names + ")";
     if(t.dueDate) line += " — échéance : " + t.dueDate.split("-").reverse().join("/");
+    if(t.description && t.description.trim()) line += "\n    " + t.description.trim().replace(/\n/g, "\n    ");
     const subLines = (t.subtasks||[]).filter(s=>!s.done).map(s=>{
       const sc = s.assignedTo ? DATA.collaborators.find(c=>c.id===s.assignedTo) : null;
       return "    · " + s.text + (sc ? " (" + sc.name + ")" : "");
@@ -1517,7 +1518,8 @@ function buildCollabEmailText(){
   if(groups.p1.length) sections.push("Priorité 1 :\n" + groups.p1.map(lineFor).join("\n"));
   if(groups.p2.length) sections.push("Priorité 2 :\n" + groups.p2.map(lineFor).join("\n"));
   if(groups.p3.length) sections.push("Priorité 3 :\n" + groups.p3.map(lineFor).join("\n"));
-  return sections.join("\n\n");
+  const intro = "Bonjour,\n\nTu trouveras ci-dessous les points abordés lors de notre échange :\n\n";
+  return intro + sections.join("\n\n");
 }
 function showCollabEmailModal(){
   const text = buildCollabEmailText();
