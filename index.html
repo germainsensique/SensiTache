@@ -619,6 +619,8 @@ let currentWsId = (function(){
 })();
 let currentTab = localStorage.getItem("sensitache.lastTab") || "tasks";
 let openTaskId = null;
+let collabEmailMode = false;
+let collabEmailSelected = new Set();
 let suppressNextPopstate = false;
 let lastLocalEditAt = 0;
 
@@ -1427,7 +1429,33 @@ function renderCollabTab(el){
     });
   });
   const hasAny = Object.keys(byCollab).some(k=>byCollab[k].length>0);
-  if(!hasAny){ el.innerHTML = '<div class="empty-hint">Aucune tâche active affectée à d’autres collaborateurs.</div>'; return; }
+
+  const toolbar = document.createElement("div");
+  toolbar.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;";
+  toolbar.innerHTML = `
+    <button class="btn small${collabEmailMode?' primary':''}" id="btnToggleEmailMode">✉️ ${collabEmailMode ? "Annuler la sélection" : "Générer un e-mail"}</button>
+    ${collabEmailMode ? `<span id="emailSelCount" style="font-size:12px;color:var(--text-sub);">${collabEmailSelected.size} sélectionnée(s)</span><button class="btn small primary" id="btnGenEmail" style="margin-left:auto;">📋 Générer le texte</button>` : ""}
+  `;
+  el.appendChild(toolbar);
+  toolbar.querySelector("#btnToggleEmailMode").addEventListener("click", ()=>{
+    collabEmailMode = !collabEmailMode;
+    if(!collabEmailMode) collabEmailSelected.clear();
+    renderMain();
+  });
+  if(collabEmailMode){
+    toolbar.querySelector("#btnGenEmail").addEventListener("click", ()=>{
+      if(collabEmailSelected.size===0){ alert("Coche au moins une tâche à inclure dans l'e-mail."); return; }
+      showCollabEmailModal();
+    });
+  }
+
+  if(!hasAny){
+    const hint = document.createElement("div");
+    hint.className = "empty-hint";
+    hint.textContent = "Aucune tâche active affectée à d’autres collaborateurs.";
+    el.appendChild(hint);
+    return;
+  }
   DATA.collaborators.forEach(c=>{
     if(c.id===DATA.currentUserId) return;
     const list = byCollab[c.id]; if(!list || list.length===0) return;
@@ -1441,9 +1469,78 @@ function renderCollabTab(el){
       if(bo!==undefined) return 1;
       return sortCategory(a)-sortCategory(b);
     });
-    list.forEach(t=> group.appendChild(renderTaskRow(t, list, c.id)));
+    list.forEach(t=>{
+      const row = renderTaskRow(t, list, c.id);
+      if(collabEmailMode){
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = collabEmailSelected.has(t.id);
+        cb.style.cssText = "flex-shrink:0;width:17px;height:17px;margin:0 2px 0 0;cursor:pointer;";
+        cb.addEventListener("click", e=>{
+          e.stopPropagation();
+          if(cb.checked) collabEmailSelected.add(t.id); else collabEmailSelected.delete(t.id);
+          const counter = document.getElementById("emailSelCount");
+          if(counter) counter.textContent = collabEmailSelected.size + " sélectionnée(s)";
+        });
+        row.insertBefore(cb, row.firstChild);
+      }
+      group.appendChild(row);
+    });
     el.appendChild(group);
   });
+}
+function assigneeNamesForTask(t){
+  return (t.assignedTo||[]).map(id=> DATA.collaborators.find(c=>c.id===id)).filter(Boolean).map(c=>c.name);
+}
+function buildCollabEmailText(){
+  const ids = Array.from(collabEmailSelected);
+  const tasks = ids.map(id=> DATA.tasks.find(t=>t.id===id)).filter(Boolean);
+  const groups = { today: [], urgent: [], other: [] };
+  tasks.forEach(t=>{
+    if(t.today) groups.today.push(t);
+    else if(t.urgent) groups.urgent.push(t);
+    else groups.other.push(t);
+  });
+  const lineFor = t=>{
+    const names = assigneeNamesForTask(t).join(", ");
+    return "- " + t.title + (names ? " (" + names + ")" : "");
+  };
+  const sections = [];
+  if(groups.today.length) sections.push("Aujourd'hui :\n" + groups.today.map(lineFor).join("\n"));
+  if(groups.urgent.length) sections.push("Urgent :\n" + groups.urgent.map(lineFor).join("\n"));
+  if(groups.other.length) sections.push("Autres tâches :\n" + groups.other.map(lineFor).join("\n"));
+  return sections.join("\n\n");
+}
+function showCollabEmailModal(){
+  const text = buildCollabEmailText();
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal" style="width:540px;max-height:82vh;overflow-y:auto;">
+      <h2>Texte pour l'e-mail</h2>
+      <p style="font-size:12.5px;color:var(--text-sub);">Copie ce texte et colle-le dans ton e-mail.</p>
+      <textarea readonly style="width:100%;min-height:260px;font-size:13px;line-height:1.5;border:1px solid var(--border-soft);border-radius:8px;padding:10px 12px;background:var(--bg-app);color:var(--text-main);margin:12px 0;white-space:pre-wrap;">${escapeHtml(text)}</textarea>
+      <div class="modal-actions">
+        <button class="btn ghost" id="ceClose">Fermer</button>
+        <button class="btn primary" id="ceCopy">Copier le texte</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector("#ceCopy").addEventListener("click", async ()=>{
+    const btn = overlay.querySelector("#ceCopy");
+    try{
+      await navigator.clipboard.writeText(text);
+      btn.textContent = "✅ Copié !";
+      setTimeout(()=>{ btn.textContent = "Copier le texte"; }, 2000);
+    }catch(e){
+      alert("Impossible de copier automatiquement — sélectionne le texte ci-dessus et copie-le manuellement (Ctrl+C).");
+    }
+  });
+  overlay.querySelector("#ceClose").addEventListener("click", ()=>{
+    overlay.remove();
+    collabEmailMode = false; collabEmailSelected.clear(); renderMain();
+  });
+  overlay.addEventListener("click", e=>{ if(e.target===overlay){ overlay.remove(); collabEmailMode=false; collabEmailSelected.clear(); renderMain(); } });
 }
 
 /* ---------- RECURRENCE TAB ---------- */
