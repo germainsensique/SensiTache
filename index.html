@@ -22,7 +22,7 @@
     --border:#2C2F38; --border-light:#383B45; --border-soft:#2C2F38;
     --text:#ECEBE6; --text-dim:#9A9DA8; --text-main:#ECEBE6; --text-sub:#9198A5;
     --accent:#E4E4E4; --accent-dark:#C7C7C7;
-    --flame:#E8813A; --urgent:#E0555F; --knowledge:#1FA971; --recur:#7A5CFA; --clock:#3AA0D6;
+    --flame:#E8813A; --urgent:#E0555F; --knowledge:#1FA971; --recur:#7A5CFA; --clock:#3AA0D6; --followup:#8B8FA3;
     --green:#1FA971; --orange:#E07B39; --grey-arrow:#9A9DA8; --danger:#E0555F;
     color-scheme: dark;
     font-family:'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -47,6 +47,7 @@
   .btn.chip.on.urgent{background:rgba(224,85,95,.2);border-color:var(--urgent);color:#F0838C;}
   .btn.chip.on.knowledge{background:rgba(31,169,113,.2);border-color:var(--knowledge);color:#5FD9A4;}
   .btn.chip.on.quick{background:rgba(58,160,214,.2);border-color:var(--clock);color:#7CC6E8;}
+  .btn.chip.on.followup{background:rgba(139,143,163,.2);border-color:var(--followup);color:#C4C8D4;}
 
   /* ---------- Sidebar (dark, on the app) ---------- */
   .sidebar{width:230px; flex-shrink:0; background:var(--bg-app); color:var(--text); display:flex; flex-direction:column; padding:16px 10px;}
@@ -93,6 +94,7 @@
   .badge.clock{background:rgba(58,160,214,.18); color:var(--clock);}
   .badge.recur{background:rgba(122,92,250,.18); color:var(--recur);}
   .badge.quick{background:rgba(58,160,214,.18); color:var(--clock);}
+  .badge.followup{background:rgba(139,143,163,.18); color:var(--followup);}
   .badge.knowledge{background:rgba(31,169,113,.18); color:#5FD9A4;}
   .badge.proc{background:rgba(255,255,255,.12); color:var(--accent);}
   .badge.attach{background:var(--bg-panel-2); color:var(--text-sub); font-size:10px; font-weight:700; width:auto; padding:0 6px;}
@@ -330,6 +332,7 @@
           <button class="btn chip small flame" id="chipToday">🔥 Aujourd'hui</button>
           <button class="btn chip small urgent" id="chipUrgent">🎯 Urgent</button>
           <button class="btn chip small quick" id="chipQuick">⚡ Rapide</button>
+          <button class="btn chip small followup" id="chipFollowUp">👁️ À suivre (sans action)</button>
           <button class="btn chip small knowledge" id="chipKnowledge">📚 Base de connaissances</button>
         </div>
       </div>
@@ -621,6 +624,7 @@ let currentTab = localStorage.getItem("sensitache.lastTab") || "tasks";
 let openTaskId = null;
 let collabEmailMode = false;
 let collabEmailSelected = new Set();
+let collabEmailTheme = "";
 let suppressNextPopstate = false;
 let lastLocalEditAt = 0;
 
@@ -1058,12 +1062,13 @@ function sortCategory(t){
   const today = todayStr();
   if(t.reminderDate && t.reminderDate<=today) return 1;
   if(recurrenceIsDue(t)) return 2;
+  if(t.followUp) return 7;
   if(t.today) return 3;
   if(t.urgent) return 4;
   if(t.quick) return 5;
   return 6;
 }
-const CATEGORY_LABEL = {1:"Rappel", 2:"Récurrence", 3:"Aujourd'hui", 4:"Urgent", 5:"Rapide", 6:"Non prioritaire"};
+const CATEGORY_LABEL = {1:"Rappel", 2:"Récurrence", 3:"Aujourd'hui", 4:"Urgent", 5:"Rapide", 6:"Non prioritaire", 7:"À suivre (sans action)"};
 function addDays(dateStr, n){ const d=new Date(dateStr+"T00:00:00"); d.setDate(d.getDate()+n); return dateToStr(d); }
 function addYears(dateStr, n){ const d=new Date(dateStr+"T00:00:00"); d.setFullYear(d.getFullYear()+n); return dateToStr(d); }
 function nthWeekdayOfMonth(year, month, weekday, nth){
@@ -1172,7 +1177,8 @@ function iconSvg(name){
     link:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 15l6-6M10 6l1-1a4 4 0 116 6l-1 1M14 18l-1 1a4 4 0 11-6-6l1-1"/></svg>',
     bolt:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>',
     flag:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 21V4"/><path d="M5 4h13l-3 4 3 4H5"/></svg>',
-    note:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h5"/></svg>'
+    note:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h5"/></svg>',
+    eye:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>'
   };
   return icons[name]||"";
 }
@@ -1211,33 +1217,44 @@ function renderTasksGroupedList(){
     groupsEl.innerHTML = "<div class=\"empty-hint\">Aucune tache active qui te soit affectee pour le moment. Regarde aussi l onglet Collaboration.</div>";
     return;
   }
-  const buckets = {1:[],2:[],3:[],4:[],5:[],6:[]};
+  const buckets = {1:[],2:[],3:[],4:[],5:[],6:[],7:[]};
   tasks.forEach(t=> buckets[sortCategory(t)].push(t));
-  Object.keys(buckets).forEach(k=> buckets[k].sort((a,b)=>{
-    const ao=a.sortOrder, bo=b.sortOrder;
-    if(ao!==undefined && bo!==undefined) return ao-bo;
-    if(ao!==undefined) return -1;
-    if(bo!==undefined) return 1;
-    return (b.updatedAt||0)-(a.updatedAt||0);
-  }));
+  Object.keys(buckets).forEach(k=>{
+    if(Number(k)===7){
+      buckets[k].sort((a,b)=>{
+        if(a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+        if(a.dueDate) return -1;
+        if(b.dueDate) return 1;
+        return (b.updatedAt||0)-(a.updatedAt||0);
+      });
+    } else {
+      buckets[k].sort((a,b)=>{
+        const ao=a.sortOrder, bo=b.sortOrder;
+        if(ao!==undefined && bo!==undefined) return ao-bo;
+        if(ao!==undefined) return -1;
+        if(bo!==undefined) return 1;
+        return (b.updatedAt||0)-(a.updatedAt||0);
+      });
+    }
+  });
 
   if(isPhoneSize()){
     groupsEl.className = "";
     groupsEl.innerHTML = "";
-    [3,4,1,2,5,6].forEach(cat=>{
+    [3,7,4,1,2,5,6].forEach(cat=>{
       const list = buckets[cat];
       if(list.length===0) return;
       const label = document.createElement("div");
       label.className = "task-group-label"; label.textContent = CATEGORY_LABEL[cat];
       groupsEl.appendChild(label);
-      list.forEach(t=> groupsEl.appendChild(renderTaskRow(t, list)));
+      list.forEach(t=> groupsEl.appendChild(renderTaskRow(t, cat===7 ? undefined : list)));
     });
   } else {
     groupsEl.className = "two-col-layout";
     groupsEl.innerHTML = `<div id="taskColLeft" class="task-col"></div><div id="taskColRight" class="task-col"></div>`;
     const left = document.getElementById("taskColLeft");
     const right = document.getElementById("taskColRight");
-    function fillCol(container, cat, label){
+    function fillCol(container, cat, label, noDrag){
       const list = buckets[cat];
       if(list.length===0) return;
       if(label){
@@ -1245,11 +1262,12 @@ function renderTasksGroupedList(){
         l.className = "task-group-label"; l.textContent = label;
         container.appendChild(l);
       }
-      list.forEach(t=> container.appendChild(renderTaskRow(t, list)));
+      list.forEach(t=> container.appendChild(renderTaskRow(t, noDrag ? undefined : list)));
     }
     fillCol(left, 3, "Aujourd'hui");
     fillCol(left, 1, "Planifié");
     fillCol(left, 5, "Rapide");
+    fillCol(right, 7, "À suivre (sans action)", true);
     fillCol(right, 4, "Urgences");
     fillCol(right, 2, "Récurrence");
     fillCol(right, 6, "Non prioritaire");
@@ -1313,13 +1331,27 @@ function createAndOpenNewTask(){
   const t = {
     id: uid("task"), workspaceId: currentWsId, title: "", description:"",
     assignedTo: [DATA.currentUserId], today:false, urgent:false, quick:false, knowledge:false,
-    reminderDate:null, recurrence:null, done:false, doneAt:null,
-    attachments:[], process:null, createdAt:Date.now(), updatedAt:Date.now()
+    reminderDate:null, dueDate:null, recurrence:null, done:false, doneAt:null,
+    attachments:[], subtasks:[], process:null, createdAt:Date.now(), updatedAt:Date.now(),
+    isDraft:true
   };
   DATA.tasks.push(t); saveData(); renderMain();
   openTaskDrawer(t.id);
   const titleInput = document.getElementById("taskTitleInput");
   titleInput.focus();
+}
+function isDraftTaskEmpty(t){
+  const hasTitle = t.title && t.title.trim();
+  const hasDesc = t.description && t.description.trim();
+  const hasFlags = t.today || t.urgent || t.quick || t.knowledge || t.followUp;
+  const hasDates = t.reminderDate || t.dueDate;
+  const hasRecur = !!t.recurrence;
+  const hasSub = t.subtasks && t.subtasks.length>0;
+  const hasAttach = t.attachments && t.attachments.length>0;
+  const hasProcess = !!t.process;
+  const assign = (t.assignedTo||[]).slice().sort();
+  const defaultAssign = JSON.stringify(assign) === JSON.stringify([DATA.currentUserId]) || assign.length===0;
+  return !hasTitle && !hasDesc && !hasFlags && !hasDates && !hasRecur && !hasSub && !hasAttach && !hasProcess && defaultAssign;
 }
 function renderTaskRow(t, bucketList, forCollabId){
   const row = document.createElement("div");
@@ -1331,6 +1363,7 @@ function renderTaskRow(t, bucketList, forCollabId){
   if(t.today) badges += `<span class="badge flame" title="Aujourd'hui">${iconSvg("flame")}</span>`;
   if(t.urgent) badges += `<span class="badge urgent" title="Urgent">${iconSvg("target")}</span>`;
   if(t.quick) badges += `<span class="badge quick" title="Rapide">${iconSvg("bolt")}</span>`;
+  if(t.followUp) badges += `<span class="badge followup" title="À suivre (sans action)">${iconSvg("eye")}</span>`;
   if(t.knowledge) badges += `<span class="badge knowledge" title="Base de connaissances">${iconSvg("book")}</span>`;
   if(t.process) badges += `<span class="badge proc" title="Processus associé">${iconSvg("link")}</span>`;
   if(t.description && t.description.trim()) badges += `<span class="badge" style="background:rgba(255,255,255,.08);color:var(--text-sub);" title="Cette tâche a une description">${iconSvg("note")}</span>`;
@@ -1431,10 +1464,13 @@ function renderCollabTab(el){
   const hasAny = Object.keys(byCollab).some(k=>byCollab[k].length>0);
 
   const toolbar = document.createElement("div");
-  toolbar.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;";
+  toolbar.style.cssText = "display:flex;flex-direction:column;gap:8px;margin-bottom:14px;";
   toolbar.innerHTML = `
-    <button class="btn small${collabEmailMode?' primary':''}" id="btnToggleEmailMode">✉️ ${collabEmailMode ? "Annuler la sélection" : "Générer un e-mail"}</button>
-    ${collabEmailMode ? `<span id="emailSelCount" style="font-size:12px;color:var(--text-sub);">${collabEmailSelected.size} sélectionnée(s)</span><button class="btn small primary" id="btnGenEmail" style="margin-left:auto;">📋 Générer le texte</button>` : ""}
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <button class="btn small${collabEmailMode?' primary':''}" id="btnToggleEmailMode">✉️ ${collabEmailMode ? "Annuler la sélection" : "Générer un e-mail"}</button>
+      ${collabEmailMode ? `<span id="emailSelCount" style="font-size:12px;color:var(--text-sub);">${collabEmailSelected.size} sélectionnée(s)</span><button class="btn small primary" id="btnGenEmail" style="margin-left:auto;">📋 Générer le texte</button>` : ""}
+    </div>
+    ${collabEmailMode ? `<input type="text" id="emailThemeInput" class="fieldinput" placeholder="Thème (pour l'objet du mail)" value="${escapeHtml(collabEmailTheme)}" style="max-width:320px;">` : ""}
   `;
   el.appendChild(toolbar);
   toolbar.querySelector("#btnToggleEmailMode").addEventListener("click", ()=>{
@@ -1447,6 +1483,7 @@ function renderCollabTab(el){
       if(collabEmailSelected.size===0){ alert("Coche au moins une tâche à inclure dans l'e-mail."); return; }
       showCollabEmailModal();
     });
+    toolbar.querySelector("#emailThemeInput").addEventListener("input", e=>{ collabEmailTheme = e.target.value; });
   }
 
   if(!hasAny){
@@ -1492,6 +1529,26 @@ function renderCollabTab(el){
 function assigneeNamesForTask(t){
   return (t.assignedTo||[]).map(id=> DATA.collaborators.find(c=>c.id===id)).filter(Boolean).map(c=>c.name);
 }
+function wrapBullet(text, width){
+  width = width || 78;
+  const prefixFirst = "    · ";
+  const prefixRest = "      ";
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines = [];
+  let current = "";
+  words.forEach(w=>{
+    const test = current ? current + " " + w : w;
+    if(current && (prefixRest.length + test.length) > width){
+      lines.push(current);
+      current = w;
+    } else {
+      current = test;
+    }
+  });
+  if(current) lines.push(current);
+  if(lines.length===0) return "";
+  return lines.map((l,i)=> (i===0?prefixFirst:prefixRest) + l).join("\n");
+}
 function buildCollabEmailText(){
   const ids = Array.from(collabEmailSelected);
   const tasks = ids.map(id=> DATA.tasks.find(t=>t.id===id)).filter(Boolean);
@@ -1507,12 +1564,12 @@ function buildCollabEmailText(){
     if(names) line += " (" + names + ")";
     if(t.dueDate) line += " — échéance : " + t.dueDate.split("-").reverse().join("/");
     if(t.description && t.description.trim()){
-      const descLines = t.description.trim().split("\n").filter(l=>l.trim()!=="").map(l=>"    · " + l.trim());
+      const descLines = t.description.trim().split("\n").filter(l=>l.trim()!=="").map(l=> wrapBullet(l.trim()));
       line += "\n" + descLines.join("\n");
     }
     const subLines = (t.subtasks||[]).filter(s=>!s.done).map(s=>{
       const sc = s.assignedTo ? DATA.collaborators.find(c=>c.id===s.assignedTo) : null;
-      return "    · " + s.text + (sc ? " (" + sc.name + ")" : "");
+      return wrapBullet(s.text + (sc ? " (" + sc.name + ")" : ""));
     });
     if(subLines.length) line += "\n" + subLines.join("\n");
     return line;
@@ -1524,21 +1581,43 @@ function buildCollabEmailText(){
   const intro = "Bonjour,\n\nTu trouveras ci-dessous les points abordés lors de notre échange :\n\n";
   return intro + sections.join("\n\n");
 }
+function buildCollabEmailSubject(){
+  const ds = dateToStr(new Date()).split("-").reverse().join("/");
+  const theme = (collabEmailTheme||"").trim().toUpperCase();
+  return (theme ? theme + " " : "") + ds;
+}
 function showCollabEmailModal(){
   const text = buildCollabEmailText();
+  const subject = buildCollabEmailSubject();
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.innerHTML = `
     <div class="modal" style="width:540px;max-height:82vh;overflow-y:auto;">
       <h2>Texte pour l'e-mail</h2>
-      <p style="font-size:12.5px;color:var(--text-sub);">Copie ce texte et colle-le dans ton e-mail.</p>
-      <textarea readonly style="width:100%;min-height:260px;font-size:13px;line-height:1.5;border:1px solid var(--border-soft);border-radius:8px;padding:10px 12px;background:var(--bg-app);color:var(--text-main);margin:12px 0;white-space:pre-wrap;">${escapeHtml(text)}</textarea>
+      <p style="font-size:12.5px;color:var(--text-sub);">Copie l'objet et le texte, et colle-les dans ton e-mail.</p>
+      <div class="field-label" style="margin-top:8px;">Objet</div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
+        <input readonly id="ceSubjectField" value="${escapeHtml(subject)}" style="flex:1;font-size:13px;border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;background:var(--bg-app);color:var(--text-main);">
+        <button class="btn small" id="ceCopySubject">Copier</button>
+      </div>
+      <div class="field-label">Corps du message</div>
+      <textarea readonly style="width:100%;min-height:260px;font-size:13px;line-height:1.5;border:1px solid var(--border-soft);border-radius:8px;padding:10px 12px;background:var(--bg-app);color:var(--text-main);margin:8px 0 12px;white-space:pre-wrap;">${escapeHtml(text)}</textarea>
       <div class="modal-actions">
         <button class="btn ghost" id="ceClose">Fermer</button>
         <button class="btn primary" id="ceCopy">Copier le texte</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
+  overlay.querySelector("#ceCopySubject").addEventListener("click", async ()=>{
+    const btn = overlay.querySelector("#ceCopySubject");
+    try{
+      await navigator.clipboard.writeText(subject);
+      btn.textContent = "✅ Copié !";
+      setTimeout(()=>{ btn.textContent = "Copier"; }, 2000);
+    }catch(e){
+      alert("Impossible de copier automatiquement — sélectionne le texte de l'objet et copie-le manuellement (Ctrl+C).");
+    }
+  });
   overlay.querySelector("#ceCopy").addEventListener("click", async ()=>{
     const btn = overlay.querySelector("#ceCopy");
     try{
@@ -1664,6 +1743,7 @@ function openTaskDrawer(id){
   document.getElementById("chipToday").classList.toggle("on", !!t.today);
   document.getElementById("chipUrgent").classList.toggle("on", !!t.urgent);
   document.getElementById("chipQuick").classList.toggle("on", !!t.quick);
+  document.getElementById("chipFollowUp").classList.toggle("on", !!t.followUp);
   document.getElementById("chipKnowledge").classList.toggle("on", !!t.knowledge);
   document.getElementById("reminderInput").value = t.reminderDate||"";
   document.getElementById("dueDateInput").value = t.dueDate||"";
@@ -1690,7 +1770,17 @@ function openTaskDrawer(id){
 }
 function closeDrawer(){
   const t = curTask();
-  if(t && (!t.assignedTo || t.assignedTo.length===0)){ t.assignedTo = [DATA.currentUserId]; t.updatedAt = Date.now(); saveData(); }
+  if(t && t.isDraft){
+    if(isDraftTaskEmpty(t)){
+      DATA.tasks = DATA.tasks.filter(x=>x.id!==t.id);
+      DATA.tombstones.tasks[t.id] = Date.now();
+      saveData();
+    } else {
+      delete t.isDraft;
+      if(!t.assignedTo || t.assignedTo.length===0){ t.assignedTo = [DATA.currentUserId]; }
+      t.updatedAt = Date.now(); saveData();
+    }
+  } else if(t && (!t.assignedTo || t.assignedTo.length===0)){ t.assignedTo = [DATA.currentUserId]; t.updatedAt = Date.now(); saveData(); }
   document.getElementById("overlayBg").classList.remove("show");
   document.getElementById("drawer").classList.remove("show");
   document.getElementById("drawer").classList.remove("fullscreen");
@@ -1799,6 +1889,10 @@ document.getElementById("chipUrgent").addEventListener("click", e=>{
 document.getElementById("chipQuick").addEventListener("click", e=>{
   const t = curTask(); if(!t) return; snapshot(); t.quick = !t.quick; t.updatedAt=Date.now(); saveData();
   e.target.classList.toggle("on", t.quick);
+});
+document.getElementById("chipFollowUp").addEventListener("click", e=>{
+  const t = curTask(); if(!t) return; snapshot(); t.followUp = !t.followUp; t.updatedAt=Date.now(); saveData();
+  e.target.classList.toggle("on", t.followUp);
 });
 document.getElementById("chipKnowledge").addEventListener("click", e=>{
   const t = curTask(); if(!t) return; snapshot(); t.knowledge = !t.knowledge; t.updatedAt=Date.now(); saveData();
