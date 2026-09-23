@@ -1353,9 +1353,11 @@ function isDraftTaskEmpty(t){
   const defaultAssign = JSON.stringify(assign) === JSON.stringify([DATA.currentUserId]) || assign.length===0;
   return !hasTitle && !hasDesc && !hasFlags && !hasDates && !hasRecur && !hasSub && !hasAttach && !hasProcess && defaultAssign;
 }
+const PRIORITY_COLOR = {1:"var(--clock)", 2:"var(--recur)", 3:"var(--flame)", 4:"var(--urgent)", 5:"var(--clock)", 6:"rgba(255,255,255,.18)", 7:"var(--followup)"};
 function renderTaskRow(t, bucketList, forCollabId){
   const row = document.createElement("div");
   row.className = "task-row";
+  row.style.borderLeft = "4px solid " + PRIORITY_COLOR[sortCategory(t)];
   const today = todayStr();
   let badges = "";
   if(t.reminderDate) badges += `<span class="badge clock" title="Rappel : ${t.reminderDate}">${iconSvg("clock")}</span>`;
