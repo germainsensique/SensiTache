@@ -549,6 +549,18 @@ function loadData(){
 }
 function saveData(){
   lastLocalEditAt = Date.now();
+  // The process editor mutates PROC (=t.process) directly in many places
+  // without always touching the owning task's own updatedAt. Since sync
+  // merge picks the whole task object with the greatest updatedAt (see
+  // mergeData's task union), a process/legend edit that never bumps the
+  // task's updatedAt can be silently discarded by a later merge pulling in
+  // an older-but-"newer-stamped" copy of the same task. Stamping the owner
+  // here, on every save while a process is open, keeps that edit tagged as
+  // the freshest copy no matter which field inside PROC changed.
+  if(typeof PROC !== "undefined" && PROC){
+    const procOwner = DATA.tasks.find(x=> x.process === PROC);
+    if(procOwner) procOwner.updatedAt = Date.now();
+  }
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); }
   catch(e){ alert("Impossible d'enregistrer (stockage plein ?). Exporte ta sauvegarde régulièrement.\n"+e.message); }
   scheduleAutoBackup();
