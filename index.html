@@ -3846,9 +3846,6 @@ async function procExport(kind, sections){
         const h = item.el.offsetHeight;
         const top = Math.max(item.shape.y, cursorY);
         item.el.style.top = top+"px";
-        item.top = top; item.h = h;
-        const headerEl = item.el.firstElementChild;
-        item.anchorY = top + (headerEl ? headerEl.offsetTop + headerEl.offsetHeight/2 : h/2);
         cursorY = top + h + 16;
       });
       descLabels.push(...items);
@@ -3859,17 +3856,34 @@ async function procExport(kind, sections){
       connectorSvg.setAttribute("width", box.w);
       connectorSvg.setAttribute("height", box.h);
       connectorSvg.style.cssText = "position:absolute;left:"+box.x+"px;top:"+box.y+"px;pointer-events:none;overflow:visible;";
+      // Positions below are read back from the real, just-laid-out DOM via
+      // getBoundingClientRect() rather than recomputed from the model
+      // (shape.x/y, our own stacking math, offsetTop on a nested header
+      // div…) — that recomputation was drifting from what actually got
+      // rendered (the arrows were landing beside their comment box, not on
+      // it). Measuring the live boxes directly and converting to
+      // board-local coordinates via procBoardEl's own rect removes that
+      // whole class of mismatch: what we draw is exactly where things are.
+      const boardRect = procBoardEl.getBoundingClientRect();
+      function localRect(el){
+        const r = el.getBoundingClientRect();
+        return {left: r.left-boardRect.left, top: r.top-boardRect.top, width:r.width, height:r.height};
+      }
       // The arrowhead is drawn by hand as a plain <polygon> rather than via
       // an SVG <marker> — html2canvas frequently fails to render markers
       // referenced through marker-end, which is why earlier exports showed
       // a bare line with no visible arrow tip at all.
       items.forEach(item=>{
-        const s = item.shape;
-        const x1 = s.x + s.w - box.x, y1 = s.y + s.h/2 - box.y;
+        const shapeEl = document.querySelector('.pshape[data-id="'+item.shape.id+'"]');
+        const sr = shapeEl ? localRect(shapeEl) : {left:item.shape.x, top:item.shape.y, width:item.shape.w, height:item.shape.h};
+        const lr = localRect(item.el);
+        const headerEl = item.el.firstElementChild;
+        const headerH = headerEl ? headerEl.getBoundingClientRect().height : 16;
+        const x1 = sr.left + sr.width - box.x, y1 = sr.top + sr.height/2 - box.y;
         // Anchored at the "Commentaire" header, not the box's full-height
         // middle — a fixed point right at the comment's face, regardless
         // of how tall the box ends up once the text wraps.
-        const x2 = marginX - box.x, y2 = item.anchorY - box.y;
+        const x2 = lr.left - box.x, y2 = lr.top + headerH/2 + 3 - box.y;
         const midX = (x1+x2)/2;
         const tipX = x1 + 9; // where the line stops, just short of the arrow tip
         const path = document.createElementNS(svgNS,"path");
