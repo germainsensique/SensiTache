@@ -288,6 +288,7 @@
   <button class="icon-btn" id="btnExpandSidebar" title="Afficher le menu"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
   <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
   <input type="file" id="importAllFile" accept="application/json" style="display:none">
+  <input type="file" id="importProcessFile" accept="application/json" style="display:none">
 
   <div class="main">
     <div class="topbar">
@@ -759,6 +760,37 @@ document.getElementById("importAllFile").addEventListener("change", (e)=>{
   };
   r.readAsText(f);
 });
+document.getElementById("importProcessFile").addEventListener("change", (e)=>{
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=>{
+    try{
+      const incoming = JSON.parse(r.result);
+      const srcTask = incoming.tasks && incoming.tasks[0];
+      if(!srcTask || !srcTask.process) throw new Error("Ce fichier ne contient pas de processus (il doit provenir d'un export SensiTâche avec une tâche + un processus).");
+      if(!currentWsId){ throw new Error("Choisis d'abord un espace de travail."); }
+      snapshot();
+      const newTask = {
+        id: uid("task"), workspaceId: currentWsId,
+        title: srcTask.title || "Processus importé",
+        description: srcTask.description || "",
+        assignedTo: [DATA.currentUserId],
+        today:false, urgent:false, quick:false, knowledge:false, followUp:false,
+        reminderDate:null, dueDate: srcTask.dueDate||null, recurrence:null,
+        done:false, doneAt:null, attachments:[], subtasks: srcTask.subtasks||[],
+        process: srcTask.process,
+        createdAt: Date.now(), updatedAt: Date.now()
+      };
+      DATA.tasks.push(newTask);
+      saveData(); renderSidebar(); renderMain();
+      openTaskDrawer(newTask.id);
+      openProcessEditor(newTask);
+      alert("Processus importé dans une nouvelle tâche de l'espace courant.");
+    }catch(err){ alert("Fichier invalide : "+err.message); }
+    e.target.value="";
+  };
+  r.readAsText(f);
+});
 async function refreshStorageUsageLine(textBytes){
   const el = document.getElementById("storageUsageLine");
   if(!el) return;
@@ -804,6 +836,7 @@ function showSettingsModal(){
         <button class="btn" id="setUndo" style="justify-content:flex-start;gap:10px;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg> Annuler la dernière action</button>
         <button class="btn" id="setExport" style="justify-content:flex-start;gap:10px;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M4 21h16"/></svg> Exporter la sauvegarde</button>
         <button class="btn" id="setImport" style="justify-content:flex-start;gap:10px;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9m0 0-4 4m4-4 4 4"/><path d="M4 3h16"/></svg> Importer une sauvegarde</button>
+        <button class="btn" id="setImportProcess" style="justify-content:flex-start;gap:10px;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9m0 0-4 4m4-4 4 4"/><path d="M4 3h16"/></svg> Importer un processus (JSON)…</button>
       </div>
       <div class="modal-actions"><button class="btn ghost" id="setClose">Fermer</button></div>
     </div>`;
@@ -851,6 +884,7 @@ function showSettingsModal(){
   overlay.querySelector("#setUndo").addEventListener("click", ()=>{ undo(); overlay.remove(); });
   overlay.querySelector("#setExport").addEventListener("click", ()=>{ exportAllData(); overlay.remove(); });
   overlay.querySelector("#setImport").addEventListener("click", ()=>{ document.getElementById("importAllFile").click(); overlay.remove(); });
+  overlay.querySelector("#setImportProcess").addEventListener("click", ()=>{ document.getElementById("importProcessFile").click(); overlay.remove(); });
   overlay.querySelector("#setClose").addEventListener("click", ()=> overlay.remove());
   overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
 
