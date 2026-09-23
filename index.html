@@ -3921,7 +3921,27 @@ async function driveFindOrCreateFile(token){
 }
 function mergeAppData(local, remote){
   if(!remote || !remote.workspaces || !remote.tasks) return local;
-  const merged = JSON.parse(JSON.stringify(local));
+  // Shallow-clone the top level and the three record arrays only — each
+  // individual task/workspace/collaborator object stays the exact same
+  // reference from `local` unless a remote copy genuinely wins below. This
+  // used to deep-clone the whole tree (JSON.parse(JSON.stringify(local)))
+  // on every sync, even when nothing on the remote side had actually
+  // changed — which silently orphaned anything bound to a "live" object
+  // elsewhere, most notably PROC in the process editor: its legend/shape
+  // inputs stay wired (via closures) to the pre-clone objects, so further
+  // typing quietly lands on a disconnected copy that's discarded on the
+  // very next save, and the edit appears to "revert to the default" the
+  // next time the page reloads.
+  const merged = Object.assign({}, local);
+  merged.tasks = (local.tasks||[]).slice();
+  merged.workspaces = (local.workspaces||[]).slice();
+  merged.collaborators = (local.collaborators||[]).slice();
+  const lt0 = local.tombstones || {};
+  merged.tombstones = {
+    workspaces: Object.assign({}, lt0.workspaces||{}),
+    tasks: Object.assign({}, lt0.tasks||{}),
+    collaborators: Object.assign({}, lt0.collaborators||{})
+  };
 
   // Reconcile "Moi" across devices. Each device generates its own random
   // collaborator id for "Moi" the very first time it's ever opened, before
@@ -4392,7 +4412,22 @@ async function writeDriveBackup(){
           if(!DATA.workspaces.find(w=>w.id===currentWsId)) currentWsId = DATA.workspaces[0] ? DATA.workspaces[0].id : null;
           if(document.getElementById("procOverlay").classList.contains("show") && openTaskId){
             const stillOpenTask = DATA.tasks.find(x=>x.id===openTaskId);
-            if(stillOpenTask && stillOpenTask.process) PROC = stillOpenTask.process;
+            if(stillOpenTask && stillOpenTask.process && stillOpenTask.process !== PROC){
+              // The merge above only swaps this task's object in when a
+              // genuinely newer remote copy won (see mergeAppData) — the
+              // normal case (nothing else changed) keeps the exact same
+              // reference and skips this whole block. When it does swap,
+              // every DOM control in the process editor (legend inputs,
+              // shape toolbar, tasks pane) is still wired to the old
+              // objects, so re-render everything now rather than let
+              // further edits quietly land on a disconnected copy.
+              PROC = stillOpenTask.process;
+              procSelectedShapeId = null; procSelectedArrowId = null;
+              procMultiSelectedIds.clear();
+              procRemoveFloatToolbar();
+              document.getElementById("procNameInput").value = PROC.name || "Processus";
+              renderProcBoard(); renderProcLegend(); renderProcTasksList();
+            }
           }
           renderSidebar(); renderMain();
         }
