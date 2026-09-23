@@ -186,6 +186,7 @@
   .panchor.top{top:-6px;left:calc(50% - 6px);} .panchor.bottom{bottom:-6px;left:calc(50% - 6px);}
   .panchor.left{left:-6px;top:calc(50% - 6px);} .panchor.right{right:-6px;top:calc(50% - 6px);}
   .collabtag{position:absolute; top:-10px; left:6px; z-index:5; font-size:10px; font-weight:700; padding:2px 7px; border-radius:20px; color:#fff; white-space:nowrap;}
+  .desctag{position:absolute; top:-10px; right:6px; z-index:5; width:19px; height:19px; border-radius:50%; background:var(--bg-panel); border:1.5px solid rgba(0,0,0,.18); display:flex; align-items:center; justify-content:center; font-size:10px; box-shadow:0 1px 3px rgba(0,0,0,.18);}
   .pfloat-toolbar{position:absolute;z-index:6;background:var(--bg-panel);border:1px solid var(--border-light);border-radius:10px;padding:6px;display:flex;gap:5px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,.4);}
   #procLassoBox{position:absolute;z-index:6;border:1.5px dashed var(--accent);background:rgba(122,140,255,.12);border-radius:3px;pointer-events:none;}
   .proc-side{width:280px;flex-shrink:0;background:var(--bg-panel);border-left:1px solid var(--border);overflow:hidden;color:var(--text);}
@@ -2952,6 +2953,11 @@ function renderProcShapes(){
       const c = collabById(shape.collabTag);
       if(c){ const tag=document.createElement("div"); tag.className="collabtag"; tag.style.background=c.color; tag.textContent=(shape.linkedTaskId?"📋 ":"")+c.name; el.appendChild(tag); }
     }
+    if(shape.description && shape.description.trim()){
+      const dtag = document.createElement("div"); dtag.className="desctag"; dtag.textContent="📝";
+      dtag.title = shape.description;
+      el.appendChild(dtag);
+    }
     const content = document.createElement("div");
     content.className = "pshapeContent";
     content.style.color = procContrastText(shape.color);
@@ -3169,7 +3175,19 @@ function procShowFloatToolbarForShape(id){
   `;
   document.getElementById("procShapesLayer").appendChild(bar);
   bar.querySelector("#pftDesc").addEventListener("pointerdown", e=> e.stopPropagation());
-  bar.querySelector("#pftDesc").addEventListener("input", e=>{ shape.description = e.target.value; saveData(); });
+  bar.querySelector("#pftDesc").addEventListener("input", e=>{
+    shape.description = e.target.value;
+    saveData();
+    const shapeEl = document.querySelector('.pshape[data-id="'+id+'"]');
+    if(shapeEl){
+      let dtag = shapeEl.querySelector(".desctag");
+      const hasDesc = shape.description && shape.description.trim();
+      if(hasDesc){
+        if(!dtag){ dtag=document.createElement("div"); dtag.className="desctag"; dtag.textContent="📝"; shapeEl.appendChild(dtag); }
+        dtag.title = shape.description;
+      } else if(dtag){ dtag.remove(); }
+    }
+  });
   function applyShapeColor(hex){
     shape.color=hex;
     document.querySelector('.pshape[data-id="'+id+'"] .pshapeBg').style.background=shape.color;
@@ -3684,7 +3702,7 @@ function procBoundingBox(){
   const pad=60; return {x:Math.max(0,minX-pad), y:Math.max(0,minY-pad), w:(maxX-minX)+pad*2, h:(maxY-minY)+pad*2};
 }
 async function buildProcSidePanelCanvas(sections){
-  sections = Object.assign({legend:true, tasks:true, summary:true}, sections||{});
+  sections = Object.assign({legend:true, tasks:true, summary:true, descriptions:true}, sections||{});
   const holder = document.createElement("div");
   holder.style.cssText = "position:fixed;left:-99999px;top:0;width:520px;background:#EFEEE8;padding:32px;font-family:'Segoe UI',Arial,sans-serif;color:#1B1D23;box-sizing:border-box;";
   const order = computeFlowOrder(PROC.shapes, PROC.arrows);
@@ -3699,7 +3717,7 @@ async function buildProcSidePanelCanvas(sections){
       order.forEach((s,i)=>{
         html += `<div style="margin-bottom:16px;">
           <div style="font-size:14.5px;font-weight:700;margin-bottom:3px;">${i+1}. ${escapeHtml(stripHtml(s.content||"(sans titre)"))}</div>
-          ${s.description ? '<div style="font-size:12.5px;color:#444;white-space:pre-wrap;line-height:1.45;">'+escapeHtml(s.description)+'</div>' : ''}
+          ${(sections.descriptions && s.description) ? '<div style="font-size:12.5px;color:#444;white-space:pre-wrap;line-height:1.45;">'+escapeHtml(s.description)+'</div>' : ''}
         </div>`;
       });
     }
@@ -3715,7 +3733,7 @@ async function buildProcSidePanelCanvas(sections){
         const c = taskCollaborators(task)[0];
         html += `<div style="margin-bottom:14px;">
           <div style="font-size:13.5px;font-weight:700;margin-bottom:2px;">${task.done?'✓ ':''}${escapeHtml(task.title)}${c?' — '+escapeHtml(c.name):''}</div>
-          ${task.description ? '<div style="font-size:12px;color:#444;white-space:pre-wrap;line-height:1.4;">'+escapeHtml(task.description)+'</div>' : ''}
+          ${(sections.descriptions && task.description) ? '<div style="font-size:12px;color:#444;white-space:pre-wrap;line-height:1.4;">'+escapeHtml(task.description)+'</div>' : ''}
         </div>`;
       });
     }
@@ -3794,6 +3812,7 @@ function showProcExportMenu(){
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="pexSecLegend" checked> Légende</label>
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="pexSecTasks" checked> Tâches liées</label>
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="pexSecSummary" checked> Résumé</label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding-left:22px;"><input type="checkbox" id="pexSecDesc" checked> ↳ Afficher les descriptions</label>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;margin-top:12px;">
           <button class="btn" id="pexPng" style="justify-content:flex-start;gap:10px;">🖼️ Image (PNG)</button>
@@ -3806,7 +3825,8 @@ function showProcExportMenu(){
   const getSections = ()=>({
     legend: overlay.querySelector("#pexSecLegend").checked,
     tasks: overlay.querySelector("#pexSecTasks").checked,
-    summary: overlay.querySelector("#pexSecSummary").checked
+    summary: overlay.querySelector("#pexSecSummary").checked,
+    descriptions: overlay.querySelector("#pexSecDesc").checked
   });
   overlay.querySelector("#pexJson").addEventListener("click", ()=>{ procExportJson(); overlay.remove(); });
   overlay.querySelector("#pexPng").addEventListener("click", ()=>{ const s=getSections(); overlay.remove(); procExport("png", s); });
