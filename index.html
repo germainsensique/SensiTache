@@ -3853,7 +3853,7 @@ async function procExport(kind, sections){
       items.forEach(item=>{
         const s = item.shape;
         const x1 = s.x + s.w - box.x, y1 = s.y + s.h/2 - box.y;
-        const x2 = marginX - box.x, y2 = item.top + Math.min(item.h,26)/2 - box.y;
+        const x2 = marginX - box.x, y2 = item.top + item.h/2 - box.y;
         const midX = (x1+x2)/2;
         const path = document.createElementNS(svgNS,"path");
         path.setAttribute("d", "M"+x1+","+y1+" C"+midX+","+y1+" "+midX+","+y2+" "+x2+","+y2);
