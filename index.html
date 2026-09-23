@@ -3641,30 +3641,55 @@ function procBoundingBox(){
   PROC.shapes.forEach(s=>{ minX=Math.min(minX,s.x); minY=Math.min(minY,s.y); maxX=Math.max(maxX,s.x+s.w); maxY=Math.max(maxY,s.y+s.h); });
   const pad=60; return {x:Math.max(0,minX-pad), y:Math.max(0,minY-pad), w:(maxX-minX)+pad*2, h:(maxY-minY)+pad*2};
 }
-async function buildProcSidePanelCanvas(){
+async function buildProcSidePanelCanvas(sections){
+  sections = Object.assign({legend:true, tasks:true, summary:true}, sections||{});
   const holder = document.createElement("div");
   holder.style.cssText = "position:fixed;left:-99999px;top:0;width:520px;background:#EFEEE8;padding:32px;font-family:'Segoe UI',Arial,sans-serif;color:#1B1D23;box-sizing:border-box;";
   const order = computeFlowOrder(PROC.shapes, PROC.arrows);
   let html = `<h1 style="font-size:24px;margin:0 0 22px;">${escapeHtml(PROC.name||"Processus")}</h1>`;
-  html += `<h2 style="font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#767A85;margin:0 0 12px;">Étapes du processus</h2>`;
-  if(order.length===0){
-    html += `<p style="font-size:13px;color:#767A85;">Aucune étape.</p>`;
-  } else {
-    order.forEach((s,i)=>{
-      html += `<div style="margin-bottom:16px;">
-        <div style="font-size:14.5px;font-weight:700;margin-bottom:3px;">${i+1}. ${escapeHtml(stripHtml(s.content||"(sans titre)"))}</div>
-        ${s.description ? '<div style="font-size:12.5px;color:#444;white-space:pre-wrap;line-height:1.45;">'+escapeHtml(s.description)+'</div>' : ''}
-      </div>`;
-    });
+  let any = false;
+  if(sections.summary){
+    any = true;
+    html += `<h2 style="font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#767A85;margin:0 0 12px;">Résumé — étapes du processus</h2>`;
+    if(order.length===0){
+      html += `<p style="font-size:13px;color:#767A85;">Aucune étape.</p>`;
+    } else {
+      order.forEach((s,i)=>{
+        html += `<div style="margin-bottom:16px;">
+          <div style="font-size:14.5px;font-weight:700;margin-bottom:3px;">${i+1}. ${escapeHtml(stripHtml(s.content||"(sans titre)"))}</div>
+          ${s.description ? '<div style="font-size:12.5px;color:#444;white-space:pre-wrap;line-height:1.45;">'+escapeHtml(s.description)+'</div>' : ''}
+        </div>`;
+      });
+    }
   }
-  if(PROC.legend && PROC.legend.length){
-    html += `<h2 style="font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#767A85;margin:26px 0 12px;">Légende</h2>`;
+  if(sections.tasks){
+    const linked = PROC.shapes.filter(s=>s.linkedTaskId).map(s=>({shape:s, task:DATA.tasks.find(t=>t.id===s.linkedTaskId)})).filter(x=>x.task);
+    html += `<h2 style="font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#767A85;margin:${any?'26px':'0'} 0 12px;">Tâches liées</h2>`;
+    any = true;
+    if(linked.length===0){
+      html += `<p style="font-size:13px;color:#767A85;">Aucune tâche assignée.</p>`;
+    } else {
+      linked.forEach(({task})=>{
+        const c = taskCollaborators(task)[0];
+        html += `<div style="margin-bottom:14px;">
+          <div style="font-size:13.5px;font-weight:700;margin-bottom:2px;">${task.done?'✓ ':''}${escapeHtml(task.title)}${c?' — '+escapeHtml(c.name):''}</div>
+          ${task.description ? '<div style="font-size:12px;color:#444;white-space:pre-wrap;line-height:1.4;">'+escapeHtml(task.description)+'</div>' : ''}
+        </div>`;
+      });
+    }
+  }
+  if(sections.legend && PROC.legend && PROC.legend.length){
+    html += `<h2 style="font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#767A85;margin:${any?'26px':'0'} 0 12px;">Légende</h2>`;
+    any = true;
     PROC.legend.forEach(item=>{
       html += `<div style="display:flex;gap:9px;align-items:flex-start;margin-bottom:12px;">
         <span style="width:16px;height:16px;border-radius:4px;background:${item.color};flex-shrink:0;margin-top:2px;"></span>
         <div><div style="font-size:13.5px;font-weight:600;">${escapeHtml(item.label||"")}</div>${item.detail?'<div style="font-size:12px;color:#666;">'+escapeHtml(item.detail)+'</div>':''}</div>
       </div>`;
     });
+  }
+  if(!any){
+    html += `<p style="font-size:13px;color:#767A85;">Aucune section sélectionnée.</p>`;
   }
   holder.innerHTML = html;
   document.body.appendChild(holder);
@@ -3674,14 +3699,14 @@ async function buildProcSidePanelCanvas(){
     document.body.removeChild(holder);
   }
 }
-async function procExport(kind){
+async function procExport(kind, sections){
   procRemoveFloatToolbar();
   document.querySelectorAll(".panchor").forEach(a=>a.style.opacity=0);
   const saved = procBoardEl.style.transform; procBoardEl.style.transform="none";
   const box = procBoundingBox();
   try{
     const boardCanvas = await html2canvas(procBoardEl, {backgroundColor:"#EFEEE8", x:box.x, y:box.y, width:box.w, height:box.h, scale:2, useCORS:true});
-    const panelCanvas = await buildProcSidePanelCanvas();
+    const panelCanvas = await buildProcSidePanelCanvas(sections);
     const totalW = boardCanvas.width + panelCanvas.width;
     const totalH = Math.max(boardCanvas.height, panelCanvas.height);
     const canvas = document.createElement("canvas");
@@ -3720,15 +3745,30 @@ function showProcExportMenu(){
       <h2>Exporter le processus</h2>
       <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px;">
         <button class="btn" id="pexJson" style="justify-content:flex-start;gap:10px;">📄 Sauvegarde (JSON)</button>
-        <button class="btn" id="pexPng" style="justify-content:flex-start;gap:10px;">🖼️ Image (PNG)</button>
-        <button class="btn" id="pexPdf" style="justify-content:flex-start;gap:10px;">📑 PDF</button>
+      </div>
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-light);">
+        <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Sections à inclure dans l'image / le PDF :</div>
+        <div style="display:flex;flex-direction:column;gap:6px;font-size:13px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="pexSecLegend" checked> Légende</label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="pexSecTasks" checked> Tâches liées</label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="pexSecSummary" checked> Résumé</label>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:12px;">
+          <button class="btn" id="pexPng" style="justify-content:flex-start;gap:10px;">🖼️ Image (PNG)</button>
+          <button class="btn" id="pexPdf" style="justify-content:flex-start;gap:10px;">📑 PDF</button>
+        </div>
       </div>
       <div class="modal-actions"><button class="btn ghost" id="pexClose">Fermer</button></div>
     </div>`;
   document.body.appendChild(overlay);
+  const getSections = ()=>({
+    legend: overlay.querySelector("#pexSecLegend").checked,
+    tasks: overlay.querySelector("#pexSecTasks").checked,
+    summary: overlay.querySelector("#pexSecSummary").checked
+  });
   overlay.querySelector("#pexJson").addEventListener("click", ()=>{ procExportJson(); overlay.remove(); });
-  overlay.querySelector("#pexPng").addEventListener("click", ()=>{ overlay.remove(); procExport("png"); });
-  overlay.querySelector("#pexPdf").addEventListener("click", ()=>{ overlay.remove(); procExport("pdf"); });
+  overlay.querySelector("#pexPng").addEventListener("click", ()=>{ const s=getSections(); overlay.remove(); procExport("png", s); });
+  overlay.querySelector("#pexPdf").addEventListener("click", ()=>{ const s=getSections(); overlay.remove(); procExport("pdf", s); });
   overlay.querySelector("#pexClose").addEventListener("click", ()=> overlay.remove());
   overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
 }
