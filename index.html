@@ -3776,10 +3776,63 @@ async function buildProcSidePanelCanvas(sections){
   }
 }
 async function procExport(kind, sections){
+  sections = Object.assign({legend:true, tasks:true, summary:true, descriptions:true}, sections||{});
   procRemoveFloatToolbar();
   document.querySelectorAll(".panchor").forEach(a=>a.style.opacity=0);
   const saved = procBoardEl.style.transform; procBoardEl.style.transform="none";
+
+  // html2canvas can't render a CSS clip-path — a diamond's .pshapeBg would
+  // just come out as its full rectangular box. Swap in an equivalent
+  // inline SVG polygon for the capture only, then put the live DOM back
+  // exactly as it was (see finally{} below).
+  const diamondSwaps = [];
+  PROC.shapes.forEach(shape=>{
+    if(shape.type!=="diamond") return;
+    const shapeEl = document.querySelector('.pshape[data-id="'+shape.id+'"]');
+    const bgEl = shapeEl && shapeEl.querySelector(".pshapeBg");
+    if(!bgEl) return;
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS,"svg");
+    svg.setAttribute("viewBox","0 0 100 100");
+    svg.setAttribute("preserveAspectRatio","none");
+    svg.style.cssText = "position:absolute;inset:0;width:100%;height:100%;";
+    const poly = document.createElementNS(svgNS,"polygon");
+    poly.setAttribute("points","50,1 99,50 50,99 1,50");
+    poly.setAttribute("fill", shape.color||"#FFD966");
+    poly.setAttribute("stroke","rgba(0,0,0,.35)");
+    poly.setAttribute("stroke-width","1.2");
+    svg.appendChild(poly);
+    bgEl.style.visibility = "hidden";
+    shapeEl.insertBefore(svg, bgEl);
+    diamondSwaps.push({svg, bgEl});
+  });
+
+  // When "Afficher les descriptions" is on, attach each shape's actual
+  // description text right under it on the diagram itself — not only
+  // listed separately in the side panel — so it's clear which note
+  // belongs to which step once the image is out of the app.
+  const descLabels = [];
+  const shapesLayer = document.getElementById("procShapesLayer");
+  if(sections.descriptions && shapesLayer){
+    PROC.shapes.forEach(shape=>{
+      if(!shape.description || !shape.description.trim()) return;
+      const lbl = document.createElement("div");
+      lbl.style.cssText = "position:absolute;left:"+shape.x+"px;top:"+(shape.y+shape.h+6)+"px;width:"+Math.max(shape.w,170)+"px;background:#FFFDF4;border:1px solid rgba(0,0,0,.16);border-radius:7px;padding:6px 9px;font-size:11px;line-height:1.4;color:#2A2C33;white-space:pre-wrap;box-shadow:0 1px 3px rgba(0,0,0,.12);";
+      lbl.textContent = shape.description;
+      shapesLayer.appendChild(lbl);
+      descLabels.push({shape, el:lbl});
+    });
+  }
+
   const box = procBoundingBox();
+  // Widen the capture area downward so a description label hanging below
+  // its shape (possibly past the normal shape-only bounding box) isn't
+  // cut off.
+  descLabels.forEach(({shape, el})=>{
+    const bottom = shape.y + shape.h + 6 + el.offsetHeight;
+    if(bottom + 40 > box.y + box.h) box.h = (bottom + 40) - box.y;
+  });
+
   try{
     const boardCanvas = await html2canvas(procBoardEl, {backgroundColor:"#EFEEE8", x:box.x, y:box.y, width:box.w, height:box.h, scale:2, useCORS:true});
     const panelCanvas = await buildProcSidePanelCanvas(sections);
@@ -3803,7 +3856,11 @@ async function procExport(kind, sections){
       pdf.save(name+".pdf");
     }
   }catch(err){ alert("Export impossible : "+err.message); }
-  finally{ procBoardEl.style.transform=saved; }
+  finally{
+    procBoardEl.style.transform=saved;
+    diamondSwaps.forEach(({svg,bgEl})=>{ svg.remove(); bgEl.style.visibility=""; });
+    descLabels.forEach(({el})=> el.remove());
+  }
 }
 function procExportJson(){
   const data = {name: PROC.name||"Processus", shapes: PROC.shapes, arrows: PROC.arrows, legend: PROC.legend, refImage: PROC.refImage||null};
