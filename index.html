@@ -3808,30 +3808,64 @@ async function procExport(kind, sections){
   });
 
   // When "Afficher les descriptions" is on, attach each shape's actual
-  // description text right under it on the diagram itself — not only
-  // listed separately in the side panel — so it's clear which note
-  // belongs to which step once the image is out of the app.
+  // description text on the diagram itself — not only listed separately
+  // in the side panel — so it's clear which note belongs to which step
+  // once the image is out of the app. The notes are stacked in a blank
+  // column to the right of the diagram (never on top of another shape)
+  // and each gets a curved arrow pointing back at its own shape.
   const descLabels = [];
   const shapesLayer = document.getElementById("procShapesLayer");
+  let connectorSvg = null;
+  let box = procBoundingBox();
   if(sections.descriptions && shapesLayer){
-    PROC.shapes.forEach(shape=>{
-      if(!shape.description || !shape.description.trim()) return;
-      const lbl = document.createElement("div");
-      lbl.style.cssText = "position:absolute;left:"+shape.x+"px;top:"+(shape.y+shape.h+6)+"px;width:"+Math.max(shape.w,170)+"px;background:#FFFDF4;border:1px solid rgba(0,0,0,.16);border-radius:7px;padding:6px 9px;font-size:11px;line-height:1.4;color:#2A2C33;white-space:pre-wrap;box-shadow:0 1px 3px rgba(0,0,0,.12);";
-      lbl.textContent = shape.description;
-      shapesLayer.appendChild(lbl);
-      descLabels.push({shape, el:lbl});
-    });
+    const withDesc = PROC.shapes.filter(s=> s.description && s.description.trim()).sort((a,b)=> a.y-b.y);
+    if(withDesc.length){
+      const calloutW = 210;
+      const marginX = box.x + box.w + 40;
+      const items = withDesc.map(shape=>{
+        const lbl = document.createElement("div");
+        lbl.style.cssText = "position:absolute;left:"+marginX+"px;top:0px;width:"+calloutW+"px;background:#FFFDF4;border:1px solid rgba(0,0,0,.18);border-radius:7px;padding:7px 10px;font-size:11px;line-height:1.4;color:#2A2C33;white-space:pre-wrap;box-shadow:0 1px 3px rgba(0,0,0,.14);";
+        lbl.textContent = shape.description;
+        shapesLayer.appendChild(lbl);
+        return {shape, el:lbl};
+      });
+      // Stack top-to-bottom without overlapping, anchored near each
+      // shape's own height when there's room for it.
+      let cursorY = box.y;
+      items.forEach(item=>{
+        const h = item.el.offsetHeight;
+        const top = Math.max(item.shape.y, cursorY);
+        item.el.style.top = top+"px";
+        item.top = top; item.h = h;
+        cursorY = top + h + 16;
+      });
+      descLabels.push(...items);
+      const rightEdge = marginX + calloutW + 24;
+      box = {x: box.x, y: box.y, w: Math.max(box.w, rightEdge-box.x), h: Math.max(box.h, cursorY-box.y)};
+      const svgNS = "http://www.w3.org/2000/svg";
+      connectorSvg = document.createElementNS(svgNS,"svg");
+      connectorSvg.setAttribute("width", box.w);
+      connectorSvg.setAttribute("height", box.h);
+      connectorSvg.style.cssText = "position:absolute;left:"+box.x+"px;top:"+box.y+"px;pointer-events:none;overflow:visible;";
+      const defs = document.createElementNS(svgNS,"defs");
+      defs.innerHTML = '<marker id="pexArrowHead" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#6B6F7A"/></marker>';
+      connectorSvg.appendChild(defs);
+      items.forEach(item=>{
+        const s = item.shape;
+        const x1 = s.x + s.w - box.x, y1 = s.y + s.h/2 - box.y;
+        const x2 = marginX - box.x, y2 = item.top + Math.min(item.h,26)/2 - box.y;
+        const midX = (x1+x2)/2;
+        const path = document.createElementNS(svgNS,"path");
+        path.setAttribute("d", "M"+x1+","+y1+" C"+midX+","+y1+" "+midX+","+y2+" "+x2+","+y2);
+        path.setAttribute("fill","none");
+        path.setAttribute("stroke","#6B6F7A");
+        path.setAttribute("stroke-width","1.4");
+        path.setAttribute("marker-end","url(#pexArrowHead)");
+        connectorSvg.appendChild(path);
+      });
+      shapesLayer.appendChild(connectorSvg);
+    }
   }
-
-  const box = procBoundingBox();
-  // Widen the capture area downward so a description label hanging below
-  // its shape (possibly past the normal shape-only bounding box) isn't
-  // cut off.
-  descLabels.forEach(({shape, el})=>{
-    const bottom = shape.y + shape.h + 6 + el.offsetHeight;
-    if(bottom + 40 > box.y + box.h) box.h = (bottom + 40) - box.y;
-  });
 
   try{
     const boardCanvas = await html2canvas(procBoardEl, {backgroundColor:"#EFEEE8", x:box.x, y:box.y, width:box.w, height:box.h, scale:2, useCORS:true});
@@ -3860,6 +3894,7 @@ async function procExport(kind, sections){
     procBoardEl.style.transform=saved;
     diamondSwaps.forEach(({svg,bgEl})=>{ svg.remove(); bgEl.style.visibility=""; });
     descLabels.forEach(({el})=> el.remove());
+    if(connectorSvg) connectorSvg.remove();
   }
 }
 function procExportJson(){
