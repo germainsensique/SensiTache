@@ -3780,6 +3780,11 @@ async function procExport(kind, sections){
   procRemoveFloatToolbar();
   document.querySelectorAll(".panchor").forEach(a=>a.style.opacity=0);
   const saved = procBoardEl.style.transform; procBoardEl.style.transform="none";
+  // The little 📝 badge is a screen-only hint; html2canvas can't render
+  // emoji glyphs (they come out as a blank/broken tofu box in the capture),
+  // and it's redundant anyway once the description callouts are drawn.
+  const hiddenDescTags = Array.from(document.querySelectorAll(".desctag"));
+  hiddenDescTags.forEach(el=> el.style.visibility="hidden");
 
   // html2canvas can't render a CSS clip-path — a diamond's .pshapeBg would
   // just come out as its full rectangular box. Swap in an equivalent
@@ -3847,21 +3852,28 @@ async function procExport(kind, sections){
       connectorSvg.setAttribute("width", box.w);
       connectorSvg.setAttribute("height", box.h);
       connectorSvg.style.cssText = "position:absolute;left:"+box.x+"px;top:"+box.y+"px;pointer-events:none;overflow:visible;";
-      const defs = document.createElementNS(svgNS,"defs");
-      defs.innerHTML = '<marker id="pexArrowHead" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#6B6F7A"/></marker>';
-      connectorSvg.appendChild(defs);
+      // The arrowhead is drawn by hand as a plain <polygon> rather than via
+      // an SVG <marker> — html2canvas frequently fails to render markers
+      // referenced through marker-end, which is why earlier exports showed
+      // a bare line with no visible arrow tip at all.
       items.forEach(item=>{
         const s = item.shape;
         const x1 = s.x + s.w - box.x, y1 = s.y + s.h/2 - box.y;
         const x2 = marginX - box.x, y2 = item.top + item.h/2 - box.y;
         const midX = (x1+x2)/2;
+        const tipX = x1 + 9; // where the line stops, just short of the arrow tip
         const path = document.createElementNS(svgNS,"path");
-        path.setAttribute("d", "M"+x1+","+y1+" C"+midX+","+y1+" "+midX+","+y2+" "+x2+","+y2);
+        path.setAttribute("d", "M"+x2+","+y2+" C"+midX+","+y2+" "+midX+","+y1+" "+tipX+","+y1);
         path.setAttribute("fill","none");
         path.setAttribute("stroke","#6B6F7A");
         path.setAttribute("stroke-width","1.4");
-        path.setAttribute("marker-end","url(#pexArrowHead)");
         connectorSvg.appendChild(path);
+        // Points back at the shape (arrow tip at x1,y1), since the callout
+        // is explaining that shape, not the other way around.
+        const tri = document.createElementNS(svgNS,"polygon");
+        tri.setAttribute("points", x1+","+y1+" "+tipX+","+(y1-4)+" "+tipX+","+(y1+4));
+        tri.setAttribute("fill","#6B6F7A");
+        connectorSvg.appendChild(tri);
       });
       shapesLayer.appendChild(connectorSvg);
     }
@@ -3895,6 +3907,7 @@ async function procExport(kind, sections){
     diamondSwaps.forEach(({svg,bgEl})=>{ svg.remove(); bgEl.style.visibility=""; });
     descLabels.forEach(({el})=> el.remove());
     if(connectorSvg) connectorSvg.remove();
+    hiddenDescTags.forEach(el=> el.style.visibility="");
   }
 }
 function procExportJson(){
