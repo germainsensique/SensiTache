@@ -2736,6 +2736,7 @@ function openProcessEditor(t){
   setProcTool("select");
   document.getElementById("procZoomLabel").textContent = "100%";
   document.getElementById("procBoard").style.transform = "scale(1)";
+  procSyncLegendWithColors();
   renderProcBoard(); renderProcLegend(); renderProcTasksList(); setProcSideTab("legend");
   procUpdateSideToggleIcon();
 }
@@ -3151,6 +3152,9 @@ function procShowFloatToolbarForShape(id){
     if(contentEl) contentEl.style.color = procContrastText(shape.color);
     saveData();
   });
+  bar.querySelector("#pftColor").addEventListener("change", e=>{
+    procSyncLegendWithColors(); saveData(); renderProcLegend();
+  });
   bar.querySelector("#pftTag").addEventListener("change", e=>{
     procAssignShapeToCollaborator(shape, e.target.value || null);
   });
@@ -3236,7 +3240,8 @@ function procDeleteMultiSelected(){
   PROC.shapes = PROC.shapes.filter(s=>!toDelete.has(s.id));
   PROC.arrows = PROC.arrows.filter(a=>!toDelete.has(a.from.shapeId) && !toDelete.has(a.to.shapeId));
   procMultiSelectedIds.clear();
-  saveData(); renderProcBoard(); procRemoveFloatToolbar(); renderProcTasksList();
+  procSyncLegendWithColors();
+  saveData(); renderProcBoard(); renderProcLegend(); procRemoveFloatToolbar(); renderProcTasksList();
 }
 function procDeleteShape(id){
   const shape = PROC.shapes.find(s=>s.id===id);
@@ -3249,7 +3254,9 @@ function procDeleteShape(id){
   }
   PROC.shapes = PROC.shapes.filter(s=>s.id!==id);
   PROC.arrows = PROC.arrows.filter(a=>a.from.shapeId!==id && a.to.shapeId!==id);
-  procSelectedShapeId=null; saveData(); renderProcBoard(); procRemoveFloatToolbar(); renderProcTasksList();
+  procSelectedShapeId=null;
+  procSyncLegendWithColors();
+  saveData(); renderProcBoard(); renderProcLegend(); procRemoveFloatToolbar(); renderProcTasksList();
 }
 document.getElementById("btnProcDeleteSel").addEventListener("click", ()=>{
   if(procMultiSelectedIds.size>1) procDeleteMultiSelected();
@@ -3297,7 +3304,7 @@ procBoardEl.addEventListener("pointerdown", e=>{
     const shape = {id:uid("shape"), type:isRect?"rect":"diamond",
       x:Math.max(0,pos.x-(isRect?80:90)), y:Math.max(0,pos.y-(isRect?35:55)),
       w:isRect?160:180, h:isRect?70:110, color:"#FFD966", content:isRect?"Nouvelle étape":"Condition ?", collabTag:null};
-    PROC.shapes.push(shape); saveData(); renderProcBoard(); procSelectShape(shape.id);
+    PROC.shapes.push(shape); procSyncLegendWithColors(); saveData(); renderProcBoard(); renderProcLegend(); procSelectShape(shape.id);
     setProcTool("select");
     return;
   }
@@ -3489,6 +3496,19 @@ async function renderProcRefImage(){
 }
 
 /* legend */
+function procNormColor(c){ return (c||"").toUpperCase(); }
+function procSyncLegendWithColors(){
+  if(!PROC.legend) PROC.legend = [];
+  const used = new Set(PROC.shapes.map(s=> procNormColor(s.color||"#FFD966")));
+  PROC.legend = PROC.legend.filter(item=> used.has(procNormColor(item.color)));
+  const existing = new Set(PROC.legend.map(item=> procNormColor(item.color)));
+  used.forEach(c=>{
+    if(!existing.has(c)){
+      PROC.legend.push({id:uid("legend"), color:c, label:"Nouvelle couleur", detail:""});
+      existing.add(c);
+    }
+  });
+}
 function renderProcLegend(){
   const list = document.getElementById("procLegendList");
   list.innerHTML="";
@@ -3732,6 +3752,7 @@ document.getElementById("procImportJsonFile").addEventListener("change", (e)=>{
       PROC.arrows = src.arrows || [];
       PROC.legend = src.legend || [];
       PROC.refImage = src.refImage || null;
+      procSyncLegendWithColors();
       saveData();
       document.getElementById("procNameInput").value = PROC.name || "Processus";
       procClearSelection();
