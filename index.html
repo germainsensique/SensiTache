@@ -3257,12 +3257,28 @@ function procShowFloatToolbarForShape(id){
   bar.querySelector("#pftLink").addEventListener("pointerdown", e=>{
     e.stopPropagation();
     const content = document.querySelector('.pshape[data-id="'+id+'"] .pshapeContent');
-    const url = prompt("Adresse du lien (https://...) :"); if(!url) return;
-    const label = prompt("Texte affiché :", url) || url;
-    content.setAttribute("contenteditable","true"); content.focus();
-    const a = document.createElement("a"); a.href=url; a.target="_blank"; a.textContent=label;
-    content.appendChild(document.createTextNode(" ")); content.appendChild(a);
-    content.blur();
+    const url = prompt("Adresse du lien (https://...) — laisse vide pour retirer le lien :", shape.linkUrl||"");
+    if(url===null) return;
+    if(!url.trim()){
+      if(!shape.linkUrl) return;
+      shape.linkUrl = null;
+      shape.content = escapeHtml(stripHtml(shape.content||""));
+      content.innerHTML = shape.content;
+      saveData();
+      return;
+    }
+    // The whole existing text becomes the hyperlink, instead of appending a
+    // separate "link text" next to it — the shape keeps showing just its
+    // one label, which now happens to be clickable.
+    shape.linkUrl = url.trim();
+    const label = stripHtml(shape.content||"") || shape.linkUrl;
+    shape.content = '<a href="'+escapeHtml(shape.linkUrl)+'" target="_blank" rel="noopener">'+escapeHtml(label)+'</a>';
+    content.innerHTML = shape.content;
+    if(shape.linkedTaskId){
+      const lt = DATA.tasks.find(t=>t.id===shape.linkedTaskId);
+      if(lt){ lt.title = label; lt.updatedAt = Date.now(); }
+    }
+    saveData();
   });
 }
 function procShowFloatToolbarForArrow(id){
