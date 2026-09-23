@@ -3816,26 +3816,41 @@ async function procExport(kind, sections){
   // description text on the diagram itself — not only listed separately
   // in the side panel — so it's clear which note belongs to which step
   // once the image is out of the app. The notes are stacked in a blank
-  // column to the right of the diagram (never on top of another shape)
-  // and each gets a curved arrow pointing back at its own shape.
+  // column to the right of the diagram (never on top of another shape).
+  //
+  // Earlier versions drew a computed arrow from each note back to its
+  // shape — but that meant recomputing, on every export, where two
+  // independent elements would end up on screen, and any small drift
+  // between that computation and the real layout made the arrow miss.
+  // Numbering is a completely different (and foolproof) way to link them:
+  // the same number appears once on the shape and once on its note — like
+  // a footnote — so there's no line to compute or draw, and therefore
+  // nothing that can end up misaligned.
   const descLabels = [];
+  const numberTags = [];
   const shapesLayer = document.getElementById("procShapesLayer");
-  let connectorSvg = null;
   let box = procBoundingBox();
   if(sections.descriptions && shapesLayer){
-    const withDesc = PROC.shapes.filter(s=> s.description && s.description.trim()).sort((a,b)=> a.y-b.y);
+    const withDesc = PROC.shapes.filter(s=> s.description && s.description.trim()).sort((a,b)=> (a.y-b.y) || (a.x-b.x));
     if(withDesc.length){
       const calloutW = 210;
       const marginX = box.x + box.w + 40;
-      const items = withDesc.map(shape=>{
+      const items = withDesc.map((shape, i)=>{
+        const n = i+1;
+        const shapeEl = document.querySelector('.pshape[data-id="'+shape.id+'"]');
+        if(shapeEl){
+          const tag = document.createElement("div");
+          tag.style.cssText = "position:absolute;top:-10px;right:6px;z-index:6;width:19px;height:19px;border-radius:50%;background:#6B6F7A;color:#fff;font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.25);";
+          tag.textContent = n;
+          shapeEl.appendChild(tag);
+          numberTags.push(tag);
+        }
         const lbl = document.createElement("div");
         lbl.style.cssText = "position:absolute;left:"+marginX+"px;top:0px;width:"+calloutW+"px;background:#FFFDF4;border:1px solid rgba(0,0,0,.18);border-radius:7px;padding:7px 10px;font-size:11px;line-height:1.4;color:#2A2C33;box-shadow:0 1px 3px rgba(0,0,0,.14);";
-        // A small "Commentaire" header makes it unambiguous that this box
-        // is a note about a shape (and not, say, a step in the flow), and
-        // gives the connector arrow a fixed, obvious point to aim at
-        // instead of the middle of a box whose height varies with the
-        // text length.
-        lbl.innerHTML = '<div style="font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#9A8035;margin-bottom:4px;">Commentaire</div><div style="white-space:pre-wrap;">'+escapeHtml(shape.description)+'</div>';
+        lbl.innerHTML = '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">'
+          + '<span style="flex-shrink:0;width:16px;height:16px;border-radius:50%;background:#6B6F7A;color:#fff;font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;">'+n+'</span>'
+          + '<span style="font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#9A8035;">Commentaire</span>'
+          + '</div><div style="white-space:pre-wrap;">'+escapeHtml(shape.description)+'</div>';
         shapesLayer.appendChild(lbl);
         return {shape, el:lbl};
       });
@@ -3851,61 +3866,6 @@ async function procExport(kind, sections){
       descLabels.push(...items);
       const rightEdge = marginX + calloutW + 24;
       box = {x: box.x, y: box.y, w: Math.max(box.w, rightEdge-box.x), h: Math.max(box.h, cursorY-box.y)};
-      const svgNS = "http://www.w3.org/2000/svg";
-      connectorSvg = document.createElementNS(svgNS,"svg");
-      connectorSvg.setAttribute("width", box.w);
-      connectorSvg.setAttribute("height", box.h);
-      connectorSvg.style.cssText = "position:absolute;left:"+box.x+"px;top:"+box.y+"px;pointer-events:none;overflow:visible;";
-      // Positions below are read back from the real, just-laid-out DOM via
-      // getBoundingClientRect() rather than recomputed from the model
-      // (shape.x/y, our own stacking math, offsetTop on a nested header
-      // div…) — that recomputation was drifting from what actually got
-      // rendered (the arrows were landing beside their comment box, not on
-      // it). Measuring the live boxes directly and converting to
-      // board-local coordinates via procBoardEl's own rect removes that
-      // whole class of mismatch: what we draw is exactly where things are.
-      const boardRect = procBoardEl.getBoundingClientRect();
-      function localRect(el){
-        const r = el.getBoundingClientRect();
-        return {left: r.left-boardRect.left, top: r.top-boardRect.top, width:r.width, height:r.height};
-      }
-      // The arrowhead is drawn by hand as a plain <polygon> rather than via
-      // an SVG <marker> — html2canvas frequently fails to render markers
-      // referenced through marker-end, which is why earlier exports showed
-      // a bare line with no visible arrow tip at all.
-      items.forEach(item=>{
-        const shapeEl = document.querySelector('.pshape[data-id="'+item.shape.id+'"]');
-        const sr = shapeEl ? localRect(shapeEl) : {left:item.shape.x, top:item.shape.y, width:item.shape.w, height:item.shape.h};
-        const lr = localRect(item.el);
-        const headerEl = item.el.firstElementChild;
-        const headerH = headerEl ? headerEl.getBoundingClientRect().height : 16;
-        const x1 = sr.left + sr.width - box.x, y1 = sr.top + sr.height/2 - box.y;
-        // Anchored at the "Commentaire" header, not the box's full-height
-        // middle — a fixed point right at the comment's face, regardless
-        // of how tall the box ends up once the text wraps.
-        const x2 = lr.left - box.x, y2 = lr.top + headerH/2 + 3 - box.y;
-        const midX = (x1+x2)/2;
-        const tipX = x1 + 9; // where the line stops, just short of the arrow tip
-        const path = document.createElementNS(svgNS,"path");
-        path.setAttribute("d", "M"+x2+","+y2+" C"+midX+","+y2+" "+midX+","+y1+" "+tipX+","+y1);
-        path.setAttribute("fill","none");
-        path.setAttribute("stroke","#6B6F7A");
-        path.setAttribute("stroke-width","1.4");
-        connectorSvg.appendChild(path);
-        // A small dot right on the comment's edge makes the base of the
-        // arrow visibly touch the box it belongs to.
-        const dot = document.createElementNS(svgNS,"circle");
-        dot.setAttribute("cx", x2); dot.setAttribute("cy", y2); dot.setAttribute("r", 3);
-        dot.setAttribute("fill", "#6B6F7A");
-        connectorSvg.appendChild(dot);
-        // Points back at the shape (arrow tip at x1,y1), since the callout
-        // is explaining that shape, not the other way around.
-        const tri = document.createElementNS(svgNS,"polygon");
-        tri.setAttribute("points", x1+","+y1+" "+tipX+","+(y1-4)+" "+tipX+","+(y1+4));
-        tri.setAttribute("fill","#6B6F7A");
-        connectorSvg.appendChild(tri);
-      });
-      shapesLayer.appendChild(connectorSvg);
     }
   }
 
@@ -3936,7 +3896,7 @@ async function procExport(kind, sections){
     procBoardEl.style.transform=saved;
     diamondSwaps.forEach(({svg,bgEl})=>{ svg.remove(); bgEl.style.visibility=""; });
     descLabels.forEach(({el})=> el.remove());
-    if(connectorSvg) connectorSvg.remove();
+    numberTags.forEach(el=> el.remove());
     hiddenDescTags.forEach(el=> el.style.visibility="");
   }
 }
