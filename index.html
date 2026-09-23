@@ -190,6 +190,8 @@
   #procLassoBox{position:absolute;z-index:6;border:1.5px dashed var(--accent);background:rgba(122,140,255,.12);border-radius:3px;pointer-events:none;}
   .proc-side{width:280px;flex-shrink:0;background:var(--bg-panel);border-left:1px solid var(--border);overflow:hidden;color:var(--text);}
   .proc-side.collapsed{width:0;border-left:none;}
+  .proc-side-toggle{width:20px;flex-shrink:0;background:var(--bg-panel);border-left:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-dim);}
+  .proc-side-toggle:hover{color:var(--text);background:var(--bg-panel-2);}
   .proc-side-inner{width:280px;padding:16px;overflow-y:auto;height:100%;}
   .proc-side h3{font-size:13px;margin:0 0 12px;font-weight:600;}
   .plegend-item{background:var(--bg-panel-2);border:1px solid var(--border-light);border-radius:8px;padding:10px;margin-bottom:8px;}
@@ -220,7 +222,6 @@
     .drawer-head{flex-wrap:wrap;gap:8px;}
     .proc-topbar{overflow-x:auto;flex-wrap:nowrap;}
     .proc-topbar > *{flex-shrink:0;}
-    .proc-topbar > span[style*="text-dim"]{display:none;}
     #procNameInput{max-width:110px;}
     .proc-toolbar{width:100%;height:auto;flex-direction:row;border-right:none;border-top:1px solid var(--border);order:2;padding:6px 8px;overflow-x:auto;}
     .proc-body{flex-direction:column;}
@@ -228,6 +229,7 @@
     .proc-side{position:fixed;top:0;right:0;bottom:0;width:86vw;max-width:320px;z-index:130;box-shadow:-8px 0 24px rgba(0,0,0,.4);transform:translateX(0);transition:transform .15s;}
     .proc-side.collapsed{width:86vw;max-width:320px;transform:translateX(100%);border-left:1px solid var(--border);}
     .proc-side-inner{width:100%;}
+    .proc-side-toggle{position:fixed;top:50%;right:0;transform:translateY(-50%);width:22px;height:60px;border-radius:8px 0 0 8px;box-shadow:-4px 0 10px rgba(0,0,0,.3);z-index:131;}
     .topbar, .tabs{padding-left:14px;padding-right:14px;}
     .topbar h1{font-size:16px;}
     .tabs{overflow-x:auto;flex-wrap:nowrap;}
@@ -440,7 +442,6 @@
       <button class="btn ghost" id="btnProcClose">← Retour à la tâche</button>
       <div class="divider"></div>
       <input id="procNameInput" type="text" spellcheck="false" style="background:transparent;border:1px solid transparent;color:var(--text);font-size:14px;font-weight:600;padding:5px 8px;border-radius:6px;min-width:80px;max-width:240px;">
-      <span style="font-size:11.5px;color:var(--text-dim);">💡 Affecte un collaborateur sur une forme, ajoute un détail, puis consulte « Tâches liées » à droite.</span>
       <div class="topbar-spacer" style="flex:1;"></div>
       <button class="btn small" id="btnProcZoomOut">–</button>
       <span id="procZoomLabel" style="font-size:12px;color:var(--text-dim);width:38px;text-align:center;">100%</span>
@@ -449,11 +450,10 @@
       <button class="btn" id="btnProcAutoArrange" title="Réorganise automatiquement toutes les formes en couches selon les flèches">✨ Réorganiser</button>
       <button class="btn" id="btnProcImportImg">Image de référence</button>
       <div class="divider"></div>
-      <button class="btn" id="btnProcExportPng">Exporter image</button>
-      <button class="btn" id="btnProcExportPdf">Exporter PDF</button>
-      <div class="divider"></div>
-      <button class="btn ghost" id="btnProcToggleLegend">Légende</button>
+      <button class="btn" id="btnProcImportMenu">Importer…</button>
+      <button class="btn" id="btnProcExportMenu">Exporter ▾</button>
       <input type="file" id="procImportImgFile" accept="image/*" style="display:none">
+      <input type="file" id="procImportJsonFile" accept="application/json" style="display:none">
     </div>
     <div class="proc-body">
       <div class="proc-toolbar">
@@ -483,6 +483,9 @@
           </svg>
           <div class="proc-shapes-layer" id="procShapesLayer"></div>
         </div>
+      </div>
+      <div class="proc-side-toggle" id="procSideToggleBtn" title="Afficher/masquer le panneau">
+        <svg id="procSideToggleIcon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
       </div>
       <div class="proc-side" id="procSide">
         <div class="proc-side-inner">
@@ -2738,6 +2741,7 @@ function openProcessEditor(t){
   document.getElementById("procZoomLabel").textContent = "100%";
   document.getElementById("procBoard").style.transform = "scale(1)";
   renderProcBoard(); renderProcLegend(); renderProcTasksList(); setProcSideTab("legend");
+  procUpdateSideToggleIcon();
 }
 document.getElementById("procNameInput").addEventListener("input", (e)=>{
   if(!PROC) return;
@@ -2787,8 +2791,15 @@ function setProcTool(tool){
   document.querySelectorAll(".proc-toolbar .tbtn[data-ptool]").forEach(b=> b.classList.toggle("active", b.dataset.ptool===tool));
   document.getElementById("procCanvasScroll").style.cursor = (tool==="rect"||tool==="diamond") ? "crosshair" : "default";
 }
-document.getElementById("btnProcToggleLegend").addEventListener("click", ()=>{
+function procUpdateSideToggleIcon(){
+  const collapsed = document.getElementById("procSide").classList.contains("collapsed");
+  document.getElementById("procSideToggleIcon").innerHTML = collapsed
+    ? '<path d="M9 18l6-6-6-6"/>'
+    : '<path d="M15 18l-6-6 6-6"/>';
+}
+document.getElementById("procSideToggleBtn").addEventListener("click", ()=>{
   document.getElementById("procSide").classList.toggle("collapsed");
+  procUpdateSideToggleIcon();
 });
 
 function procBoardSize(){
@@ -3693,8 +3704,64 @@ async function procExport(kind){
   }catch(err){ alert("Export impossible : "+err.message); }
   finally{ procBoardEl.style.transform=saved; }
 }
-document.getElementById("btnProcExportPng").addEventListener("click", ()=> procExport("png"));
-document.getElementById("btnProcExportPdf").addEventListener("click", ()=> procExport("pdf"));
+function procExportJson(){
+  const data = {name: PROC.name||"Processus", shapes: PROC.shapes, arrows: PROC.arrows, legend: PROC.legend, refImage: PROC.refImage||null};
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const name = (curTask()? curTask().title : "processus") || "processus";
+  const a = document.createElement("a"); a.href=url; a.download=name+".json"; a.click();
+  URL.revokeObjectURL(url);
+}
+function showProcExportMenu(){
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal" style="width:320px;">
+      <h2>Exporter le processus</h2>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px;">
+        <button class="btn" id="pexJson" style="justify-content:flex-start;gap:10px;">📄 Sauvegarde (JSON)</button>
+        <button class="btn" id="pexPng" style="justify-content:flex-start;gap:10px;">🖼️ Image (PNG)</button>
+        <button class="btn" id="pexPdf" style="justify-content:flex-start;gap:10px;">📑 PDF</button>
+      </div>
+      <div class="modal-actions"><button class="btn ghost" id="pexClose">Fermer</button></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector("#pexJson").addEventListener("click", ()=>{ procExportJson(); overlay.remove(); });
+  overlay.querySelector("#pexPng").addEventListener("click", ()=>{ overlay.remove(); procExport("png"); });
+  overlay.querySelector("#pexPdf").addEventListener("click", ()=>{ overlay.remove(); procExport("pdf"); });
+  overlay.querySelector("#pexClose").addEventListener("click", ()=> overlay.remove());
+  overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
+}
+document.getElementById("btnProcExportMenu").addEventListener("click", showProcExportMenu);
+document.getElementById("btnProcImportMenu").addEventListener("click", ()=> document.getElementById("procImportJsonFile").click());
+document.getElementById("procImportJsonFile").addEventListener("change", (e)=>{
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=>{
+    try{
+      const incoming = JSON.parse(r.result);
+      let src = null;
+      if(incoming.tasks && incoming.tasks[0] && incoming.tasks[0].process) src = incoming.tasks[0].process;
+      else if(incoming.process && incoming.process.shapes) src = incoming.process;
+      else if(incoming.shapes) src = incoming;
+      if(!src) throw new Error("Ce fichier ne contient pas de processus SensiTâche valide.");
+      if(!confirm("Remplacer le contenu actuel de ce processus par celui du fichier importé ? Cette action est irréversible.")) return;
+      snapshot();
+      PROC.name = src.name || PROC.name;
+      PROC.shapes = src.shapes || [];
+      PROC.arrows = src.arrows || [];
+      PROC.legend = src.legend || [];
+      PROC.refImage = src.refImage || null;
+      saveData();
+      document.getElementById("procNameInput").value = PROC.name || "Processus";
+      procClearSelection();
+      renderProcBoard(); renderProcLegend(); renderProcTasksList();
+      alert("Processus importé.");
+    }catch(err){ alert("Fichier invalide : "+err.message); }
+    e.target.value="";
+  };
+  r.readAsText(f);
+});
 
 /* =========================================================================
    AUTO-BACKUP TRIGGER (Drive-only)
