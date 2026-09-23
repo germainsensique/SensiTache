@@ -3829,8 +3829,13 @@ async function procExport(kind, sections){
       const marginX = box.x + box.w + 40;
       const items = withDesc.map(shape=>{
         const lbl = document.createElement("div");
-        lbl.style.cssText = "position:absolute;left:"+marginX+"px;top:0px;width:"+calloutW+"px;background:#FFFDF4;border:1px solid rgba(0,0,0,.18);border-radius:7px;padding:7px 10px;font-size:11px;line-height:1.4;color:#2A2C33;white-space:pre-wrap;box-shadow:0 1px 3px rgba(0,0,0,.14);";
-        lbl.textContent = shape.description;
+        lbl.style.cssText = "position:absolute;left:"+marginX+"px;top:0px;width:"+calloutW+"px;background:#FFFDF4;border:1px solid rgba(0,0,0,.18);border-radius:7px;padding:7px 10px;font-size:11px;line-height:1.4;color:#2A2C33;box-shadow:0 1px 3px rgba(0,0,0,.14);";
+        // A small "Commentaire" header makes it unambiguous that this box
+        // is a note about a shape (and not, say, a step in the flow), and
+        // gives the connector arrow a fixed, obvious point to aim at
+        // instead of the middle of a box whose height varies with the
+        // text length.
+        lbl.innerHTML = '<div style="font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#9A8035;margin-bottom:4px;">Commentaire</div><div style="white-space:pre-wrap;">'+escapeHtml(shape.description)+'</div>';
         shapesLayer.appendChild(lbl);
         return {shape, el:lbl};
       });
@@ -3842,6 +3847,8 @@ async function procExport(kind, sections){
         const top = Math.max(item.shape.y, cursorY);
         item.el.style.top = top+"px";
         item.top = top; item.h = h;
+        const headerEl = item.el.firstElementChild;
+        item.anchorY = top + (headerEl ? headerEl.offsetTop + headerEl.offsetHeight/2 : h/2);
         cursorY = top + h + 16;
       });
       descLabels.push(...items);
@@ -3859,7 +3866,10 @@ async function procExport(kind, sections){
       items.forEach(item=>{
         const s = item.shape;
         const x1 = s.x + s.w - box.x, y1 = s.y + s.h/2 - box.y;
-        const x2 = marginX - box.x, y2 = item.top + item.h/2 - box.y;
+        // Anchored at the "Commentaire" header, not the box's full-height
+        // middle — a fixed point right at the comment's face, regardless
+        // of how tall the box ends up once the text wraps.
+        const x2 = marginX - box.x, y2 = item.anchorY - box.y;
         const midX = (x1+x2)/2;
         const tipX = x1 + 9; // where the line stops, just short of the arrow tip
         const path = document.createElementNS(svgNS,"path");
@@ -3868,6 +3878,12 @@ async function procExport(kind, sections){
         path.setAttribute("stroke","#6B6F7A");
         path.setAttribute("stroke-width","1.4");
         connectorSvg.appendChild(path);
+        // A small dot right on the comment's edge makes the base of the
+        // arrow visibly touch the box it belongs to.
+        const dot = document.createElementNS(svgNS,"circle");
+        dot.setAttribute("cx", x2); dot.setAttribute("cy", y2); dot.setAttribute("r", 3);
+        dot.setAttribute("fill", "#6B6F7A");
+        connectorSvg.appendChild(dot);
         // Points back at the shape (arrow tip at x1,y1), since the callout
         // is explaining that shape, not the other way around.
         const tri = document.createElementNS(svgNS,"polygon");
