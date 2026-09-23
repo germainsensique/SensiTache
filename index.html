@@ -3143,6 +3143,18 @@ function procShowFloatToolbarForShape(id){
   bar.style.flexWrap="wrap"; bar.style.maxWidth="290px";
   bar.style.flexDirection="column"; bar.style.alignItems="stretch";
   const collabOpts = `<option value="">Aucun collaborateur</option>` + DATA.collaborators.map(c=>`<option value="${c.id}" ${shape.collabTag===c.id?"selected":""}>${escapeHtml(c.name)}</option>`).join("");
+  // Colors already used elsewhere in this process (from the legend, which
+  // is kept in sync with every shape's color) are offered as one-click
+  // swatches, so applying a color that's already in use on another shape
+  // doesn't mean reopening the color wheel and trying to eyeball the exact
+  // same hex each time.
+  const usedColors = (PROC.legend||[]).map(item=>({color: procNormColor(item.color), label: item.label||""}))
+    .filter((item,i,arr)=> arr.findIndex(x=>x.color===item.color)===i);
+  const curColorNorm = procNormColor(shape.color||"#FFD966");
+  const swatchesHtml = usedColors.length ? `
+    <div id="pftUsedColors" style="display:flex;flex-wrap:wrap;gap:5px;">
+      ${usedColors.map(item=>`<button type="button" class="pft-used-swatch${item.color===curColorNorm?' active':''}" data-color="${item.color}" title="${escapeHtml(item.label)}" style="width:20px;height:20px;border-radius:5px;padding:0;background:${item.color};border:2px solid ${item.color===curColorNorm?'var(--text)':'transparent'};cursor:pointer;"></button>`).join("")}
+    </div>` : "";
   bar.innerHTML = `
     <div style="display:flex;flex-wrap:wrap;gap:5px;">
       <input type="color" class="swatch-input" id="pftColor" value="${shape.color&&shape.color.startsWith('#')?shape.color:'#ffd966'}">
@@ -3152,11 +3164,29 @@ function procShowFloatToolbarForShape(id){
       <button class="btn small" id="pftLink">Lien</button>
       <button class="btn small danger" id="pftDelete">Suppr.</button>
     </div>
+    ${swatchesHtml}
     <textarea id="pftDesc" placeholder="Description de cette étape (visible uniquement quand la forme est sélectionnée)…" style="margin-top:6px;width:270px;min-height:50px;font-size:12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg-panel-2);color:var(--text);padding:6px 8px;resize:vertical;">${escapeHtml(shape.description||"")}</textarea>
   `;
   document.getElementById("procShapesLayer").appendChild(bar);
   bar.querySelector("#pftDesc").addEventListener("pointerdown", e=> e.stopPropagation());
   bar.querySelector("#pftDesc").addEventListener("input", e=>{ shape.description = e.target.value; saveData(); });
+  function applyShapeColor(hex){
+    shape.color=hex;
+    document.querySelector('.pshape[data-id="'+id+'"] .pshapeBg').style.background=shape.color;
+    const contentEl = document.querySelector('.pshape[data-id="'+id+'"] .pshapeContent');
+    if(contentEl) contentEl.style.color = procContrastText(shape.color);
+    bar.querySelector("#pftColor").value = hex;
+    procSyncLegendWithColors(); saveData(); renderProcLegend();
+    bar.querySelectorAll(".pft-used-swatch").forEach(btn=>{
+      const isCur = procNormColor(btn.dataset.color)===procNormColor(hex);
+      btn.classList.toggle("active", isCur);
+      btn.style.borderColor = isCur ? "var(--text)" : "transparent";
+    });
+  }
+  bar.querySelectorAll(".pft-used-swatch").forEach(btn=>{
+    btn.addEventListener("pointerdown", e=> e.stopPropagation());
+    btn.addEventListener("click", e=>{ e.stopPropagation(); applyShapeColor(btn.dataset.color); });
+  });
   bar.querySelector("#pftColor").addEventListener("input", e=>{
     shape.color=e.target.value;
     document.querySelector('.pshape[data-id="'+id+'"] .pshapeBg').style.background=shape.color;
