@@ -168,12 +168,14 @@
   #procBoard{position:relative; transform-origin:0 0;}
   #procArrowSvg{position:absolute; top:0; left:0; overflow:visible; z-index:2;}
   .proc-shapes-layer{position:absolute; top:0; left:0; z-index:3;}
-  .pshape{position:absolute; display:flex; filter:drop-shadow(0 1px 2px rgba(0,0,0,.18)); touch-action:none;}
-  .pshape.rect .pshapeBg{border-radius:9px;}
+  .pshape{position:absolute; display:flex; filter:drop-shadow(0 2px 6px rgba(0,0,0,.28)); touch-action:none; transition:filter .12s;}
+  .pshape:hover{filter:drop-shadow(0 3px 10px rgba(0,0,0,.38));}
+  .pshape.rect .pshapeBg{border-radius:10px;}
   .pshape.diamond .pshapeBg{clip-path:polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);}
-  .pshapeBg{position:absolute; inset:0; background:#FFD966; border:2px solid rgba(0,0,0,.18);}
-  .pshape.selected .pshapeBg{outline:2.5px solid var(--accent); outline-offset:2px;}
-  .pshapeContent{position:relative; z-index:1; width:100%; height:100%; display:flex; align-items:center; justify-content:center; text-align:center; padding:10px 16px; font-size:13.5px; line-height:1.28; color:#1B1D23; overflow:auto; outline:none; word-break:break-word;}
+  .pshapeBg{position:absolute; inset:0; background:#FFD966; border:1.5px solid rgba(0,0,0,.14); background-image:linear-gradient(180deg, rgba(255,255,255,.10), rgba(0,0,0,.05));}
+  .pshape.selected .pshapeBg{outline:2.5px solid var(--accent); outline-offset:2px; box-shadow:0 0 0 5px rgba(122,140,255,.18);}
+  .pshape.multiselected .pshapeBg{outline:2.5px solid #FF4D8D; outline-offset:2px; box-shadow:0 0 0 5px rgba(255,77,141,.16);}
+  .pshapeContent{position:relative; z-index:1; width:100%; height:100%; display:flex; align-items:center; justify-content:center; text-align:center; padding:10px 16px; font-size:13.5px; font-weight:500; line-height:1.3; color:#1B1D23; overflow:auto; outline:none; word-break:break-word;}
   .pshape.diamond .pshapeContent{padding:10px 34px;}
   .pshapeContent[contenteditable="true"]{cursor:text; background:rgba(255,255,255,.35); border-radius:4px;}
   .presizeHandle{position:absolute;width:14px;height:14px;right:-6px;bottom:-6px;background:var(--accent);border:2px solid var(--bg-app);border-radius:3px;z-index:4;cursor:nwse-resize;display:none;touch-action:none;}
@@ -184,7 +186,8 @@
   .panchor.top{top:-6px;left:calc(50% - 6px);} .panchor.bottom{bottom:-6px;left:calc(50% - 6px);}
   .panchor.left{left:-6px;top:calc(50% - 6px);} .panchor.right{right:-6px;top:calc(50% - 6px);}
   .collabtag{position:absolute; top:-10px; left:6px; z-index:5; font-size:10px; font-weight:700; padding:2px 7px; border-radius:20px; color:#fff; white-space:nowrap;}
-  .pfloat-toolbar{position:absolute;z-index:6;background:var(--bg-panel);border:1px solid var(--border-light);border-radius:9px;padding:6px;display:flex;gap:5px;align-items:center;box-shadow:0 6px 20px rgba(0,0,0,.35);}
+  .pfloat-toolbar{position:absolute;z-index:6;background:var(--bg-panel);border:1px solid var(--border-light);border-radius:10px;padding:6px;display:flex;gap:5px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,.4);}
+  #procLassoBox{position:absolute;z-index:6;border:1.5px dashed var(--accent);background:rgba(122,140,255,.12);border-radius:3px;pointer-events:none;}
   .proc-side{width:280px;flex-shrink:0;background:var(--bg-panel);border-left:1px solid var(--border);overflow:hidden;color:var(--text);}
   .proc-side.collapsed{width:0;border-left:none;}
   .proc-side-inner{width:280px;padding:16px;overflow-y:auto;height:100%;}
@@ -443,6 +446,7 @@
       <span id="procZoomLabel" style="font-size:12px;color:var(--text-dim);width:38px;text-align:center;">100%</span>
       <button class="btn small" id="btnProcZoomIn">+</button>
       <div class="divider"></div>
+      <button class="btn" id="btnProcAutoArrange" title="Réorganise automatiquement toutes les formes en couches selon les flèches">✨ Réorganiser</button>
       <button class="btn" id="btnProcImportImg">Image de référence</button>
       <div class="divider"></div>
       <button class="btn" id="btnProcExportPng">Exporter image</button>
@@ -2716,6 +2720,8 @@ async function showEmailPreviewModal(a){
 ========================================================================= */
 let PROC = null;         // process object bound to the open task: {shapes,arrows,legend,refImage}
 let procSelectedShapeId = null, procSelectedArrowId = null;
+let procMultiSelectedIds = new Set();
+let procLassoState = null, procGroupDragState = null, procSpaceDown = false;
 let procActiveTool = "select";
 let procZoom = 1;
 let procArrowDraft = null, procDragState = null, procPanState = null;
@@ -2726,6 +2732,7 @@ function openProcessEditor(t){
   history.pushState({sensitacheModal:"proc"}, "", location.href);
   document.getElementById("procNameInput").value = PROC.name || "Processus";
   procSelectedShapeId = null; procSelectedArrowId = null; procActiveTool="select"; procZoom=1;
+  procMultiSelectedIds.clear();
   document.getElementById("procOverlay").classList.add("show");
   setProcTool("select");
   document.getElementById("procZoomLabel").textContent = "100%";
@@ -2803,6 +2810,39 @@ function renderProcBoard(){
   renderProcShapes();
   renderProcArrows();
 }
+function procAutoArrange(){
+  if(!PROC.shapes.length) return;
+  if(!confirm("Réorganiser automatiquement toutes les formes du processus selon le sens des flèches ? Les positions actuelles seront perdues.")) return;
+  snapshot();
+  const ids = PROC.shapes.map(s=>s.id);
+  const level = {}; ids.forEach(id=> level[id]=0);
+  for(let iter=0; iter<ids.length+1; iter++){
+    let changed=false;
+    PROC.arrows.forEach(a=>{
+      if(level[a.from.shapeId]===undefined || level[a.to.shapeId]===undefined) return;
+      if(level[a.to.shapeId] < level[a.from.shapeId]+1){ level[a.to.shapeId]=level[a.from.shapeId]+1; changed=true; }
+    });
+    if(!changed) break;
+  }
+  const byLevel = {};
+  ids.forEach(id=>{ (byLevel[level[id]] = byLevel[level[id]]||[]).push(id); });
+  const levelKeys = Object.keys(byLevel).map(Number).sort((a,b)=>a-b);
+  const GAP_X=50, GAP_Y=70, START_X=60, START_Y=40;
+  let curY = START_Y;
+  levelKeys.forEach(lv=>{
+    const idsAtLevel = byLevel[lv].slice().sort((a,b)=> PROC.shapes.find(s=>s.id===a).x - PROC.shapes.find(s=>s.id===b).x);
+    let curX = START_X, rowH = 0;
+    idsAtLevel.forEach(id=>{
+      const s = PROC.shapes.find(x=>x.id===id);
+      s.x = curX; s.y = curY;
+      curX += s.w + GAP_X;
+      rowH = Math.max(rowH, s.h);
+    });
+    curY += rowH + GAP_Y;
+  });
+  saveData(); procClearSelection(); renderProcBoard();
+}
+document.getElementById("btnProcAutoArrange").addEventListener("click", procAutoArrange);
 function procAnchorPoint(shape, side){
   switch(side){
     case "top": return {x:shape.x+shape.w/2, y:shape.y};
@@ -2863,6 +2903,14 @@ function procRouteOrthogonal(p0,dir0,p1,dir1){
   return out;
 }
 function procPointsToPath(pts){ return "M "+pts.map(p=>p.x.toFixed(1)+" "+p.y.toFixed(1)).join(" L "); }
+function procContrastText(hex){
+  if(!hex || hex[0]!=="#" || hex.length<7) return "#1B1D23";
+  const r = parseInt(hex.substr(1,2),16), g = parseInt(hex.substr(3,2),16), b = parseInt(hex.substr(5,2),16);
+  if(isNaN(r)||isNaN(g)||isNaN(b)) return "#1B1D23";
+  const toLin = c=>{ c/=255; return c<=0.03928 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4); };
+  const L = 0.2126*toLin(r) + 0.7152*toLin(g) + 0.0722*toLin(b);
+  return L > 0.45 ? "#1B1D23" : "#FFFFFF";
+}
 const procArrowColorVar = {positive:"var(--green)", negative:"var(--orange)", neutral:"var(--grey-arrow)"};
 const procArrowMarker = {positive:"url(#parrow-green)", negative:"url(#parrow-orange)", neutral:"url(#parrow-grey)"};
 function procArrowPathPoints(arrow){
@@ -2874,8 +2922,9 @@ function renderProcShapes(){
   const layer = document.getElementById("procShapesLayer");
   layer.innerHTML = "";
   PROC.shapes.forEach(shape=>{
+    const isMulti = procMultiSelectedIds.has(shape.id) && procMultiSelectedIds.size>1;
     const el = document.createElement("div");
-    el.className = "pshape "+shape.type+(shape.id===procSelectedShapeId?" selected":"");
+    el.className = "pshape "+shape.type+(shape.id===procSelectedShapeId?" selected":"")+(isMulti?" multiselected":"");
     el.dataset.id = shape.id;
     el.style.left=shape.x+"px"; el.style.top=shape.y+"px"; el.style.width=shape.w+"px"; el.style.height=shape.h+"px";
     const bg = document.createElement("div"); bg.className="pshapeBg"; bg.style.background = shape.color||"#FFD966";
@@ -2886,6 +2935,7 @@ function renderProcShapes(){
     }
     const content = document.createElement("div");
     content.className = "pshapeContent";
+    content.style.color = procContrastText(shape.color);
     content.innerHTML = shape.content||"";
     content.addEventListener("dblclick", e=>{ e.stopPropagation(); content.setAttribute("contenteditable","true"); content.focus(); });
     content.addEventListener("keydown", e=>{
@@ -2923,8 +2973,19 @@ function renderProcShapes(){
       if(e.pointerType==="mouse" && e.button!==0) return;
       if(content.getAttribute("contenteditable")==="true") return;
       e.stopPropagation();
-      procSelectShape(shape.id);
-      procDragState = {mode:"move", shapeId:shape.id, startX:e.clientX, startY:e.clientY, startLeft:shape.x, startTop:shape.y};
+      if(procMultiSelectedIds.has(shape.id) && procMultiSelectedIds.size>1){
+        procGroupDragState = {
+          startX:e.clientX, startY:e.clientY,
+          items: Array.from(procMultiSelectedIds).map(id=>{
+            const s = PROC.shapes.find(x=>x.id===id);
+            return {id, startLeft:s.x, startTop:s.y};
+          })
+        };
+      } else {
+        procMultiSelectedIds.clear();
+        procSelectShape(shape.id);
+        procDragState = {mode:"move", shapeId:shape.id, startX:e.clientX, startY:e.clientY, startLeft:shape.x, startTop:shape.y};
+      }
     });
     layer.appendChild(el);
   });
@@ -2959,19 +3020,60 @@ function procUpdateArrowsForShape(shapeId){
 }
 function procRemoveFloatToolbar(){ const ex=document.getElementById("procFloatToolbar"); if(ex) ex.remove(); }
 function procSelectShape(id){
-  procSelectedShapeId=id; procSelectedArrowId=null;
-  document.querySelectorAll(".pshape").forEach(el=> el.classList.toggle("selected", el.dataset.id===id));
+  procSelectedShapeId=id; procSelectedArrowId=null; procMultiSelectedIds.clear();
+  document.querySelectorAll(".pshape").forEach(el=>{ el.classList.toggle("selected", el.dataset.id===id); el.classList.remove("multiselected"); });
   procRemoveFloatToolbar(); procShowFloatToolbarForShape(id); renderProcArrows();
 }
 function procSelectArrow(id){
-  procSelectedArrowId=id; procSelectedShapeId=null;
-  document.querySelectorAll(".pshape").forEach(el=>el.classList.remove("selected"));
+  procSelectedArrowId=id; procSelectedShapeId=null; procMultiSelectedIds.clear();
+  document.querySelectorAll(".pshape").forEach(el=>el.classList.remove("selected","multiselected"));
   procRemoveFloatToolbar(); renderProcArrows(); procShowFloatToolbarForArrow(id);
 }
 function procClearSelection(){
-  procSelectedShapeId=null; procSelectedArrowId=null;
-  document.querySelectorAll(".pshape").forEach(el=>el.classList.remove("selected"));
+  procSelectedShapeId=null; procSelectedArrowId=null; procMultiSelectedIds.clear();
+  document.querySelectorAll(".pshape").forEach(el=>el.classList.remove("selected","multiselected"));
   procRemoveFloatToolbar(); renderProcArrows();
+}
+function procSelectAllShapes(){
+  if(PROC.shapes.length===0) return;
+  procSelectedArrowId=null; procRemoveFloatToolbar();
+  if(PROC.shapes.length===1){
+    procMultiSelectedIds.clear();
+    procSelectShape(PROC.shapes[0].id);
+    return;
+  }
+  procSelectedShapeId=null;
+  procMultiSelectedIds = new Set(PROC.shapes.map(s=>s.id));
+  renderProcShapes(); renderProcArrows();
+  procShowMultiFloatToolbar();
+}
+function procApplyMultiSelectionClasses(){
+  document.querySelectorAll(".pshape").forEach(el=>{
+    const isMulti = procMultiSelectedIds.has(el.dataset.id) && procMultiSelectedIds.size>1;
+    el.classList.toggle("multiselected", isMulti);
+    el.classList.toggle("selected", el.dataset.id===procSelectedShapeId);
+  });
+}
+function procShowMultiFloatToolbar(){
+  procRemoveFloatToolbar();
+  if(procMultiSelectedIds.size<2) return;
+  const ids = Array.from(procMultiSelectedIds);
+  const shapesSel = ids.map(id=>PROC.shapes.find(s=>s.id===id)).filter(Boolean);
+  if(shapesSel.length===0) return;
+  const minX = Math.min(...shapesSel.map(s=>s.x));
+  const minY = Math.min(...shapesSel.map(s=>s.y));
+  const bar = document.createElement("div");
+  bar.className="pfloat-toolbar"; bar.id="procFloatToolbar";
+  bar.style.left=minX+"px"; bar.style.top=(minY-48)+"px";
+  bar.innerHTML = `
+    <span style="font-size:12px;color:var(--text-dim);padding:0 4px;">${shapesSel.length} formes sélectionnées</span>
+    <button class="btn small danger" id="pmtDelete">Suppr. la sélection</button>
+  `;
+  document.getElementById("procShapesLayer").appendChild(bar);
+  bar.querySelector("#pmtDelete").addEventListener("pointerdown", e=>{
+    e.stopPropagation();
+    procDeleteMultiSelected();
+  });
 }
 function stripHtml(html){ const d=document.createElement("div"); d.innerHTML=html||""; return (d.textContent||"").trim(); }
 function procAssignShapeToCollaborator(shape, collabId){
@@ -3037,7 +3139,11 @@ function procShowFloatToolbarForShape(id){
   bar.querySelector("#pftDesc").addEventListener("pointerdown", e=> e.stopPropagation());
   bar.querySelector("#pftDesc").addEventListener("input", e=>{ shape.description = e.target.value; saveData(); });
   bar.querySelector("#pftColor").addEventListener("input", e=>{
-    shape.color=e.target.value; document.querySelector('.pshape[data-id="'+id+'"] .pshapeBg').style.background=shape.color; saveData();
+    shape.color=e.target.value;
+    document.querySelector('.pshape[data-id="'+id+'"] .pshapeBg').style.background=shape.color;
+    const contentEl = document.querySelector('.pshape[data-id="'+id+'"] .pshapeContent');
+    if(contentEl) contentEl.style.color = procContrastText(shape.color);
+    saveData();
   });
   bar.querySelector("#pftTag").addEventListener("change", e=>{
     procAssignShapeToCollaborator(shape, e.target.value || null);
@@ -3111,6 +3217,21 @@ function procShowFloatToolbarForArrow(id){
     PROC.arrows = PROC.arrows.filter(a=>a.id!==id); procSelectedArrowId=null; saveData(); renderProcArrows(); procRemoveFloatToolbar();
   });
 }
+function procDeleteMultiSelected(){
+  const toDelete = new Set(procMultiSelectedIds);
+  toDelete.forEach(id=>{
+    const shape = PROC.shapes.find(s=>s.id===id);
+    if(shape && shape.linkedTaskId){
+      const linked = DATA.tasks.find(t=>t.id===shape.linkedTaskId);
+      if(linked) cleanupTaskAttachments(linked);
+      DATA.tasks = DATA.tasks.filter(t=>t.id!==shape.linkedTaskId);
+    }
+  });
+  PROC.shapes = PROC.shapes.filter(s=>!toDelete.has(s.id));
+  PROC.arrows = PROC.arrows.filter(a=>!toDelete.has(a.from.shapeId) && !toDelete.has(a.to.shapeId));
+  procMultiSelectedIds.clear();
+  saveData(); renderProcBoard(); procRemoveFloatToolbar(); renderProcTasksList();
+}
 function procDeleteShape(id){
   const shape = PROC.shapes.find(s=>s.id===id);
   if(shape && shape.linkedTaskId){
@@ -3125,19 +3246,33 @@ function procDeleteShape(id){
   procSelectedShapeId=null; saveData(); renderProcBoard(); procRemoveFloatToolbar(); renderProcTasksList();
 }
 document.getElementById("btnProcDeleteSel").addEventListener("click", ()=>{
-  if(procSelectedShapeId) procDeleteShape(procSelectedShapeId);
+  if(procMultiSelectedIds.size>1) procDeleteMultiSelected();
+  else if(procSelectedShapeId) procDeleteShape(procSelectedShapeId);
   else if(procSelectedArrowId){ PROC.arrows = PROC.arrows.filter(a=>a.id!==procSelectedArrowId); procSelectedArrowId=null; saveData(); renderProcArrows(); procRemoveFloatToolbar(); }
 });
 document.addEventListener("keydown", e=>{
   if(!document.getElementById("procOverlay").classList.contains("show")) return;
   const active = document.activeElement;
   const editing = active && ((active.getAttribute && active.getAttribute("contenteditable")==="true") || active.tagName==="INPUT" || active.tagName==="TEXTAREA" || active.tagName==="SELECT");
-  if(editing) return;
+  if(editing){
+    if(e.code==="Space") procSpaceDown=false;
+    return;
+  }
+  if((e.key==="a"||e.key==="A") && (e.ctrlKey||e.metaKey)){
+    e.preventDefault();
+    procSelectAllShapes();
+    return;
+  }
   if(e.key==="Delete"||e.key==="Backspace"){
-    if(procSelectedShapeId){ e.preventDefault(); procDeleteShape(procSelectedShapeId); }
+    if(procMultiSelectedIds.size>1){ e.preventDefault(); procDeleteMultiSelected(); }
+    else if(procSelectedShapeId){ e.preventDefault(); procDeleteShape(procSelectedShapeId); }
     else if(procSelectedArrowId){ e.preventDefault(); PROC.arrows = PROC.arrows.filter(a=>a.id!==procSelectedArrowId); procSelectedArrowId=null; saveData(); renderProcArrows(); procRemoveFloatToolbar(); }
   }
   if(e.key==="Escape"){ procArrowDraft=null; procClearSelection(); }
+  if(e.code==="Space" && !procSpaceDown){ procSpaceDown=true; procCanvasScroll.style.cursor="grab"; e.preventDefault(); }
+});
+document.addEventListener("keyup", e=>{
+  if(e.code==="Space"){ procSpaceDown=false; if(document.getElementById("procOverlay").classList.contains("show") && !procPanState) procCanvasScroll.style.cursor="default"; }
 });
 
 /* ---- proc canvas interactions: place / drag / resize / arrow draft / pan / pinch ---- */
@@ -3158,7 +3293,20 @@ procBoardEl.addEventListener("pointerdown", e=>{
       w:isRect?160:180, h:isRect?70:110, color:"#FFD966", content:isRect?"Nouvelle étape":"Condition ?", collabTag:null};
     PROC.shapes.push(shape); saveData(); renderProcBoard(); procSelectShape(shape.id);
     setProcTool("select");
-  } else if(e.pointerType==="mouse"){
+    return;
+  }
+  if(e.pointerType==="mouse" && (e.button===1 || procSpaceDown)){
+    e.preventDefault();
+    procPanState = {startX:e.clientX, startY:e.clientY, startScrollLeft:procCanvasScroll.scrollLeft, startScrollTop:procCanvasScroll.scrollTop, moved:false};
+    return;
+  }
+  if(procActiveTool==="select" && e.pointerType==="mouse" && e.button===0){
+    const pos = procToBoardCoords(e.clientX, e.clientY);
+    procLassoState = {startX:pos.x, startY:pos.y, curX:pos.x, curY:pos.y, additive: e.shiftKey||e.ctrlKey||e.metaKey, moved:false};
+    if(!procLassoState.additive){ procMultiSelectedIds.clear(); procSelectedShapeId=null; procRemoveFloatToolbar(); procApplyMultiSelectionClasses(); }
+    return;
+  }
+  if(e.pointerType==="mouse"){
     procPanState = {startX:e.clientX, startY:e.clientY, startScrollLeft:procCanvasScroll.scrollLeft, startScrollTop:procCanvasScroll.scrollTop, moved:false};
   }
 });
@@ -3184,6 +3332,30 @@ document.addEventListener("pointermove", e=>{
     }
     return;
   }
+  if(procGroupDragState){
+    const dx=(e.clientX-procGroupDragState.startX)/procZoom, dy=(e.clientY-procGroupDragState.startY)/procZoom;
+    procGroupDragState.items.forEach(item=>{
+      const s = PROC.shapes.find(x=>x.id===item.id); if(!s) return;
+      s.x = Math.max(0, item.startLeft+dx); s.y = Math.max(0, item.startTop+dy);
+      const el=document.querySelector('.pshape[data-id="'+s.id+'"]');
+      if(el){ el.style.left=s.x+"px"; el.style.top=s.y+"px"; }
+      procUpdateArrowsForShape(s.id);
+    });
+    const bar=document.getElementById("procFloatToolbar");
+    if(bar){
+      const shapesSel = procGroupDragState.items.map(it=>PROC.shapes.find(s=>s.id===it.id)).filter(Boolean);
+      const minX = Math.min(...shapesSel.map(s=>s.x)), minY = Math.min(...shapesSel.map(s=>s.y));
+      bar.style.left=minX+"px"; bar.style.top=(minY-48)+"px";
+    }
+    return;
+  }
+  if(procLassoState){
+    const pos = procToBoardCoords(e.clientX, e.clientY);
+    procLassoState.curX = pos.x; procLassoState.curY = pos.y;
+    if(!procLassoState.moved && Math.hypot(pos.x-procLassoState.startX, pos.y-procLassoState.startY)>3) procLassoState.moved=true;
+    procDrawLassoBox();
+    return;
+  }
   if(procArrowDraft){ const pos=procToBoardCoords(e.clientX,e.clientY); procDrawDraftLine(procArrowDraft.origin, pos); return; }
   if(procPanState){
     const dx=e.clientX-procPanState.startX, dy=e.clientY-procPanState.startY;
@@ -3191,8 +3363,37 @@ document.addEventListener("pointermove", e=>{
     if(procPanState.moved){ procCanvasScroll.scrollLeft=procPanState.startScrollLeft-dx; procCanvasScroll.scrollTop=procPanState.startScrollTop-dy; }
   }
 });
+function procLassoRect(){
+  const x1=Math.min(procLassoState.startX, procLassoState.curX), x2=Math.max(procLassoState.startX, procLassoState.curX);
+  const y1=Math.min(procLassoState.startY, procLassoState.curY), y2=Math.max(procLassoState.startY, procLassoState.curY);
+  return {x1,y1,x2,y2};
+}
+function procDrawLassoBox(){
+  let box = document.getElementById("procLassoBox");
+  if(!box){ box=document.createElement("div"); box.id="procLassoBox"; document.getElementById("procShapesLayer").appendChild(box); }
+  const r = procLassoRect();
+  box.style.left=r.x1+"px"; box.style.top=r.y1+"px"; box.style.width=(r.x2-r.x1)+"px"; box.style.height=(r.y2-r.y1)+"px";
+}
+function procRemoveLassoBox(){ const b=document.getElementById("procLassoBox"); if(b) b.remove(); }
 function procEndPointerInteractions(e){
   if(procDragState){ procApplyBoardSize(); saveData(); procDragState=null; procRemoveSnapGuides(); }
+  if(procGroupDragState){ procApplyBoardSize(); saveData(); procGroupDragState=null; }
+  if(procLassoState){
+    if(procLassoState.moved){
+      const r = procLassoRect();
+      const hit = PROC.shapes.filter(s=> s.x < r.x2 && s.x+s.w > r.x1 && s.y < r.y2 && s.y+s.h > r.y1).map(s=>s.id);
+      if(procLassoState.additive){ hit.forEach(id=> procMultiSelectedIds.add(id)); }
+      else { procMultiSelectedIds = new Set(hit); }
+      procRemoveFloatToolbar();
+      if(procMultiSelectedIds.size===1){ procSelectShape(Array.from(procMultiSelectedIds)[0]); }
+      else if(procMultiSelectedIds.size>1){ procSelectedShapeId=null; procApplyMultiSelectionClasses(); procShowMultiFloatToolbar(); renderProcArrows(); }
+      else { procApplyMultiSelectionClasses(); renderProcArrows(); }
+    } else {
+      if(!procLassoState.additive) procClearSelection();
+    }
+    procRemoveLassoBox();
+    procLassoState=null;
+  }
   if(procArrowDraft){
     const el = document.elementFromPoint(e.clientX, e.clientY);
     const anchorEl = el && el.closest ? el.closest(".panchor") : null;
