@@ -5014,32 +5014,39 @@ async function gmailFetchUnprocessed(count){
   const listData = await listRes.json();
   const ids = (listData.messages||[]).map(m=>m.id).filter(id=> !processed.has(id));
   const mails = [];
+  let skipped = 0;
   for(const id of ids){
-    const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/"+id+"?format=full", {headers:{Authorization:"Bearer "+mailGmailAccessToken}});
-    if(!res.ok) continue;
-    const m = await res.json();
-    const headers = m.payload ? m.payload.headers : [];
-    let from = gmailHeader(headers,"From");
-    let to = gmailHeader(headers,"To");
-    let cc = gmailHeader(headers,"Cc");
-    let subject = gmailHeader(headers,"Subject") || "(sans objet)";
-    let body = gmailExtractBody(m.payload);
-    const fwd = parseForwardedBody(body);
-    if(fwd && (fwd.subject || fwd.from)){
-      from = fwd.from || from;
-      to = fwd.to || to;
-      cc = fwd.cc || cc;
-      subject = fwd.subject || subject;
-      body = fwd.body;
+    try{
+      const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/"+id+"?format=full", {headers:{Authorization:"Bearer "+mailGmailAccessToken}});
+      if(!res.ok){ skipped++; continue; }
+      const m = await res.json();
+      const headers = m.payload ? m.payload.headers : [];
+      let from = gmailHeader(headers,"From");
+      let to = gmailHeader(headers,"To");
+      let cc = gmailHeader(headers,"Cc");
+      let subject = gmailHeader(headers,"Subject") || "(sans objet)";
+      let body = gmailExtractBody(m.payload);
+      const fwd = parseForwardedBody(body);
+      if(fwd && (fwd.subject || fwd.from)){
+        from = fwd.from || from;
+        to = fwd.to || to;
+        cc = fwd.cc || cc;
+        subject = fwd.subject || subject;
+        body = fwd.body;
+      }
+      mails.push({
+        id: id, gmailId: id, source: "gmail",
+        from, to, cc, subject,
+        date: Date.now(),
+        unread: (m.labelIds||[]).includes("UNREAD"),
+        body: stripEmailSignature(body)
+      });
+    }catch(e){
+      skipped++;
+      console.error("Mail Gmail ignoré (id="+id+") :", e);
     }
-    mails.push({
-      id: id, gmailId: id, source: "gmail",
-      from, to, cc, subject,
-      date: Date.now(),
-      unread: (m.labelIds||[]).includes("UNREAD"),
-      body: stripEmailSignature(body)
-    });
   }
+  if(skipped>0) console.warn(skipped+" mail(s) Gmail n'ont pas pu être chargés et ont été ignorés.");
   return mails;
 }
 async function gmailTrash(id){
@@ -5188,14 +5195,26 @@ function renderMailTab(el){
   function renderList(mails){
     listBox.innerHTML = "";
     if(!mails.length){ listBox.innerHTML = '<div class="empty-hint">Aucun mail non traité 🎉</div>'; return; }
+    let rendered = 0;
     mails.forEach(mail=>{
-      const row = buildMailRow(mail, {
-        allowDelete: true,
-        onRead: (m)=>{ mailMarkProcessed(m.gmailId||m.id); },
-        onDelete: async (m)=>{ mailMarkProcessed(m.gmailId||m.id); await gmailTrash(m.gmailId||m.id); }
-      });
-      listBox.appendChild(row);
+      try{
+        const row = buildMailRow(mail, {
+          allowDelete: true,
+          onRead: (m)=>{ mailMarkProcessed(m.gmailId||m.id); },
+          onDelete: async (m)=>{ mailMarkProcessed(m.gmailId||m.id); await gmailTrash(m.gmailId||m.id); }
+        });
+        listBox.appendChild(row);
+        rendered++;
+      }catch(e){
+        console.error("Impossible d'afficher un mail :", mail, e);
+      }
     });
+    if(rendered===0 && mails.length>0){
+      const warn = document.createElement("p");
+      warn.style.cssText = "font-size:12.5px;color:var(--danger);";
+      warn.textContent = "Erreur : "+mails.length+" mail(s) trouvé(s) mais impossible de les afficher. Regarde la console du navigateur pour le détail.";
+      listBox.appendChild(warn);
+    }
   }
 }
 
