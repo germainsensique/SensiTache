@@ -1256,6 +1256,7 @@ function renderMain(){
   const el = document.getElementById("mainContent");
   if(!ws){ el.innerHTML = '<div class="empty-hint">Crée un espace de travail pour commencer.</div>'; return; }
   const prevScrollTop = el.scrollTop;
+  if(currentTab!=="mail") mailReleaseWakeLock();
   if(currentTab==="tasks") renderTasksTab(el);
   else if(currentTab==="collab") renderCollabTab(el);
   else if(currentTab==="recurrence") renderRecurrenceTab(el);
@@ -1263,7 +1264,14 @@ function renderMain(){
   else if(currentTab==="knowledge") renderKnowledgeTab(el);
   else if(currentTab==="archive") renderArchiveTab(el);
   else if(currentTab==="search") renderSearchTab(el);
-  else if(currentTab==="mail") renderMailTab(el);
+  else if(currentTab==="mail"){
+    // renderMain() est aussi appelé par la synchro Drive en tâche de fond
+    // (toutes les ~15s) : si une réponse est en cours de rédaction/dictée,
+    // on laisse l'écran tel quel plutôt que de tout reconstruire et perdre
+    // ce qui vient d'être tapé ou dicté.
+    const hasOpenReply = Array.from(el.querySelectorAll("[data-replyPane]")).some(p=> p.style.display!=="none");
+    if(!hasOpenReply) renderMailTab(el);
+  }
   if(prevScrollTop>0) el.scrollTop = prevScrollTop;
 }
 
@@ -4840,6 +4848,10 @@ async function msFetchRecent(count){
 const FEMALE_VOICE_HINTS = ["amelie","amélie","audrey","aurelie","aurélie","marie","chantal","celine","céline",
   "victoire","lea","léa","julie","hortense","denise","charline","claire","manon","emma","female","femme",
   "google français","google francais","samantha","zira","salli","joanna","ines","inès"];
+// Les voix "Amélioré/Enhanced/Premium/Neural" sont générées différemment
+// (souvent par un réseau de neurones) et sonnent nettement moins robotiques
+// que les voix "standard" du même nom — on les préfère quand elles existent.
+const QUALITY_VOICE_HINTS = ["enhanced","amélioré","ameliore","premium","neural","natural","plus","hd"];
 let mailVoiceURI = localStorage.getItem("sensitache.mailVoiceURI") || "";
 let mailVoicesCache = [];
 function mailRefreshVoices(){
@@ -4851,13 +4863,21 @@ if("speechSynthesis" in window){
   mailRefreshVoices();
   window.speechSynthesis.addEventListener("voiceschanged", mailRefreshVoices);
 }
+function mailVoiceScore(v){
+  const n = v.name.toLowerCase();
+  let score = 0;
+  if(FEMALE_VOICE_HINTS.some(h=> n.includes(h))) score += 2;
+  if(QUALITY_VOICE_HINTS.some(h=> n.includes(h))) score += 3;
+  if(!v.localService) score += 1; // les voix réseau sont souvent plus naturelles que les voix embarquées
+  return score;
+}
 function mailPickDefaultVoice(){
   const voices = mailVoicesCache.length ? mailVoicesCache : mailRefreshVoices();
   if(!voices.length) return null;
   const fr = voices.filter(v=> v.lang && v.lang.toLowerCase().startsWith("fr"));
   const pool = fr.length ? fr : voices;
-  const female = pool.find(v=> FEMALE_VOICE_HINTS.some(h=> v.name.toLowerCase().includes(h)));
-  return female || pool[0];
+  const sorted = pool.slice().sort((a,b)=> mailVoiceScore(b)-mailVoiceScore(a));
+  return sorted[0] || pool[0];
 }
 function mailGetSelectedVoice(){
   const voices = mailVoicesCache.length ? mailVoicesCache : mailRefreshVoices();
@@ -4871,7 +4891,7 @@ function buildVoicePickerHtml(){
   return `
     <div style="border:1px solid var(--border-soft);border-radius:10px;padding:10px 12px;margin-bottom:12px;">
       <div style="font-weight:700;font-size:13px;margin-bottom:6px;">🎙️ Voix du narrateur</div>
-      <p style="font-size:11.5px;color:var(--text-sub);margin:0 0 6px;">Les voix proposées viennent de ton appareil (pas de SensiTâche). Choisis une voix féminine française dans la liste, puis teste-la.</p>
+      <p style="font-size:11.5px;color:var(--text-sub);margin:0 0 6px;">Les voix proposées viennent de ton appareil (pas de SensiTâche). Les voix marquées ⭐ sont les versions « Améliorée/Enhanced/Neural » — nettement moins robotiques ; installe-les dans les réglages vocaux de ton téléphone si tu n'en as pas encore. Choisis une voix française dans la liste, puis teste-la.</p>
       <select id="mailVoiceSelect" style="width:100%;border:1px solid var(--border-soft);border-radius:8px;padding:7px 9px;background:var(--bg-app);color:var(--text-main);font-size:12.5px;margin-bottom:6px;"></select>
       <button class="btn small" id="mailVoiceTestBtn">🔊 Tester la voix</button>
     </div>`;
@@ -4884,7 +4904,7 @@ function wireVoicePicker(container){
       select.innerHTML = '<option value="">(aucune voix disponible sur cet appareil — voir les instructions de configuration ci-dessous)</option>';
       return;
     }
-    const fr = voices.filter(v=> v.lang && v.lang.toLowerCase().startsWith("fr"));
+    const fr = voices.filter(v=> v.lang && v.lang.toLowerCase().startsWith("fr")).sort((a,b)=> mailVoiceScore(b)-mailVoiceScore(a));
     const others = voices.filter(v=> !fr.includes(v));
     select.innerHTML = "";
     const addGroup = (label, list)=>{
@@ -4892,7 +4912,8 @@ function wireVoicePicker(container){
       const grp = document.createElement("optgroup"); grp.label = label;
       list.forEach(v=>{
         const opt = document.createElement("option");
-        opt.value = v.voiceURI; opt.textContent = v.name+" ("+v.lang+")";
+        const star = mailVoiceScore(v)>=3 ? "⭐ " : "";
+        opt.value = v.voiceURI; opt.textContent = star+v.name+" ("+v.lang+")";
         grp.appendChild(opt);
       });
       select.appendChild(grp);
@@ -4920,8 +4941,10 @@ function mailSpeak(text, onEnd){
   const u = new SpeechSynthesisUtterance(text);
   const voice = mailGetSelectedVoice();
   if(voice){ u.voice = voice; u.lang = voice.lang; } else { u.lang = "fr-FR"; }
-  u.rate = 1;
-  u.pitch = 1.05;
+  // Un débit légèrement plus lent et un ton naturel (pas de suraigu artificiel)
+  // rendent la lecture moins robotique, surtout avec les voix "standard".
+  u.rate = 0.95;
+  u.pitch = 1;
   if(onEnd) u.onend = onEnd;
   mailCurrentUtterance = u;
   window.speechSynthesis.speak(u);
@@ -4935,6 +4958,30 @@ const MAIL_DEFAULT_ACCOUNT = "germain.sensique.eufy@gmail.com";
 // liste des mails disparaissait aussitôt pour laisser place au message
 // "touche Actualiser" — on la restitue simplement au lieu de la recharger.
 let mailTabCachedList = [];
+
+/* ---------- Empêche la mise en veille de l'écran pendant qu'on est sur l'onglet Mail ---------- */
+let mailWakeLock = null;
+async function mailRequestWakeLock(){
+  if(!("wakeLock" in navigator)) return;
+  try{
+    mailWakeLock = await navigator.wakeLock.request("screen");
+    mailWakeLock.addEventListener("release", ()=>{ mailWakeLock = null; });
+  }catch(e){
+    // Refusé (ex. onglet en arrière-plan) — pas grave, on retentera au besoin.
+    mailWakeLock = null;
+  }
+}
+function mailReleaseWakeLock(){
+  if(mailWakeLock){ mailWakeLock.release().catch(()=>{}); mailWakeLock = null; }
+}
+// Le verrou est automatiquement relâché par le système quand l'onglet passe
+// en arrière-plan (écran éteint, changement d'appli) — on le redemande dès
+// qu'on redevient visible, mais seulement si on est toujours sur l'onglet Mail.
+document.addEventListener("visibilitychange", ()=>{
+  if(document.visibilityState==="visible" && typeof currentTab!=="undefined" && currentTab==="mail"){
+    mailRequestWakeLock();
+  }
+});
 let mailGmailClientId = localStorage.getItem("sensitache.mailGmailClientId") || "136023641350-3f06n888t65idflab4845139gb6e1ver.apps.googleusercontent.com";
 let mailGmailTokenClient = null;
 let mailGmailAccessToken = null;
@@ -4980,6 +5027,24 @@ function mailMarkProcessed(id){
   let arr = Array.from(set);
   if(arr.length>500) arr = arr.slice(arr.length-500);
   localStorage.setItem("sensitache.mailProcessedIds", JSON.stringify(arr));
+}
+// Mails pour lesquels une tâche a déjà été créée — indépendant du statut
+// "traité" (écouté), pour garder une trace visible même si le mail reste
+// affiché (pas encore supprimé) dans la liste.
+function mailGetTaskCreatedIds(){
+  try{ return new Set(JSON.parse(localStorage.getItem("sensitache.mailTaskCreatedIds")||"[]")); }catch(e){ return new Set(); }
+}
+function mailHasTaskCreated(id){
+  if(!id) return false;
+  return mailGetTaskCreatedIds().has(id);
+}
+function mailMarkTaskCreated(id){
+  if(!id) return;
+  const set = mailGetTaskCreatedIds();
+  set.add(id);
+  let arr = Array.from(set);
+  if(arr.length>500) arr = arr.slice(arr.length-500);
+  localStorage.setItem("sensitache.mailTaskCreatedIds", JSON.stringify(arr));
 }
 function b64urlDecode(data){
   try{
@@ -5070,6 +5135,7 @@ async function gmailTrash(id){
 function buildMailRow(mail, opts){
   opts = opts || {};
   const fromName = mailDisplayName(mail.from);
+  const mailKey = mail.gmailId || mail.id;
   const row = document.createElement("div");
   row.style.cssText = "border:1px solid var(--border-soft);border-radius:10px;padding:10px 12px;background:var(--bg-panel-2);";
   row.innerHTML = `
@@ -5078,6 +5144,7 @@ function buildMailRow(mail, opts){
         <div style="font-size:13px;font-weight:700;${mail.unread?'':'color:var(--text-sub);'}">${mail.unread?'🔵 ':''}${mail.source==='outlook'?'📨 ':(mail.source==='paste'?'📋 ':'📧 ')}${escapeHtml(fromName||"(expéditeur inconnu)")}</div>
         <div style="font-size:12.5px;color:var(--text-main);margin-top:1px;">${escapeHtml(mail.subject||"(sans objet)")}</div>
       </div>
+      <div data-taskBadge style="flex-shrink:0;font-size:11px;font-weight:700;color:var(--knowledge);white-space:nowrap;display:${mailHasTaskCreated(mailKey) ? 'block' : 'none'};" title="Une tâche a déjà été créée à partir de ce mail">✅ Tâche créée</div>
     </div>
     <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
       <button class="btn small" data-listen>🔊 Écouter</button>
@@ -5085,8 +5152,9 @@ function buildMailRow(mail, opts){
       ${opts.allowDelete ? '<button class="btn small danger" data-delete>🗑️ Supprimer</button>' : ''}
     </div>
     <div data-replyPane style="display:none;margin-top:8px;">
-      <textarea data-replyText placeholder="Dicte ou tape ta réponse ici (utilise le micro de ton clavier)…" style="width:100%;min-height:80px;border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;background:var(--bg-app);color:var(--text-main);font-size:13px;resize:vertical;"></textarea>
-      <div style="display:flex;gap:6px;margin-top:6px;">
+      <textarea data-replyText placeholder="Dicte ou tape ta réponse ici…" style="width:100%;min-height:80px;border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;background:var(--bg-app);color:var(--text-main);font-size:13px;resize:vertical;"></textarea>
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+        <button class="btn small" data-dictate>🎤 Dicter la réponse</button>
         <button class="btn small primary" data-saveTask>💾 Enregistrer comme tâche</button>
         <button class="btn small ghost" data-cancelReply>Annuler</button>
       </div>
@@ -5099,6 +5167,55 @@ function buildMailRow(mail, opts){
     replyPane.style.display = "block";
     textarea.focus();
   }
+
+  /* ---- Dictée vocale de la réponse (reconnaissance de la parole) ---- */
+  const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const dictateBtn = row.querySelector("[data-dictate]");
+  let recognition = null;
+  let recognizing = false;
+  function stopDictation(){
+    if(recognition && recognizing){ try{ recognition.stop(); }catch(e){} }
+  }
+  if(!SpeechRecognitionCtor){
+    dictateBtn.disabled = true;
+    dictateBtn.title = "Dictée vocale non prise en charge par ce navigateur — utilise le micro de ton clavier à la place.";
+    dictateBtn.style.opacity = "0.5";
+  } else {
+    dictateBtn.addEventListener("click", ()=>{
+      if(recognizing){ stopDictation(); return; }
+      mailStopSpeaking();
+      recognition = new SpeechRecognitionCtor();
+      recognition.lang = "fr-FR";
+      recognition.interimResults = false;
+      recognition.continuous = true;
+      recognition.onresult = (ev)=>{
+        let finalText = "";
+        for(let i=ev.resultIndex; i<ev.results.length; i++){
+          if(ev.results[i].isFinal) finalText += ev.results[i][0].transcript;
+        }
+        if(finalText.trim()){
+          textarea.value = (textarea.value.trim() ? textarea.value.trim()+" " : "") + finalText.trim();
+        }
+      };
+      recognition.onerror = (ev)=>{
+        console.warn("Erreur de dictée vocale :", ev.error);
+        if(ev.error==="not-allowed" || ev.error==="service-not-allowed"){
+          alert("Le micro n'est pas autorisé pour ce site. Autorise-le dans les réglages du navigateur pour dicter ta réponse.");
+        }
+      };
+      recognition.onend = ()=>{
+        recognizing = false;
+        dictateBtn.textContent = "🎤 Dicter la réponse";
+        dictateBtn.classList.remove("danger");
+      };
+      try{
+        recognition.start();
+        recognizing = true;
+        dictateBtn.textContent = "⏹ Arrêter la dictée";
+        dictateBtn.classList.add("danger");
+      }catch(e){ console.warn("Impossible de démarrer la dictée :", e); }
+    });
+  }
   row.querySelector("[data-listen]").addEventListener("click", ()=>{
     const parts = ["Mail de "+(fromName||"expéditeur inconnu")+"."];
     if(mail.to) parts.push("À "+mailDisplayName(mail.to)+".");
@@ -5108,34 +5225,39 @@ function buildMailRow(mail, opts){
     mailSpeak(parts.join(" "), ()=>{
       // Once the mail itself has been read, offer out loud to dictate
       // a reply — this is the "propose à l'oral" part.
-      mailSpeak("Veux-tu dicter une réponse ? Touche « Répondre » puis parle dans le micro du clavier.", ()=> openReply());
+      mailSpeak("Veux-tu dicter une réponse ? Touche « Répondre », puis « Dicter la réponse » et parle.", ()=> openReply());
     });
     if(opts.onRead) opts.onRead(mail);
   });
   row.querySelector("[data-reply]").addEventListener("click", ()=>{ mailStopSpeaking(); openReply(); });
-  row.querySelector("[data-cancelReply]").addEventListener("click", ()=>{ replyPane.style.display="none"; textarea.value=""; });
+  row.querySelector("[data-cancelReply]").addEventListener("click", ()=>{ stopDictation(); replyPane.style.display="none"; textarea.value=""; });
   if(opts.allowDelete){
     row.querySelector("[data-delete]").addEventListener("click", async ()=>{
       if(!confirm("Supprimer ce mail (déplacé dans la corbeille Gmail) ?")) return;
       mailStopSpeaking();
+      stopDictation();
       if(opts.onDelete) await opts.onDelete(mail);
       row.remove();
     });
   }
   row.querySelector("[data-saveTask]").addEventListener("click", ()=>{
+    stopDictation();
     const reply = textarea.value.trim();
     if(!reply){ alert("Écris ou dicte d'abord une réponse."); return; }
     const t = {
       id: uid("task"), workspaceId: currentWsId, title: mail.subject||"(sans objet)",
       description: reply, assignedTo:[DATA.currentUserId], today:false, urgent:false,
-      quick:false, knowledge:false, followUp:false, reminderDate:null, recurrence:null,
+      quick:true, knowledge:false, followUp:false, reminderDate:null, recurrence:null,
       done:false, doneAt:null, subtasks:[], attachments:[], process:null,
       createdAt:Date.now(), updatedAt:Date.now()
     };
     DATA.tasks.push(t);
     saveData(); renderSidebar(); renderMain();
+    mailMarkTaskCreated(mailKey);
+    const badge = row.querySelector("[data-taskBadge]");
+    if(badge) badge.style.display = "block";
     row.querySelector("[data-savedMsg]").style.display = "block";
-    row.querySelector("[data-savedMsg]").textContent = "✅ Enregistré dans une nouvelle tâche « "+(mail.subject||"sans objet")+" ».";
+    row.querySelector("[data-savedMsg]").textContent = "✅ Enregistré dans une nouvelle tâche « rapide » « "+(mail.subject||"sans objet")+" ».";
     mailSpeak("Tâche enregistrée.");
     if(opts.onRead) opts.onRead(mail);
   });
@@ -5145,6 +5267,7 @@ function buildMailRow(mail, opts){
 /* ---------- Onglet Mail (mails non traités, reçus par transfert vers Gmail) ---------- */
 function renderMailTab(el){
   el.innerHTML = "";
+  mailRequestWakeLock();
 
   const voiceBox = document.createElement("div");
   voiceBox.innerHTML = buildVoicePickerHtml();
