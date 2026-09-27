@@ -534,6 +534,7 @@ let corbeilleRetentionDays = Number(localStorage.getItem("sensitache.corbeilleRe
 let deferredInstallPrompt = null;
 const DRIVE_FILENAME = "sensitache-sauvegarde-drive.json";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+const DRIVE_DEFAULT_ACCOUNT = "germain.sensique@gmail.com";
 let driveClientId = localStorage.getItem("sensitache.driveClientId") || "575977443231-sojgu8ar97bgq618b4bjri90on89e300.apps.googleusercontent.com";
 let driveAccessToken = null;
 let driveTokenExpiry = 0;
@@ -4037,7 +4038,9 @@ function driveRequestToken(interactive){
       driveTokenExpiry = Date.now() + (resp.expires_in*1000 - 60000);
       resolve(driveAccessToken);
     };
-    client.requestAccessToken({prompt: interactive ? "consent" : ""});
+    // Présélectionne le compte Google utilisé pour les sauvegardes de l'appli,
+    // pour éviter de se tromper de compte entre Drive et la boîte mail dédiée.
+    client.requestAccessToken({prompt: interactive ? "consent" : "", hint: DRIVE_DEFAULT_ACCOUNT});
   });
 }
 async function driveGetToken(){
@@ -4926,7 +4929,13 @@ function mailSpeak(text, onEnd){
 function mailStopSpeaking(){ if("speechSynthesis" in window) window.speechSynthesis.cancel(); }
 
 /* ---------- Gmail (boîte dédiée pour les mails transférés depuis Nine) ---------- */
-let mailGmailClientId = localStorage.getItem("sensitache.mailGmailClientId") || "";
+const MAIL_DEFAULT_ACCOUNT = "germain.sensique.eufy@gmail.com";
+// Mémorise la dernière liste chargée pour l'onglet Mail : la synchro Drive en
+// tâche de fond (toutes les ~15s) redessine tout l'écran, et sans ce cache la
+// liste des mails disparaissait aussitôt pour laisser place au message
+// "touche Actualiser" — on la restitue simplement au lieu de la recharger.
+let mailTabCachedList = [];
+let mailGmailClientId = localStorage.getItem("sensitache.mailGmailClientId") || "136023641350-3f06n888t65idflab4845139gb6e1ver.apps.googleusercontent.com";
 let mailGmailTokenClient = null;
 let mailGmailAccessToken = null;
 let mailGmailTokenExpiry = 0;
@@ -4956,7 +4965,9 @@ function gmailRequestToken(){
       mailGmailTokenExpiry = Date.now() + (resp.expires_in||3600)*1000 - 60000;
       resolve(resp);
     };
-    client.requestAccessToken({prompt: mailGmailAccessToken ? "" : "consent"});
+    // Présélectionne la boîte Gmail dédiée aux mails transférés, pour ne
+    // pas se tromper de compte avec celui utilisé pour les sauvegardes Drive.
+    client.requestAccessToken({prompt: mailGmailAccessToken ? "" : "consent", hint: MAIL_DEFAULT_ACCOUNT});
   });
 }
 function mailGetProcessedIds(){
@@ -5192,7 +5203,16 @@ function renderMailTab(el){
     }catch(e){ listBox.innerHTML = '<p style="font-size:12.5px;color:var(--danger);">Erreur : '+escapeHtml(e.message||String(e))+'</p>'; }
   });
 
-  function renderList(mails){
+  // Si une liste a déjà été chargée plus tôt dans la session (avant qu'une
+  // synchro en tâche de fond ne redessine l'écran), la réafficher tout de
+  // suite au lieu de revenir au message "touche Actualiser".
+  if(gmailIsConnected() && mailTabCachedList.length){
+    renderList(mailTabCachedList, {fromCache:true});
+  }
+
+  function renderList(mails, opts){
+    opts = opts || {};
+    if(!opts.fromCache) mailTabCachedList = mails;
     listBox.innerHTML = "";
     if(!mails.length){ listBox.innerHTML = '<div class="empty-hint">Aucun mail non traité 🎉</div>'; return; }
     let rendered = 0;
@@ -5201,7 +5221,11 @@ function renderMailTab(el){
         const row = buildMailRow(mail, {
           allowDelete: true,
           onRead: (m)=>{ mailMarkProcessed(m.gmailId||m.id); },
-          onDelete: async (m)=>{ mailMarkProcessed(m.gmailId||m.id); await gmailTrash(m.gmailId||m.id); }
+          onDelete: async (m)=>{
+            mailMarkProcessed(m.gmailId||m.id);
+            mailTabCachedList = mailTabCachedList.filter(x=> (x.gmailId||x.id) !== (m.gmailId||m.id));
+            await gmailTrash(m.gmailId||m.id);
+          }
         });
         listBox.appendChild(row);
         rendered++;
