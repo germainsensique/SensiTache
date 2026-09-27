@@ -15,6 +15,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://alcdn.msauth.net/browser/3.7.1/js/msal-browser.min.js" async defer></script>
 <style>
   :root{
     --bg-app:#121317; --bg-panel:#1A1C22; --bg-panel-2:#22242B; --bg-main:#16171C; --bg-card:#1E2027;
@@ -541,6 +542,13 @@ let driveTokenClient = null;
 let driveLastSyncAt = localStorage.getItem("sensitache.driveLastSync") ? Number(localStorage.getItem("sensitache.driveLastSync")) : null;
 let driveLastSyncError = null;
 
+/* Microsoft 365 / Exchange Online (Outlook) — read-only via Microsoft
+   Graph, for a mailbox read day-to-day through an app like "Nine". */
+let msalClientId = localStorage.getItem("sensitache.msalClientId") || "";
+let msalInstance = null;
+let msGraphToken = null;
+let msTokenExpiry = 0;
+
 function loadData(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -844,6 +852,7 @@ function showSettingsModal(){
       <div style="display:flex;flex-direction:column;gap:6px;">
         ${showInstall ? '<button class="btn primary" id="setInstall" style="justify-content:flex-start;gap:10px;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/></svg> Installer l’application</button><p id="setInstallHint" style="font-size:11.5px;color:var(--text-sub);margin:-2px 0 4px;"></p>' : ''}
         <button class="btn" id="setDrive" style="justify-content:flex-start;gap:10px;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg> Google Drive…</button>
+        <button class="btn" id="setMail" style="justify-content:flex-start;gap:10px;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg> 📢 Lire mes mails…</button>
         <button class="btn" id="setAI" style="justify-content:flex-start;gap:10px;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg> Assistant IA (correction/reformulation)…</button>
         <button class="btn" id="setCollabs" style="justify-content:flex-start;gap:10px;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c0-3.3 2.9-5.8 6.5-5.8s6.5 2.5 6.5 5.8"/><circle cx="17.5" cy="8.5" r="2.4"/><path d="M16 14.6c2.8.2 5 2.3 5 5.4"/></svg> Collaborateurs</button>
         <button class="btn" id="setBackups" style="justify-content:flex-start;gap:10px;"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="6" rx="1.3"/><rect x="3" y="14" width="18" height="6" rx="1.3"/><circle cx="7" cy="7" r=".6" fill="currentColor" stroke="none"/><circle cx="7" cy="17" r=".6" fill="currentColor" stroke="none"/></svg> Sauvegardes automatiques…</button>
@@ -892,6 +901,7 @@ function showSettingsModal(){
     overlay.remove();
   });
   overlay.querySelector("#setDrive").addEventListener("click", ()=>{ overlay.remove(); showDriveModal(); });
+  overlay.querySelector("#setMail").addEventListener("click", ()=>{ overlay.remove(); showMailModal(); });
   overlay.querySelector("#setAI").addEventListener("click", ()=>{ overlay.remove(); showAIModal(); });
   overlay.querySelector("#setCollabs").addEventListener("click", ()=>{ overlay.remove(); showCollabManagerModal(); });
   overlay.querySelector("#setBackups").addEventListener("click", ()=>{ overlay.remove(); showBackupsModal(); });
@@ -990,7 +1000,8 @@ const TAB_DEFS = {
   search: {title:"Rechercher", icon:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>'},
   archive: {title:"Corbeille", icon:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>'},
   recurrence: {label:"Récurrences"},
-  reminders: {label:"Rappels"}
+  reminders: {label:"Rappels"},
+  mail: {label:"📧 Mail"}
 };
 let tabOrder = (function(){
   try{
@@ -1251,6 +1262,7 @@ function renderMain(){
   else if(currentTab==="knowledge") renderKnowledgeTab(el);
   else if(currentTab==="archive") renderArchiveTab(el);
   else if(currentTab==="search") renderSearchTab(el);
+  else if(currentTab==="mail") renderMailTab(el);
   if(prevScrollTop>0) el.scrollTop = prevScrollTop;
 }
 
@@ -4712,6 +4724,621 @@ function showDriveModal(){
   overlay.querySelector("#driveImportBtn").addEventListener("click", driveImport);
   overlay.querySelector("#driveClose").addEventListener("click", ()=> overlay.remove());
   overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
+}
+
+/* =========================================================================
+   MAIL — READ-ONLY, VOICE READING (Microsoft 365 / Outlook / Exchange)
+   Reads each email's from/to/cc, subject and body aloud via the browser's
+   built-in speech synthesis, with the signature/quoted-thread trimmed off,
+   then offers to dictate a reply (using the phone's own keyboard
+   microphone — nothing built here does speech-to-text) and save it
+   straight into a task.
+========================================================================= */
+// Cuts off the signature block and any quoted earlier thread, so only the
+// actual new message content gets read aloud / attached to a task.
+function stripEmailSignature(text){
+  if(!text) return "";
+  let lines = text.replace(/\r\n/g,"\n").split("\n");
+  const cutMarkers = [
+    /^--\s*$/, /^_{5,}$/, /^-{5,}$/,
+    /^(cordialement|bien à vous|bien cordialement|sincèrement|meilleures salutations|salutations distinguées|merci( d'avance)?,?)\s*$/i,
+    /^envoyé (de|depuis) (mon|votre) (iphone|ipad|android|smartphone|téléphone)/i,
+    /^sent from my (iphone|ipad|android)/i,
+    /^get outlook for/i,
+    /^le .+ a écrit\s*:?\s*$/i, // "Le 12 sept. 2026 à 10:00, X a écrit :"
+    /^on .+ wrote:\s*$/i,
+    /^>/  // quoted line
+  ];
+  let cut = lines.length;
+  for(let i=0;i<lines.length;i++){
+    const l = lines[i].trim();
+    if(l && cutMarkers.some(re=> re.test(l))){ cut = i; break; }
+  }
+  return lines.slice(0, cut).join("\n").trim();
+}
+function mailDisplayName(headerValue){
+  // "Jean Dupont <jean@x.com>" → "Jean Dupont" ; falls back to the raw value.
+  if(!headerValue) return "";
+  const m = headerValue.match(/^"?([^"<]+)"?\s*<[^>]+>/);
+  return m ? m[1].trim() : headerValue.trim();
+}
+/* Microsoft Graph (Exchange Online / Outlook / Microsoft 365) — normalized
+   to a {from,to,cc,subject,body,unread,source} shape for the list/listen/
+   reply/save-as-task UI below. */
+function msalEnsureInstance(){
+  if(!window.msal){
+    throw new Error("La librairie Microsoft ne s'est pas chargée (connexion internet ? bloqueur de scripts ?).");
+  }
+  if(!msalClientId){
+    throw new Error("Renseigne d'abord ton identifiant client Azure.");
+  }
+  if(!msalInstance || msalInstance.__clientId !== msalClientId){
+    msalInstance = new msal.PublicClientApplication({
+      auth: {
+        clientId: msalClientId,
+        authority: "https://login.microsoftonline.com/common",
+        redirectUri: window.location.origin + window.location.pathname
+      }
+    });
+    msalInstance.__clientId = msalClientId;
+  }
+  return msalInstance;
+}
+async function msalRequestToken(){
+  const inst = msalEnsureInstance();
+  if(inst.initialize) await inst.initialize();
+  let resp;
+  try{
+    resp = await inst.loginPopup({ scopes:["Mail.Read"] });
+  }catch(e){
+    // Already signed in on a previous visit — try a silent refresh before
+    // giving up and asking to sign in again.
+    const accounts = inst.getAllAccounts();
+    if(accounts.length){
+      resp = await inst.acquireTokenSilent({ scopes:["Mail.Read"], account: accounts[0] });
+    } else {
+      throw e;
+    }
+  }
+  msGraphToken = resp.accessToken;
+  msTokenExpiry = resp.expiresOn ? resp.expiresOn.getTime() - 60000 : (Date.now() + 3000*1000);
+  return msGraphToken;
+}
+function msIsConnected(){ return !!(msGraphToken && Date.now() < msTokenExpiry); }
+function msDisplayName(recipient){
+  if(!recipient || !recipient.emailAddress) return "";
+  return recipient.emailAddress.name || recipient.emailAddress.address || "";
+}
+async function msFetchRecent(count){
+  const url = "https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages"
+    + "?$top="+(count||10)+"&$orderby=receivedDateTime desc"
+    + "&$select=subject,from,toRecipients,ccRecipients,body,isRead,receivedDateTime";
+  const res = await fetch(url, {headers:{Authorization:"Bearer "+msGraphToken}});
+  if(!res.ok) throw new Error("Impossible de lister les mails Outlook ("+res.status+").");
+  const data = await res.json();
+  return (data.value||[]).map(m=>{
+    const bodyRaw = m.body ? m.body.content : "";
+    const bodyText = m.body && m.body.contentType==="html" ? stripHtml(bodyRaw) : bodyRaw;
+    return {
+      id: "ms_"+m.id,
+      source: "outlook",
+      from: msDisplayName(m.from),
+      to: (m.toRecipients||[]).map(msDisplayName).filter(Boolean).join(", "),
+      cc: (m.ccRecipients||[]).map(msDisplayName).filter(Boolean).join(", "),
+      subject: m.subject || "(sans objet)",
+      date: m.receivedDateTime,
+      unread: !m.isRead,
+      body: stripEmailSignature(bodyText)
+    };
+  });
+}
+
+/* ---------- Voix du narrateur (voix féminine paramétrable) ---------- */
+const FEMALE_VOICE_HINTS = ["amelie","amélie","audrey","aurelie","aurélie","marie","chantal","celine","céline",
+  "victoire","lea","léa","julie","hortense","denise","charline","claire","manon","emma","female","femme",
+  "google français","google francais","samantha","zira","salli","joanna","ines","inès"];
+let mailVoiceURI = localStorage.getItem("sensitache.mailVoiceURI") || "";
+let mailVoicesCache = [];
+function mailRefreshVoices(){
+  if(!("speechSynthesis" in window)) return [];
+  mailVoicesCache = window.speechSynthesis.getVoices() || [];
+  return mailVoicesCache;
+}
+if("speechSynthesis" in window){
+  mailRefreshVoices();
+  window.speechSynthesis.addEventListener("voiceschanged", mailRefreshVoices);
+}
+function mailPickDefaultVoice(){
+  const voices = mailVoicesCache.length ? mailVoicesCache : mailRefreshVoices();
+  if(!voices.length) return null;
+  const fr = voices.filter(v=> v.lang && v.lang.toLowerCase().startsWith("fr"));
+  const pool = fr.length ? fr : voices;
+  const female = pool.find(v=> FEMALE_VOICE_HINTS.some(h=> v.name.toLowerCase().includes(h)));
+  return female || pool[0];
+}
+function mailGetSelectedVoice(){
+  const voices = mailVoicesCache.length ? mailVoicesCache : mailRefreshVoices();
+  if(mailVoiceURI){
+    const found = voices.find(v=> v.voiceURI===mailVoiceURI);
+    if(found) return found;
+  }
+  return mailPickDefaultVoice();
+}
+function buildVoicePickerHtml(){
+  return `
+    <div style="border:1px solid var(--border-soft);border-radius:10px;padding:10px 12px;margin-bottom:12px;">
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px;">🎙️ Voix du narrateur</div>
+      <p style="font-size:11.5px;color:var(--text-sub);margin:0 0 6px;">Les voix proposées viennent de ton appareil (pas de SensiTâche). Choisis une voix féminine française dans la liste, puis teste-la.</p>
+      <select id="mailVoiceSelect" style="width:100%;border:1px solid var(--border-soft);border-radius:8px;padding:7px 9px;background:var(--bg-app);color:var(--text-main);font-size:12.5px;margin-bottom:6px;"></select>
+      <button class="btn small" id="mailVoiceTestBtn">🔊 Tester la voix</button>
+    </div>`;
+}
+function wireVoicePicker(container){
+  const select = container.querySelector("#mailVoiceSelect");
+  function fillOptions(){
+    const voices = mailRefreshVoices();
+    if(!voices.length){
+      select.innerHTML = '<option value="">(aucune voix disponible sur cet appareil — voir les instructions de configuration ci-dessous)</option>';
+      return;
+    }
+    const fr = voices.filter(v=> v.lang && v.lang.toLowerCase().startsWith("fr"));
+    const others = voices.filter(v=> !fr.includes(v));
+    select.innerHTML = "";
+    const addGroup = (label, list)=>{
+      if(!list.length) return;
+      const grp = document.createElement("optgroup"); grp.label = label;
+      list.forEach(v=>{
+        const opt = document.createElement("option");
+        opt.value = v.voiceURI; opt.textContent = v.name+" ("+v.lang+")";
+        grp.appendChild(opt);
+      });
+      select.appendChild(grp);
+    };
+    addGroup("Français", fr);
+    addGroup("Autres langues", others);
+    const current = mailGetSelectedVoice();
+    if(current) select.value = current.voiceURI;
+  }
+  fillOptions();
+  if("speechSynthesis" in window) window.speechSynthesis.addEventListener("voiceschanged", fillOptions);
+  select.addEventListener("change", ()=>{
+    mailVoiceURI = select.value;
+    localStorage.setItem("sensitache.mailVoiceURI", mailVoiceURI);
+  });
+  container.querySelector("#mailVoiceTestBtn").addEventListener("click", ()=>{
+    mailSpeak("Bonjour, voici un exemple de ma voix pour la lecture de vos mails.");
+  });
+}
+
+let mailCurrentUtterance = null;
+function mailSpeak(text, onEnd){
+  if(!("speechSynthesis" in window)){ alert("La lecture vocale n'est pas prise en charge par ce navigateur."); if(onEnd) onEnd(); return; }
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  const voice = mailGetSelectedVoice();
+  if(voice){ u.voice = voice; u.lang = voice.lang; } else { u.lang = "fr-FR"; }
+  u.rate = 1;
+  u.pitch = 1.05;
+  if(onEnd) u.onend = onEnd;
+  mailCurrentUtterance = u;
+  window.speechSynthesis.speak(u);
+}
+function mailStopSpeaking(){ if("speechSynthesis" in window) window.speechSynthesis.cancel(); }
+
+/* ---------- Gmail (boîte dédiée pour les mails transférés depuis Nine) ---------- */
+let mailGmailClientId = localStorage.getItem("sensitache.mailGmailClientId") || "";
+let mailGmailTokenClient = null;
+let mailGmailAccessToken = null;
+let mailGmailTokenExpiry = 0;
+const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
+
+function gmailIsConnected(){ return !!(mailGmailClientId && mailGmailAccessToken && Date.now() < mailGmailTokenExpiry); }
+function gmailEnsureTokenClient(){
+  if(!window.google || !google.accounts || !google.accounts.oauth2) throw new Error("Google Identity Services pas encore chargé, réessaie dans un instant.");
+  if(!mailGmailClientId) throw new Error("Renseigne d'abord l'identifiant client Google.");
+  if(!mailGmailTokenClient || mailGmailTokenClient.__clientId !== mailGmailClientId){
+    mailGmailTokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: mailGmailClientId,
+      scope: GMAIL_SCOPE,
+      callback: ()=>{}
+    });
+    mailGmailTokenClient.__clientId = mailGmailClientId;
+  }
+  return mailGmailTokenClient;
+}
+function gmailRequestToken(){
+  return new Promise((resolve, reject)=>{
+    let client;
+    try{ client = gmailEnsureTokenClient(); }catch(e){ reject(e); return; }
+    client.callback = (resp)=>{
+      if(resp.error){ reject(resp); return; }
+      mailGmailAccessToken = resp.access_token;
+      mailGmailTokenExpiry = Date.now() + (resp.expires_in||3600)*1000 - 60000;
+      resolve(resp);
+    };
+    client.requestAccessToken({prompt: mailGmailAccessToken ? "" : "consent"});
+  });
+}
+function mailGetProcessedIds(){
+  try{ return new Set(JSON.parse(localStorage.getItem("sensitache.mailProcessedIds")||"[]")); }catch(e){ return new Set(); }
+}
+function mailMarkProcessed(id){
+  if(!id) return;
+  const set = mailGetProcessedIds();
+  set.add(id);
+  let arr = Array.from(set);
+  if(arr.length>500) arr = arr.slice(arr.length-500);
+  localStorage.setItem("sensitache.mailProcessedIds", JSON.stringify(arr));
+}
+function b64urlDecode(data){
+  try{
+    const s = String(data||"").replace(/-/g,"+").replace(/_/g,"/");
+    return decodeURIComponent(escape(window.atob(s)));
+  }catch(e){
+    try{ return window.atob(String(data||"").replace(/-/g,"+").replace(/_/g,"/")); }catch(e2){ return ""; }
+  }
+}
+function gmailExtractBody(payload){
+  if(!payload) return "";
+  function walk(part){
+    if(!part) return null;
+    if(part.mimeType==="text/plain" && part.body && part.body.data) return {type:"text", data:b64urlDecode(part.body.data)};
+    if(part.parts){
+      for(const p of part.parts){ const r = walk(p); if(r && r.type==="text") return r; }
+      for(const p of part.parts){ const r = walk(p); if(r) return r; }
+    }
+    if(part.mimeType==="text/html" && part.body && part.body.data) return {type:"html", data:b64urlDecode(part.body.data)};
+    return null;
+  }
+  const found = walk(payload);
+  if(!found) return "";
+  return found.type==="html" ? stripHtml(found.data) : found.data;
+}
+function gmailHeader(headers, name){
+  const h = (headers||[]).find(x=> x.name.toLowerCase()===name.toLowerCase());
+  return h ? h.value : "";
+}
+function parseForwardedBody(text){
+  const markers = [/-{2,}\s*(Forwarded message|Message transf[ée]r[ée])\s*-{2,}/i, /Begin forwarded message:/i];
+  let idx = -1;
+  for(const re of markers){ const m = String(text||"").match(re); if(m){ idx = m.index + m[0].length; break; } }
+  if(idx === -1) return null;
+  const after = text.slice(idx).replace(/^\s*\n+/, "");
+  return parsePastedMail(after);
+}
+async function gmailFetchUnprocessed(count){
+  const processed = mailGetProcessedIds();
+  const listUrl = "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults="+(count||20)+"&labelIds=INBOX";
+  const listRes = await fetch(listUrl, {headers:{Authorization:"Bearer "+mailGmailAccessToken}});
+  if(!listRes.ok) throw new Error("Impossible de lister les mails Gmail ("+listRes.status+").");
+  const listData = await listRes.json();
+  const ids = (listData.messages||[]).map(m=>m.id).filter(id=> !processed.has(id));
+  const mails = [];
+  for(const id of ids){
+    const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/"+id+"?format=full", {headers:{Authorization:"Bearer "+mailGmailAccessToken}});
+    if(!res.ok) continue;
+    const m = await res.json();
+    const headers = m.payload ? m.payload.headers : [];
+    let from = gmailHeader(headers,"From");
+    let to = gmailHeader(headers,"To");
+    let cc = gmailHeader(headers,"Cc");
+    let subject = gmailHeader(headers,"Subject") || "(sans objet)";
+    let body = gmailExtractBody(m.payload);
+    const fwd = parseForwardedBody(body);
+    if(fwd && (fwd.subject || fwd.from)){
+      from = fwd.from || from;
+      to = fwd.to || to;
+      cc = fwd.cc || cc;
+      subject = fwd.subject || subject;
+      body = fwd.body;
+    }
+    mails.push({
+      id: id, gmailId: id, source: "gmail",
+      from, to, cc, subject,
+      date: Date.now(),
+      unread: (m.labelIds||[]).includes("UNREAD"),
+      body: stripEmailSignature(body)
+    });
+  }
+  return mails;
+}
+async function gmailTrash(id){
+  try{
+    await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/"+id+"/trash", {method:"POST", headers:{Authorization:"Bearer "+mailGmailAccessToken}});
+  }catch(e){}
+}
+
+/* ---------- Ligne de mail réutilisable (modale "coller/Outlook" + onglet Mail) ---------- */
+function buildMailRow(mail, opts){
+  opts = opts || {};
+  const fromName = mailDisplayName(mail.from);
+  const row = document.createElement("div");
+  row.style.cssText = "border:1px solid var(--border-soft);border-radius:10px;padding:10px 12px;background:var(--bg-panel-2);";
+  row.innerHTML = `
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">
+      <div style="min-width:0;">
+        <div style="font-size:13px;font-weight:700;${mail.unread?'':'color:var(--text-sub);'}">${mail.unread?'🔵 ':''}${mail.source==='outlook'?'📨 ':(mail.source==='paste'?'📋 ':'📧 ')}${escapeHtml(fromName||"(expéditeur inconnu)")}</div>
+        <div style="font-size:12.5px;color:var(--text-main);margin-top:1px;">${escapeHtml(mail.subject||"(sans objet)")}</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+      <button class="btn small" data-listen>🔊 Écouter</button>
+      <button class="btn small" data-reply>✍️ Répondre</button>
+      ${opts.allowDelete ? '<button class="btn small danger" data-delete>🗑️ Supprimer</button>' : ''}
+    </div>
+    <div data-replyPane style="display:none;margin-top:8px;">
+      <textarea data-replyText placeholder="Dicte ou tape ta réponse ici (utilise le micro de ton clavier)…" style="width:100%;min-height:80px;border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;background:var(--bg-app);color:var(--text-main);font-size:13px;resize:vertical;"></textarea>
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <button class="btn small primary" data-saveTask">💾 Enregistrer comme tâche</button>
+        <button class="btn small ghost" data-cancelReply">Annuler</button>
+      </div>
+      <div data-savedMsg style="font-size:12px;color:var(--knowledge);margin-top:6px;display:none;"></div>
+    </div>
+  `;
+  const replyPane = row.querySelector("[data-replyPane]");
+  const textarea = row.querySelector("[data-replyText]");
+  function openReply(){
+    replyPane.style.display = "block";
+    textarea.focus();
+  }
+  row.querySelector("[data-listen]").addEventListener("click", ()=>{
+    const parts = ["Mail de "+(fromName||"expéditeur inconnu")+"."];
+    if(mail.to) parts.push("À "+mailDisplayName(mail.to)+".");
+    if(mail.cc) parts.push("Copie à "+mailDisplayName(mail.cc)+".");
+    parts.push("Objet : "+(mail.subject||"sans objet")+".");
+    parts.push(mail.body ? "Contenu : "+mail.body : "Ce mail n'a pas de contenu texte lisible.");
+    mailSpeak(parts.join(" "), ()=>{
+      // Once the mail itself has been read, offer out loud to dictate
+      // a reply — this is the "propose à l'oral" part.
+      mailSpeak("Veux-tu dicter une réponse ? Touche « Répondre » puis parle dans le micro du clavier.", ()=> openReply());
+    });
+    if(opts.onRead) opts.onRead(mail);
+  });
+  row.querySelector("[data-reply]").addEventListener("click", ()=>{ mailStopSpeaking(); openReply(); });
+  row.querySelector("[data-cancelReply]").addEventListener("click", ()=>{ replyPane.style.display="none"; textarea.value=""; });
+  if(opts.allowDelete){
+    row.querySelector("[data-delete]").addEventListener("click", async ()=>{
+      if(!confirm("Supprimer ce mail (déplacé dans la corbeille Gmail) ?")) return;
+      mailStopSpeaking();
+      if(opts.onDelete) await opts.onDelete(mail);
+      row.remove();
+    });
+  }
+  row.querySelector("[data-saveTask]").addEventListener("click", ()=>{
+    const reply = textarea.value.trim();
+    if(!reply){ alert("Écris ou dicte d'abord une réponse."); return; }
+    const t = {
+      id: uid("task"), workspaceId: currentWsId, title: mail.subject||"(sans objet)",
+      description: reply, assignedTo:[DATA.currentUserId], today:false, urgent:false,
+      quick:false, knowledge:false, followUp:false, reminderDate:null, recurrence:null,
+      done:false, doneAt:null, subtasks:[], attachments:[], process:null,
+      createdAt:Date.now(), updatedAt:Date.now()
+    };
+    DATA.tasks.push(t);
+    saveData(); renderSidebar(); renderMain();
+    row.querySelector("[data-savedMsg]").style.display = "block";
+    row.querySelector("[data-savedMsg]").textContent = "✅ Enregistré dans une nouvelle tâche « "+(mail.subject||"sans objet")+" ».";
+    mailSpeak("Tâche enregistrée.");
+    if(opts.onRead) opts.onRead(mail);
+  });
+  return row;
+}
+
+/* ---------- Onglet Mail (mails non traités, reçus par transfert vers Gmail) ---------- */
+function renderMailTab(el){
+  el.innerHTML = "";
+
+  const voiceBox = document.createElement("div");
+  voiceBox.innerHTML = buildVoicePickerHtml();
+  el.appendChild(voiceBox);
+  wireVoicePicker(voiceBox);
+
+  const configBox = document.createElement("div");
+  configBox.style.cssText = "border:1px solid var(--border-soft);border-radius:10px;padding:10px 12px;margin-bottom:12px;";
+  configBox.innerHTML = `
+    <div style="font-weight:700;font-size:13px;margin-bottom:4px;">📧 Boîte Gmail de réception (mails transférés depuis Nine)</div>
+    <p style="font-size:11.5px;color:var(--text-sub);margin:0 0 6px;">Crée une boîte Gmail dédiée, transfère-lui tes mails depuis Nine, connecte-la ici. Les mails non encore écoutés ni supprimés s'affichent ci-dessous.</p>
+    <label style="font-size:11.5px;color:var(--text-sub);display:block;margin-bottom:4px;">Identifiant client Google (OAuth)</label>
+    <input type="text" id="mailGmailClientIdInput" placeholder="xxxxxxxx.apps.googleusercontent.com" value="${escapeHtml(mailGmailClientId)}" style="width:100%;border:1px solid var(--border-soft);border-radius:8px;padding:7px 9px;background:var(--bg-app);color:var(--text-main);font-size:12.5px;margin-bottom:6px;">
+    <div id="mailGmailStatus" style="font-size:12px;color:var(--text-sub);margin-bottom:6px;"></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+      <button class="btn small" id="mailGmailSaveId">Enregistrer l'identifiant</button>
+      <button class="btn small primary" id="mailGmailConnectBtn">Se connecter (Google)</button>
+      <button class="btn small" id="mailGmailRefreshBtn">🔄 Actualiser</button>
+    </div>
+  `;
+  el.appendChild(configBox);
+
+  const listBox = document.createElement("div");
+  listBox.id = "mailTabList";
+  listBox.style.cssText = "display:flex;flex-direction:column;gap:8px;";
+  listBox.innerHTML = '<div class="empty-hint">Connecte ta boîte Gmail puis touche « Actualiser » pour voir les mails non traités.</div>';
+  el.appendChild(listBox);
+
+  function updateStatus(){
+    configBox.querySelector("#mailGmailStatus").textContent = gmailIsConnected() ? "✅ Connecté" : (mailGmailClientId ? "⚠️ Identifiant enregistré, pas encore connecté." : "⚠️ Non connecté.");
+  }
+  updateStatus();
+
+  configBox.querySelector("#mailGmailSaveId").addEventListener("click", ()=>{
+    mailGmailClientId = configBox.querySelector("#mailGmailClientIdInput").value.trim();
+    localStorage.setItem("sensitache.mailGmailClientId", mailGmailClientId);
+    mailGmailTokenClient = null;
+    updateStatus();
+  });
+  configBox.querySelector("#mailGmailConnectBtn").addEventListener("click", async ()=>{
+    mailGmailClientId = configBox.querySelector("#mailGmailClientIdInput").value.trim();
+    if(!mailGmailClientId){ alert("Colle d'abord ton identifiant client Google."); return; }
+    localStorage.setItem("sensitache.mailGmailClientId", mailGmailClientId);
+    try{
+      await gmailRequestToken();
+      updateStatus();
+      configBox.querySelector("#mailGmailRefreshBtn").click();
+    }catch(e){ alert("Connexion annulée ou refusée : "+(e.errorMessage||e.message||e.error||"")); }
+  });
+  configBox.querySelector("#mailGmailRefreshBtn").addEventListener("click", async ()=>{
+    if(!gmailIsConnected()){ alert("Connecte-toi d'abord à Gmail."); return; }
+    listBox.innerHTML = '<p style="font-size:12.5px;color:var(--text-sub);">Chargement…</p>';
+    try{
+      const mails = await gmailFetchUnprocessed(20);
+      renderList(mails);
+    }catch(e){ listBox.innerHTML = '<p style="font-size:12.5px;color:var(--danger);">Erreur : '+escapeHtml(e.message||String(e))+'</p>'; }
+  });
+
+  function renderList(mails){
+    listBox.innerHTML = "";
+    if(!mails.length){ listBox.innerHTML = '<div class="empty-hint">Aucun mail non traité 🎉</div>'; return; }
+    mails.forEach(mail=>{
+      const row = buildMailRow(mail, {
+        allowDelete: true,
+        onRead: (m)=>{ mailMarkProcessed(m.gmailId||m.id); },
+        onDelete: async (m)=>{ mailMarkProcessed(m.gmailId||m.id); await gmailTrash(m.gmailId||m.id); }
+      });
+      listBox.appendChild(row);
+    });
+  }
+}
+
+function parsePastedMail(raw){
+  const lines = String(raw||"").split(/\r?\n/);
+  let from="", to="", cc="", subject="", bodyStartIdx=0, headerLinesSeen=0;
+  const headerRe = {
+    from: /^\s*(De|From)\s*:\s*(.+)$/i,
+    to: /^\s*(À|A|To)\s*:\s*(.+)$/i,
+    cc: /^\s*(Cc)\s*:\s*(.+)$/i,
+    subject: /^\s*(Objet|Subject)\s*:\s*(.+)$/i
+  };
+  let i = 0;
+  for(; i < Math.min(lines.length, 20); i++){
+    const line = lines[i];
+    if(!line.trim()){
+      if(headerLinesSeen>0){ bodyStartIdx = i+1; i++; break; }
+      continue;
+    }
+    let matched = false;
+    for(const key in headerRe){
+      const m = line.match(headerRe[key]);
+      if(m){
+        if(key==="from") from = m[2].trim();
+        else if(key==="to") to = m[2].trim();
+        else if(key==="cc") cc = m[2].trim();
+        else if(key==="subject") subject = m[2].trim();
+        matched = true; headerLinesSeen++;
+        break;
+      }
+    }
+    bodyStartIdx = i+1;
+    if(!matched) break;
+  }
+  const body = lines.slice(bodyStartIdx).join("\n").trim();
+  return { from, to, cc, subject, body };
+}
+
+function showMailModal(){
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal" style="width:560px;max-height:85vh;overflow-y:auto;">
+      <h2>📢 Lire mes mails à voix haute</h2>
+      <p style="font-size:12.5px;color:var(--text-sub);">Lecture seule (aucun mail n'est modifié ni envoyé).</p>
+
+      <div style="border:1px solid var(--border-soft);border-radius:10px;padding:10px 12px;">
+        <div style="font-weight:700;font-size:13px;margin-bottom:4px;">📋 Coller un mail (depuis Nine ou une autre appli)</div>
+        <p style="font-size:11.5px;color:var(--text-sub);margin:0 0 6px;">Marche à tous les coups, sans compte à connecter : dans Nine, ouvre le mail → « Partager » ou sélectionne le texte → « Copier ». Colle-le ci-dessous, puis touche « Lire ce mail ».</p>
+        <textarea id="pasteMailText" placeholder="Colle ici le texte du mail (De, À, Objet, contenu…)" style="width:100%;min-height:90px;border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;background:var(--bg-app);color:var(--text-main);font-size:12.5px;resize:vertical;margin-bottom:6px;"></textarea>
+        <label style="font-size:11.5px;color:var(--text-sub);display:block;margin-bottom:4px;">Objet (si pas détecté automatiquement)</label>
+        <input type="text" id="pasteMailSubject" placeholder="Objet du mail" style="width:100%;border:1px solid var(--border-soft);border-radius:8px;padding:7px 9px;background:var(--bg-app);color:var(--text-main);font-size:12.5px;margin-bottom:6px;">
+        <button class="btn small primary" id="pasteMailBtn">🔊 Lire ce mail</button>
+        <div id="pasteMailResult" style="margin-top:10px;"></div>
+      </div>
+
+      <details style="margin-top:12px;">
+        <summary style="cursor:pointer;font-weight:700;font-size:13px;">📨 Microsoft 365 / Outlook (Exchange) — optionnel</summary>
+        <div style="border:1px solid var(--border-soft);border-radius:10px;padding:10px 12px;margin-top:8px;">
+          <p style="font-size:11.5px;color:var(--text-sub);margin:0 0 6px;">Utile seulement si ta boîte est directement de l'Exchange Online / Microsoft 365 (pas un serveur interne) et que tu peux inscrire une appli Azure. Configuration une fois sur <a href="https://portal.azure.com/" target="_blank" style="color:var(--accent);">portal.azure.com</a> → « Inscriptions d'applications » → Nouvelle inscription (type « Comptes dans un annuaire d'organisation et comptes Microsoft personnels ») → onglet « Authentification » → ajoute une plateforme <b>SPA (application monopage)</b> avec comme URI de redirection l'adresse exacte où SensiTâche est hébergée → onglet « Autorisations API » → Ajouter une autorisation → Microsoft Graph → Déléguées → <code>Mail.Read</code> → copie l'« ID d'application (client) » ci-dessous.</p>
+          <label style="font-size:11.5px;color:var(--text-sub);display:block;margin-bottom:4px;">Identifiant client Azure</label>
+          <input type="text" id="msalClientIdInput" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" value="${escapeHtml(msalClientId)}" style="width:100%;border:1px solid var(--border-soft);border-radius:8px;padding:7px 9px;background:var(--bg-app);color:var(--text-main);font-size:12.5px;margin-bottom:6px;">
+          <div id="mailStatusMS" style="font-size:12px;color:var(--text-sub);margin-bottom:6px;"></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="btn small" id="msalSaveId">Enregistrer l'identifiant</button>
+            <button class="btn small primary" id="msalConnectBtn">Se connecter (Microsoft)</button>
+          </div>
+          <div class="modal-actions" style="flex-wrap:wrap;justify-content:flex-start;margin-top:12px;">
+            <button class="btn small" id="mailRefreshBtn">🔄 Actualiser (10 derniers)</button>
+          </div>
+          <div id="mailList" style="display:flex;flex-direction:column;gap:8px;margin-top:12px;"></div>
+        </div>
+      </details>
+
+      <div class="modal-actions" style="margin-top:12px;">
+        <button class="btn small" id="mailStopBtn">⏹ Stop lecture</button>
+      </div>
+      <div class="modal-actions"><button class="btn ghost" id="mailClose">Fermer</button></div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  function updateStatus(){
+    overlay.querySelector("#mailStatusMS").textContent = msIsConnected() ? "✅ Connecté" : (msalClientId ? "⚠️ Identifiant enregistré, pas encore connecté." : "⚠️ Non connecté.");
+  }
+  updateStatus();
+
+  overlay.querySelector("#msalSaveId").addEventListener("click", ()=>{
+    msalClientId = overlay.querySelector("#msalClientIdInput").value.trim();
+    localStorage.setItem("sensitache.msalClientId", msalClientId);
+    msalInstance = null;
+    updateStatus();
+  });
+  overlay.querySelector("#msalConnectBtn").addEventListener("click", async ()=>{
+    msalClientId = overlay.querySelector("#msalClientIdInput").value.trim();
+    if(!msalClientId){ alert("Colle d'abord ton identifiant client Azure."); return; }
+    localStorage.setItem("sensitache.msalClientId", msalClientId);
+    try{
+      await msalRequestToken();
+      updateStatus();
+      overlay.querySelector("#mailRefreshBtn").click();
+    }catch(e){ alert("Connexion annulée ou refusée : "+(e.errorMessage||e.message||e.error||"")); }
+  });
+  overlay.querySelector("#mailStopBtn").addEventListener("click", mailStopSpeaking);
+  overlay.querySelector("#mailClose").addEventListener("click", ()=>{ mailStopSpeaking(); overlay.remove(); });
+  overlay.addEventListener("click", e=>{ if(e.target===overlay){ mailStopSpeaking(); overlay.remove(); } });
+
+  overlay.querySelector("#mailRefreshBtn").addEventListener("click", async ()=>{
+    if(!msIsConnected()){ alert("Connecte-toi d'abord."); return; }
+    const list = overlay.querySelector("#mailList");
+    list.innerHTML = '<p style="font-size:12.5px;color:var(--text-sub);">Chargement…</p>';
+    try{
+      const mails = await msFetchRecent(10);
+      renderMailList(mails);
+    }catch(e){ list.innerHTML = '<p style="font-size:12.5px;color:var(--danger);">Erreur : '+escapeHtml(e.message||String(e))+'</p>'; }
+  });
+
+  function renderMailList(mails){
+    const list = overlay.querySelector("#mailList");
+    list.innerHTML = "";
+    if(!mails.length){ list.innerHTML = '<p style="font-size:12.5px;color:var(--text-sub);">Aucun mail trouvé.</p>'; return; }
+    mails.forEach(mail=> list.appendChild(buildMailRow(mail)));
+  }
+
+  overlay.querySelector("#pasteMailBtn").addEventListener("click", ()=>{
+    const raw = overlay.querySelector("#pasteMailText").value;
+    if(!raw.trim()){ alert("Colle d'abord le texte d'un mail."); return; }
+    const parsed = parsePastedMail(raw);
+    const manualSubject = overlay.querySelector("#pasteMailSubject").value.trim();
+    const mail = {
+      id: "paste_"+Date.now(),
+      source: "paste",
+      from: parsed.from || "",
+      to: parsed.to || "",
+      cc: parsed.cc || "",
+      subject: manualSubject || parsed.subject || "(sans objet)",
+      date: Date.now(),
+      unread: false,
+      body: stripEmailSignature(parsed.body || raw)
+    };
+    const result = overlay.querySelector("#pasteMailResult");
+    result.innerHTML = "";
+    result.appendChild(buildMailRow(mail));
+  });
 }
 
 /* =========================================================================
