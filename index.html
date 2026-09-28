@@ -4750,22 +4750,72 @@ function showDriveModal(){
 function stripEmailSignature(text){
   if(!text) return "";
   let lines = text.replace(/\r\n/g,"\n").split("\n");
-  const cutMarkers = [
-    /^--\s*$/, /^_{5,}$/, /^-{5,}$/,
-    /^(cordialement|bien à vous|bien cordialement|sincèrement|meilleures salutations|salutations distinguées|merci( d'avance)?,?)\s*$/i,
+
+  // 1) Remove standalone separator lines a mail client inserts to delimit a
+  //    quoted/forwarded block (Outlook's "________________________________",
+  //    plain "-----", etc.) — pure visual noise, never actual content.
+  lines = lines.filter(l=> !/^_{5,}$/.test(l.trim()) && !/^-{5,}$/.test(l.trim()));
+
+  // 2) Remove the metadata header block a forward/reply inserts before each
+  //    quoted message ("De : / Envoyé : / À : / Objet :" in French, or
+  //    "From: / Sent: / To: / Subject:" in English) — wherever it appears,
+  //    not just at the very top. A forwarded conversation can have several
+  //    of these (one per message in the thread); we drop only the header
+  //    LINES themselves so the actual written text of every message in the
+  //    thread is kept and read in full, instead of stopping at the first one.
+  const headerLineRe = /^(De|From|Envoyé|Sent|Date|À|A|To|Cc|Objet|Subject)\s*:\s*.+$/i;
+  const withoutHeaders = [];
+  for(let i=0;i<lines.length;i++){
+    if(headerLineRe.test(lines[i].trim())){
+      // Consume this whole contiguous run of header lines (a full block).
+      while(i<lines.length && (headerLineRe.test(lines[i].trim()) || lines[i].trim()==="")) i++;
+      i--; // compensate for the loop's own i++
+      continue;
+    }
+    withoutHeaders.push(lines[i]);
+  }
+  lines = withoutHeaders;
+
+  // 3) Drop "Le X a écrit :" / "On X wrote:" quote-intro lines (just that
+  //    line — the quoted message itself, right after, is real content).
+  lines = lines.filter(l=> !/^le .+ a écrit\s*:?\s*$/i.test(l.trim()) && !/^on .+ wrote:\s*$/i.test(l.trim()));
+
+  // 4) Un-quote "> " lines instead of cutting the message there, so a
+  //    forwarded conversation reads as normal prose, in full.
+  lines = lines.map(l=> l.replace(/^>+\s?/, ""));
+
+  // 5) Only strip a genuine trailing signature/footer — scan back from the
+  //    very end and cut once there, so a similar-looking line in the middle
+  //    of a thread is never mistaken for a sign-off and doesn't truncate
+  //    the rest of the conversation.
+  const footerMarkers = [
+    /^--\s*$/,
+    /^(cordialement|bien à vous|bien cordialement|sincèrement|meilleures salutations|salutations distinguées|merci d'avance)\s*,?\s*$/i,
     /^envoyé (de|depuis) (mon|votre) (iphone|ipad|android|smartphone|téléphone)/i,
     /^sent from my (iphone|ipad|android)/i,
-    /^get outlook for/i,
-    /^le .+ a écrit\s*:?\s*$/i, // "Le 12 sept. 2026 à 10:00, X a écrit :"
-    /^on .+ wrote:\s*$/i,
-    /^>/  // quoted line
+    /^get outlook for/i
   ];
-  let cut = lines.length;
-  for(let i=0;i<lines.length;i++){
-    const l = lines[i].trim();
-    if(l && cutMarkers.some(re=> re.test(l))){ cut = i; break; }
+  while(lines.length && lines[lines.length-1].trim()==="") lines.pop();
+  // Scan forward within the last few lines so the cut lands at the START of
+  // the trailing signature block (e.g. "Cordialement,") rather than at some
+  // later line within it (e.g. a device footer under the name).
+  const scanFrom = Math.max(0, lines.length-6);
+  for(let k=scanFrom; k<lines.length; k++){
+    const l = lines[k].trim();
+    if(l && footerMarkers.some(re=> re.test(l))){ lines = lines.slice(0,k); break; }
   }
-  return lines.slice(0, cut).join("\n").trim();
+
+  return lines.join("\n").replace(/\n{3,}/g,"\n\n").trim();
+}
+function cleanMailSubject(subject){
+  // Ce compte ne reçoit que des mails transférés — enlève le "Tr :"/"Fwd:"
+  // que Nine ajoute, pour ne lire/afficher que le vrai objet du message.
+  if(!subject) return subject;
+  let s = subject.trim();
+  const prefixRe = /^(tr|trans|transfert|fwd?|re)\s*:\s*/i;
+  let prev;
+  do{ prev = s; s = s.replace(prefixRe, "").trim(); }while(s !== prev && s);
+  return s || subject.trim();
 }
 function mailDisplayName(headerValue){
   // "Jean Dupont <jean@x.com>" → "Jean Dupont" ; falls back to the raw value.
@@ -5075,11 +5125,21 @@ function gmailHeader(headers, name){
   return h ? h.value : "";
 }
 function parseForwardedBody(text){
+  const raw = String(text||"");
   const markers = [/-{2,}\s*(Forwarded message|Message transf[ée]r[ée])\s*-{2,}/i, /Begin forwarded message:/i];
   let idx = -1;
-  for(const re of markers){ const m = String(text||"").match(re); if(m){ idx = m.index + m[0].length; break; } }
+  for(const re of markers){ const m = raw.match(re); if(m){ idx = m.index + m[0].length; break; } }
+  if(idx === -1){
+    // Outlook/Exchange forwards (Nine) drop straight into the "De : /
+    // Envoyé : / À : / Objet :" header block, with no banner text, often
+    // right after a plain separator line ("________________________________").
+    const withSep = raw.match(/^[ \t]*_{5,}[ \t]*\r?\n(?=[ \t]*(De|From)\s*:)/im);
+    const bare = raw.match(/^[ \t]*(De|From)\s*:/im);
+    const m = withSep || bare;
+    if(m) idx = m.index;
+  }
   if(idx === -1) return null;
-  const after = text.slice(idx).replace(/^\s*\n+/, "");
+  const after = text.slice(idx).replace(/^[ \t]*_{5,}[ \t]*\r?\n/, "").replace(/^\s*\n+/, "");
   return parsePastedMail(after);
 }
 async function gmailFetchUnprocessed(count){
@@ -5112,7 +5172,7 @@ async function gmailFetchUnprocessed(count){
       }
       mails.push({
         id: id, gmailId: id, source: "gmail",
-        from, to, cc, subject,
+        from, to, cc, subject: cleanMailSubject(subject),
         date: Date.now(),
         unread: (m.labelIds||[]).includes("UNREAD"),
         body: stripEmailSignature(body)
@@ -5370,6 +5430,7 @@ function parsePastedMail(raw){
   let from="", to="", cc="", subject="", bodyStartIdx=0, headerLinesSeen=0;
   const headerRe = {
     from: /^\s*(De|From)\s*:\s*(.+)$/i,
+    date: /^\s*(Envoyé|Sent|Date)\s*:\s*(.+)$/i, // reconnu et ignoré, pour ne pas arrêter la lecture des en-têtes avant À/Objet
     to: /^\s*(À|A|To)\s*:\s*(.+)$/i,
     cc: /^\s*(Cc)\s*:\s*(.+)$/i,
     subject: /^\s*(Objet|Subject)\s*:\s*(.+)$/i
@@ -5496,7 +5557,7 @@ function showMailModal(){
       from: parsed.from || "",
       to: parsed.to || "",
       cc: parsed.cc || "",
-      subject: manualSubject || parsed.subject || "(sans objet)",
+      subject: cleanMailSubject(manualSubject || parsed.subject) || "(sans objet)",
       date: Date.now(),
       unread: false,
       body: stripEmailSignature(parsed.body || raw)
