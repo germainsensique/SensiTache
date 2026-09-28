@@ -5052,7 +5052,7 @@ function gmailEnsureTokenClient(){
   }
   return mailGmailTokenClient;
 }
-function gmailRequestToken(){
+function gmailRequestToken(interactive){
   return new Promise((resolve, reject)=>{
     let client;
     try{ client = gmailEnsureTokenClient(); }catch(e){ reject(e); return; }
@@ -5064,9 +5064,21 @@ function gmailRequestToken(){
     };
     // Présélectionne la boîte Gmail dédiée aux mails transférés, pour ne
     // pas se tromper de compte avec celui utilisé pour les sauvegardes Drive.
-    client.requestAccessToken({prompt: mailGmailAccessToken ? "" : "consent", hint: MAIL_DEFAULT_ACCOUNT});
+    // interactive=false tente une reconnexion silencieuse (sans fenêtre),
+    // ce qui marche tant que le compte a déjà donné son accord une fois —
+    // utilisé pour ne pas redemander de se connecter à chaque actualisation.
+    client.requestAccessToken({prompt: interactive ? "consent" : "", hint: MAIL_DEFAULT_ACCOUNT});
   });
 }
+// Essaie de restaurer la session Gmail au chargement de la page, pour qu'une
+// actualisation ou une réouverture de l'appli ne redemande pas de se
+// reconnecter à chaque fois (le jeton d'accès ne survit pas à un rechargement
+// de la page, seul l'identifiant client est mémorisé).
+function attemptMailReconnect(){
+  if(!mailGmailClientId) return Promise.resolve(false);
+  return gmailRequestToken(false).then(()=> true).catch(()=> false);
+}
+setTimeout(attemptMailReconnect, 900);
 function mailGetProcessedIds(){
   try{ return new Set(JSON.parse(localStorage.getItem("sensitache.mailProcessedIds")||"[]")); }catch(e){ return new Set(); }
 }
@@ -5142,13 +5154,15 @@ function parseForwardedBody(text){
   const after = text.slice(idx).replace(/^[ \t]*_{5,}[ \t]*\r?\n/, "").replace(/^\s*\n+/, "");
   return parsePastedMail(after);
 }
-async function gmailFetchUnprocessed(count){
-  const processed = mailGetProcessedIds();
-  const listUrl = "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults="+(count||20)+"&labelIds=INBOX";
+async function gmailFetchInbox(count){
+  // Toute la boîte de réception (lus et non lus), pas seulement les mails
+  // non encore écoutés dans SensiTâche — le statut "traité" reste affiché
+  // comme indication (badge) mais ne masque plus rien.
+  const listUrl = "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults="+(count||50)+"&labelIds=INBOX";
   const listRes = await fetch(listUrl, {headers:{Authorization:"Bearer "+mailGmailAccessToken}});
   if(!listRes.ok) throw new Error("Impossible de lister les mails Gmail ("+listRes.status+").");
   const listData = await listRes.json();
-  const ids = (listData.messages||[]).map(m=>m.id).filter(id=> !processed.has(id));
+  const ids = (listData.messages||[]).map(m=>m.id);
   const mails = [];
   let skipped = 0;
   for(const id of ids){
@@ -5204,7 +5218,10 @@ function buildMailRow(mail, opts){
         <div style="font-size:13px;font-weight:700;${mail.unread?'':'color:var(--text-sub);'}">${mail.unread?'🔵 ':''}${mail.source==='outlook'?'📨 ':(mail.source==='paste'?'📋 ':'📧 ')}${escapeHtml(fromName||"(expéditeur inconnu)")}</div>
         <div style="font-size:12.5px;color:var(--text-main);margin-top:1px;">${escapeHtml(mail.subject||"(sans objet)")}</div>
       </div>
-      <div data-taskBadge style="flex-shrink:0;font-size:11px;font-weight:700;color:var(--knowledge);white-space:nowrap;display:${mailHasTaskCreated(mailKey) ? 'block' : 'none'};" title="Une tâche a déjà été créée à partir de ce mail">✅ Tâche créée</div>
+      <div style="flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
+        <div data-taskBadge style="font-size:11px;font-weight:700;color:var(--knowledge);white-space:nowrap;display:${mailHasTaskCreated(mailKey) ? 'block' : 'none'};" title="Une tâche a déjà été créée à partir de ce mail">✅ Tâche créée</div>
+        <div style="font-size:11px;color:var(--text-sub);white-space:nowrap;display:${mailGetProcessedIds().has(mailKey) ? 'block' : 'none'};" title="Déjà écouté dans SensiTâche">👂 Déjà écouté</div>
+      </div>
     </div>
     <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
       <button class="btn small" data-listen>🔊 Écouter</button>
@@ -5338,7 +5355,7 @@ function renderMailTab(el){
   configBox.style.cssText = "border:1px solid var(--border-soft);border-radius:10px;padding:10px 12px;margin-bottom:12px;";
   configBox.innerHTML = `
     <div style="font-weight:700;font-size:13px;margin-bottom:4px;">📧 Boîte Gmail de réception (mails transférés depuis Nine)</div>
-    <p style="font-size:11.5px;color:var(--text-sub);margin:0 0 6px;">Crée une boîte Gmail dédiée, transfère-lui tes mails depuis Nine, connecte-la ici. Les mails non encore écoutés ni supprimés s'affichent ci-dessous.</p>
+    <p style="font-size:11.5px;color:var(--text-sub);margin:0 0 6px;">Crée une boîte Gmail dédiée, transfère-lui tes mails depuis Nine, connecte-la ici. Toute la boîte de réception s'affiche ci-dessous (lus et non lus) — « 👂 Déjà écouté » et « ✅ Tâche créée » indiquent ceux déjà traités, sans les masquer.</p>
     <label style="font-size:11.5px;color:var(--text-sub);display:block;margin-bottom:4px;">Identifiant client Google (OAuth)</label>
     <input type="text" id="mailGmailClientIdInput" placeholder="xxxxxxxx.apps.googleusercontent.com" value="${escapeHtml(mailGmailClientId)}" style="width:100%;border:1px solid var(--border-soft);border-radius:8px;padding:7px 9px;background:var(--bg-app);color:var(--text-main);font-size:12.5px;margin-bottom:6px;">
     <div id="mailGmailStatus" style="font-size:12px;color:var(--text-sub);margin-bottom:6px;"></div>
@@ -5360,6 +5377,11 @@ function renderMailTab(el){
     configBox.querySelector("#mailGmailStatus").textContent = gmailIsConnected() ? "✅ Connecté" : (mailGmailClientId ? "⚠️ Identifiant enregistré, pas encore connecté." : "⚠️ Non connecté.");
   }
   updateStatus();
+  if(!gmailIsConnected() && mailGmailClientId){
+    // Tente une reconnexion silencieuse à l'ouverture de l'onglet, pour ne
+    // pas afficher "pas encore connecté" à tort juste après un rechargement.
+    attemptMailReconnect().then(updateStatus);
+  }
 
   configBox.querySelector("#mailGmailSaveId").addEventListener("click", ()=>{
     mailGmailClientId = configBox.querySelector("#mailGmailClientIdInput").value.trim();
@@ -5372,16 +5394,23 @@ function renderMailTab(el){
     if(!mailGmailClientId){ alert("Colle d'abord ton identifiant client Google."); return; }
     localStorage.setItem("sensitache.mailGmailClientId", mailGmailClientId);
     try{
-      await gmailRequestToken();
+      await gmailRequestToken(true);
       updateStatus();
       configBox.querySelector("#mailGmailRefreshBtn").click();
     }catch(e){ alert("Connexion annulée ou refusée : "+(e.errorMessage||e.message||e.error||"")); }
   });
   configBox.querySelector("#mailGmailRefreshBtn").addEventListener("click", async ()=>{
-    if(!gmailIsConnected()){ alert("Connecte-toi d'abord à Gmail."); return; }
+    if(!gmailIsConnected()){
+      // La page a pu être rechargée entre-temps (le jeton d'accès ne
+      // survit pas à un rechargement) — retente une reconnexion silencieuse
+      // avant de redemander explicitement de se connecter.
+      const restored = await attemptMailReconnect();
+      updateStatus();
+      if(!restored){ alert("Connecte-toi d'abord à Gmail."); return; }
+    }
     listBox.innerHTML = '<p style="font-size:12.5px;color:var(--text-sub);">Chargement…</p>';
     try{
-      const mails = await gmailFetchUnprocessed(20);
+      const mails = await gmailFetchInbox(50);
       renderList(mails);
     }catch(e){ listBox.innerHTML = '<p style="font-size:12.5px;color:var(--danger);">Erreur : '+escapeHtml(e.message||String(e))+'</p>'; }
   });
@@ -5397,7 +5426,7 @@ function renderMailTab(el){
     opts = opts || {};
     if(!opts.fromCache) mailTabCachedList = mails;
     listBox.innerHTML = "";
-    if(!mails.length){ listBox.innerHTML = '<div class="empty-hint">Aucun mail non traité 🎉</div>'; return; }
+    if(!mails.length){ listBox.innerHTML = '<div class="empty-hint">Boîte de réception vide.</div>'; return; }
     let rendered = 0;
     mails.forEach(mail=>{
       try{
