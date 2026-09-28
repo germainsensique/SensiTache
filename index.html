@@ -188,6 +188,7 @@
   .panchor.left{left:-6px;top:calc(50% - 6px);} .panchor.right{right:-6px;top:calc(50% - 6px);}
   .collabtag{position:absolute; top:-10px; left:6px; z-index:5; font-size:10px; font-weight:700; padding:2px 7px; border-radius:20px; color:#fff; white-space:nowrap;}
   .desctag{position:absolute; top:-10px; right:6px; z-index:5; width:19px; height:19px; border-radius:50%; background:var(--bg-panel); border:1.5px solid rgba(0,0,0,.18); display:flex; align-items:center; justify-content:center; font-size:10px; box-shadow:0 1px 3px rgba(0,0,0,.18);}
+  .durtag{position:absolute; bottom:-10px; left:50%; transform:translateX(-50%); z-index:5; font-size:10px; font-weight:700; padding:2px 8px; border-radius:20px; background:var(--bg-panel); border:1.5px solid rgba(0,0,0,.18); color:var(--text); white-space:nowrap; box-shadow:0 1px 3px rgba(0,0,0,.18);}
   .pfloat-toolbar{position:absolute;z-index:6;background:var(--bg-panel);border:1px solid var(--border-light);border-radius:10px;padding:6px;display:flex;gap:5px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,.4);}
   #procLassoBox{position:absolute;z-index:6;border:1.5px dashed var(--accent);background:rgba(122,140,255,.12);border-radius:3px;pointer-events:none;}
   .proc-side{width:280px;flex-shrink:0;background:var(--bg-panel);border-left:1px solid var(--border);overflow:hidden;color:var(--text);}
@@ -1002,7 +1003,8 @@ const TAB_DEFS = {
   archive: {title:"Corbeille", icon:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>'},
   recurrence: {label:"Récurrences"},
   reminders: {label:"Rappels"},
-  mail: {label:"📧 Mail"}
+  mail: {label:"Mail"},
+  trajectoire: {label:"Trajectoire"}
 };
 let tabOrder = (function(){
   try{
@@ -1272,6 +1274,7 @@ function renderMain(){
     const hasOpenReply = Array.from(el.querySelectorAll("[data-replyPane]")).some(p=> p.style.display!=="none");
     if(!hasOpenReply) renderMailTab(el);
   }
+  else if(currentTab==="trajectoire") renderTrajectoireTab(el);
   if(prevScrollTop>0) el.scrollTop = prevScrollTop;
 }
 
@@ -1798,6 +1801,84 @@ function renderArchiveTab(el){
       snapshot(); cleanupTaskAttachments(t); DATA.tasks = DATA.tasks.filter(x=>x.id!==t.id); DATA.tombstones.tasks[t.id]=Date.now(); cleanupLinkedShapeRefs(new Set([t.id])); saveData(); renderMain();
     });
     el.appendChild(row);
+  });
+}
+
+/* ---------- TRAJECTOIRE TAB (timeline des tâches avec date limite) ---------- */
+function formatDueDateFr(dateStr){
+  const parts = String(dateStr||"").split("-").map(Number);
+  if(parts.length!==3 || parts.some(isNaN)) return dateStr||"";
+  const dt = new Date(parts[0], parts[1]-1, parts[2]);
+  return dt.toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short",year:"numeric"});
+}
+let trajectoireFilterId = "all";
+function renderTrajectoireTab(el){
+  const allTasks = wsTasks().filter(t=> t.dueDate);
+  if(!allTasks.length){
+    el.innerHTML = '<div class="empty-hint">Aucune tâche avec une date limite pour le moment. Règle une « date butoir » sur une tâche pour la voir apparaître ici — elle y restera même une fois cochée comme terminée.</div>';
+    return;
+  }
+  const people = DATA.collaborators.slice().sort((a,b)=> a.name.localeCompare(b.name));
+  if(trajectoireFilterId!=="all" && !people.some(p=>p.id===trajectoireFilterId)) trajectoireFilterId = "all";
+
+  el.innerHTML = "";
+  const filterBar = document.createElement("div");
+  filterBar.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;margin:2px 2px 14px;";
+  el.appendChild(filterBar);
+  const chipsData = [{id:"all", name:"Tous", color:"var(--accent)"}].concat(people);
+  chipsData.forEach(p=>{
+    const chip = document.createElement("div");
+    const active = p.id===trajectoireFilterId;
+    chip.style.cssText = `display:flex;align-items:center;gap:5px;padding:5px 11px;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid ${active?'transparent':'var(--border-soft)'};background:${active? (p.color||'var(--accent)') : 'var(--bg-panel-2)'};color:${active?'#fff':'var(--text-sub)'};`;
+    chip.textContent = p.name;
+    chip.addEventListener("click", ()=>{ trajectoireFilterId = p.id; renderTrajectoireTab(el); });
+    filterBar.appendChild(chip);
+  });
+
+  const tasks = (trajectoireFilterId==="all" ? allTasks : allTasks.filter(t=> (t.assignedTo||[]).includes(trajectoireFilterId)))
+    .slice().sort((a,b)=> a.dueDate.localeCompare(b.dueDate));
+
+  if(!tasks.length){
+    const empty = document.createElement("div");
+    empty.className = "empty-hint";
+    empty.textContent = "Aucune tâche avec une date limite pour cette personne.";
+    el.appendChild(empty);
+    return;
+  }
+
+  const today = todayStr();
+  const wrap = document.createElement("div");
+  wrap.style.cssText = "position:relative;padding-left:26px;margin:4px 2px;";
+  wrap.innerHTML = '<div data-trajLine style="position:absolute;left:9px;top:2px;bottom:2px;width:2px;background:var(--border-soft);"></div><div data-trajList></div>';
+  el.appendChild(wrap);
+  const list = wrap.querySelector("[data-trajList]");
+  let todayMarked = false;
+  tasks.forEach(t=>{
+    if(!todayMarked && t.dueDate >= today){
+      todayMarked = true;
+      const marker = document.createElement("div");
+      marker.style.cssText = "position:relative;margin:2px 0 12px;font-size:11px;font-weight:700;color:var(--accent);";
+      marker.innerHTML = '<div style="position:absolute;left:-26px;top:3px;width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--bg-app);"></div>Aujourd\'hui';
+      list.appendChild(marker);
+    }
+    const overdue = !t.done && t.dueDate < today;
+    const dotColor = t.done ? "var(--knowledge)" : (overdue ? "var(--danger)" : "var(--accent)");
+    const row = document.createElement("div");
+    row.style.cssText = "position:relative;padding:9px 12px;margin-bottom:10px;border:1px solid var(--border-soft);border-radius:10px;background:var(--bg-panel-2);cursor:pointer;";
+    row.innerHTML = `
+      <div style="position:absolute;left:-26px;top:16px;width:10px;height:10px;border-radius:50%;background:${dotColor};box-shadow:0 0 0 3px var(--bg-app);"></div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+        <div style="min-width:0;">
+          <div style="font-size:11px;font-weight:700;color:${overdue?'var(--danger)':'var(--text-sub)'};text-transform:capitalize;">${formatDueDateFr(t.dueDate)}${overdue?' · en retard':''}</div>
+          <div style="font-size:13.5px;margin-top:2px;${t.done?'text-decoration:line-through;color:var(--text-sub);':''}">${escapeHtml(t.title)}</div>
+          <div style="margin-top:5px;">${assigneeAvatarsHtml(t)}</div>
+        </div>
+        <div class="task-check${t.done?' checked':''}" data-check style="flex-shrink:0;" title="${t.done?'Terminée — touche pour rouvrir':'Marquer comme terminée'}">${t.done?'✓':''}</div>
+      </div>
+    `;
+    row.querySelector("[data-check]").addEventListener("click", (e)=>{ e.stopPropagation(); toggleTaskDone(t); });
+    row.addEventListener("click", ()=> openTaskDrawer(t.id));
+    list.appendChild(row);
   });
 }
 
@@ -2979,6 +3060,11 @@ function renderProcShapes(){
       dtag.title = shape.description;
       el.appendChild(dtag);
     }
+    if(shape.duration && shape.duration.trim()){
+      const durtag = document.createElement("div"); durtag.className="durtag"; durtag.textContent="⏱ "+shape.duration;
+      durtag.title = "Durée estimée de cette étape";
+      el.appendChild(durtag);
+    }
     const content = document.createElement("div");
     content.className = "pshapeContent";
     content.style.color = procContrastText(shape.color);
@@ -3052,6 +3138,27 @@ function renderProcArrows(){
     line.setAttribute("stroke-width", arrow.id===procSelectedArrowId?3.4:2.4);
     line.setAttribute("stroke-linejoin","round"); line.setAttribute("marker-end", procArrowMarker[arrow.kind||"neutral"]);
     line.style.pointerEvents="none"; g.appendChild(line);
+    if(arrow.duration && arrow.duration.trim()){
+      const mid = pts[Math.floor(pts.length/2)];
+      const label = arrow.duration.trim();
+      const textW = Math.max(30, label.length*6.6+14);
+      const lg = document.createElementNS("http://www.w3.org/2000/svg","g");
+      lg.style.pointerEvents="none";
+      const rect = document.createElementNS("http://www.w3.org/2000/svg","rect");
+      rect.setAttribute("x", mid.x-textW/2); rect.setAttribute("y", mid.y-10);
+      rect.setAttribute("width", textW); rect.setAttribute("height", 20);
+      rect.setAttribute("rx", 10);
+      rect.setAttribute("fill", "var(--bg-panel)"); rect.setAttribute("stroke", "rgba(0,0,0,.18)"); rect.setAttribute("stroke-width","1");
+      lg.appendChild(rect);
+      const text = document.createElementNS("http://www.w3.org/2000/svg","text");
+      text.setAttribute("x", mid.x); text.setAttribute("y", mid.y+4);
+      text.setAttribute("text-anchor","middle");
+      text.setAttribute("font-size","10.5"); text.setAttribute("font-weight","700");
+      text.setAttribute("fill","var(--text)");
+      text.textContent = "⏱ "+label;
+      lg.appendChild(text);
+      g.appendChild(lg);
+    }
     svg.appendChild(g);
   });
 }
@@ -3192,6 +3299,7 @@ function procShowFloatToolbarForShape(id){
       <button class="btn small danger" id="pftDelete">Suppr.</button>
     </div>
     ${swatchesHtml}
+    <input type="text" id="pftDuration" placeholder="⏱ Durée de l'étape (ex. 2 jours, 3h…)" value="${escapeHtml(shape.duration||"")}" style="margin-top:6px;width:270px;font-size:12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg-panel-2);color:var(--text);padding:6px 8px;">
     <textarea id="pftDesc" placeholder="Description de cette étape (visible uniquement quand la forme est sélectionnée)…" style="margin-top:6px;width:270px;min-height:50px;font-size:12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg-panel-2);color:var(--text);padding:6px 8px;resize:vertical;">${escapeHtml(shape.description||"")}</textarea>
   `;
   document.getElementById("procShapesLayer").appendChild(bar);
@@ -3207,6 +3315,21 @@ function procShowFloatToolbarForShape(id){
         if(!dtag){ dtag=document.createElement("div"); dtag.className="desctag"; dtag.textContent="📝"; shapeEl.appendChild(dtag); }
         dtag.title = shape.description;
       } else if(dtag){ dtag.remove(); }
+    }
+  });
+  bar.querySelector("#pftDuration").addEventListener("pointerdown", e=> e.stopPropagation());
+  bar.querySelector("#pftDuration").addEventListener("input", e=>{
+    shape.duration = e.target.value;
+    saveData();
+    const shapeEl = document.querySelector('.pshape[data-id="'+id+'"]');
+    if(shapeEl){
+      let durtag = shapeEl.querySelector(".durtag");
+      const hasDur = shape.duration && shape.duration.trim();
+      if(hasDur){
+        if(!durtag){ durtag=document.createElement("div"); durtag.className="durtag"; shapeEl.appendChild(durtag); }
+        durtag.textContent = "⏱ "+shape.duration;
+        durtag.title = "Durée estimée de cette étape";
+      } else if(durtag){ durtag.remove(); }
     }
   });
   function applyShapeColor(hex){
@@ -3309,11 +3432,15 @@ function procShowFloatToolbarForArrow(id){
   const bar = document.createElement("div");
   bar.className="pfloat-toolbar"; bar.id="procFloatToolbar";
   bar.style.left=(mid.x-90)+"px"; bar.style.top=(mid.y-48)+"px";
+  bar.style.flexWrap="wrap"; bar.style.maxWidth="260px";
   bar.innerHTML = `
-    <button class="btn small" data-kind="positive" style="border-color:var(--green);color:var(--green);">Positif</button>
-    <button class="btn small" data-kind="negative" style="border-color:var(--orange);color:var(--orange);">Négatif</button>
-    <button class="btn small" data-kind="neutral" style="border-color:var(--grey-arrow);color:var(--grey-arrow);">Neutre</button>
-    <button class="btn small danger" id="parDelete">Suppr.</button>
+    <div style="display:flex;gap:5px;">
+      <button class="btn small" data-kind="positive" style="border-color:var(--green);color:var(--green);">Positif</button>
+      <button class="btn small" data-kind="negative" style="border-color:var(--orange);color:var(--orange);">Négatif</button>
+      <button class="btn small" data-kind="neutral" style="border-color:var(--grey-arrow);color:var(--grey-arrow);">Neutre</button>
+      <button class="btn small danger" id="parDelete">Suppr.</button>
+    </div>
+    <input type="text" id="partDuration" placeholder="⏱ Délai entre les deux étapes (ex. 1 jour, 2h…)" value="${escapeHtml(arrow.duration||"")}" style="margin-top:6px;width:100%;font-size:12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg-panel-2);color:var(--text);padding:6px 8px;">
   `;
   document.getElementById("procShapesLayer").appendChild(bar);
   bar.querySelectorAll("[data-kind]").forEach(b=>{
@@ -3322,6 +3449,13 @@ function procShowFloatToolbarForArrow(id){
   bar.querySelector("#parDelete").addEventListener("pointerdown", e=>{
     e.stopPropagation();
     PROC.arrows = PROC.arrows.filter(a=>a.id!==id); procSelectedArrowId=null; saveData(); renderProcArrows(); procRemoveFloatToolbar();
+  });
+  const durInput = bar.querySelector("#partDuration");
+  durInput.addEventListener("pointerdown", e=> e.stopPropagation());
+  durInput.addEventListener("input", e=>{
+    arrow.duration = e.target.value;
+    saveData();
+    renderProcArrows();
   });
 }
 function procDeleteMultiSelected(){
@@ -5245,13 +5379,55 @@ function buildMailRow(mail, opts){
     textarea.focus();
   }
 
-  /* ---- Dictée vocale de la réponse (reconnaissance de la parole) ---- */
+  /* ---- Dictée vocale de la réponse (reconnaissance de la parole) ----
+     Le moteur de reconnaissance s'arrête tout seul au bout d'un moment de
+     silence ou de pause, même en mode "continuous" — ce n'est pas voulu ici :
+     la dictée ne doit s'arrêter que quand la personne touche explicitement
+     "Arrêter la dictée". On relance donc automatiquement la reconnaissance
+     tant que l'arrêt n'a pas été demandé à la main. */
   const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
   const dictateBtn = row.querySelector("[data-dictate]");
   let recognition = null;
   let recognizing = false;
+  let dictationStoppedManually = true;
   function stopDictation(){
+    dictationStoppedManually = true;
     if(recognition && recognizing){ try{ recognition.stop(); }catch(e){} }
+  }
+  function startRecognitionInstance(){
+    recognition = new SpeechRecognitionCtor();
+    recognition.lang = "fr-FR";
+    recognition.interimResults = false;
+    recognition.continuous = true;
+    recognition.onresult = (ev)=>{
+      let finalText = "";
+      for(let i=ev.resultIndex; i<ev.results.length; i++){
+        if(ev.results[i].isFinal) finalText += ev.results[i][0].transcript;
+      }
+      if(finalText.trim()){
+        textarea.value = (textarea.value.trim() ? textarea.value.trim()+" " : "") + finalText.trim();
+      }
+    };
+    recognition.onerror = (ev)=>{
+      console.warn("Erreur de dictée vocale :", ev.error);
+      if(ev.error==="not-allowed" || ev.error==="service-not-allowed"){
+        dictationStoppedManually = true; // pas la peine de relancer si le micro est refusé
+        alert("Le micro n'est pas autorisé pour ce site. Autorise-le dans les réglages du navigateur pour dicter ta réponse.");
+      }
+      // "no-speech", "network", etc. : on laisse onend décider de relancer.
+    };
+    recognition.onend = ()=>{
+      recognizing = false;
+      if(dictationStoppedManually){
+        dictateBtn.textContent = "🎤 Dicter la réponse";
+        dictateBtn.classList.remove("danger");
+        return;
+      }
+      // Arrêt non demandé par la personne (silence, pause, limite du moteur) —
+      // on relance tout de suite pour que la dictée continue sans y toucher.
+      try{ startRecognitionInstance(); recognition.start(); recognizing = true; }
+      catch(e){ console.warn("Relance de la dictée impossible :", e); dictateBtn.textContent = "🎤 Dicter la réponse"; dictateBtn.classList.remove("danger"); }
+    };
   }
   if(!SpeechRecognitionCtor){
     dictateBtn.disabled = true;
@@ -5261,30 +5437,8 @@ function buildMailRow(mail, opts){
     dictateBtn.addEventListener("click", ()=>{
       if(recognizing){ stopDictation(); return; }
       mailStopSpeaking();
-      recognition = new SpeechRecognitionCtor();
-      recognition.lang = "fr-FR";
-      recognition.interimResults = false;
-      recognition.continuous = true;
-      recognition.onresult = (ev)=>{
-        let finalText = "";
-        for(let i=ev.resultIndex; i<ev.results.length; i++){
-          if(ev.results[i].isFinal) finalText += ev.results[i][0].transcript;
-        }
-        if(finalText.trim()){
-          textarea.value = (textarea.value.trim() ? textarea.value.trim()+" " : "") + finalText.trim();
-        }
-      };
-      recognition.onerror = (ev)=>{
-        console.warn("Erreur de dictée vocale :", ev.error);
-        if(ev.error==="not-allowed" || ev.error==="service-not-allowed"){
-          alert("Le micro n'est pas autorisé pour ce site. Autorise-le dans les réglages du navigateur pour dicter ta réponse.");
-        }
-      };
-      recognition.onend = ()=>{
-        recognizing = false;
-        dictateBtn.textContent = "🎤 Dicter la réponse";
-        dictateBtn.classList.remove("danger");
-      };
+      dictationStoppedManually = false;
+      startRecognitionInstance();
       try{
         recognition.start();
         recognizing = true;
