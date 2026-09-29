@@ -5194,85 +5194,101 @@ function mailClearKeepAlive(){
 // (texte court) marche, "Écouter" un mail (texte souvent long, surtout un
 // fil de conversation lu en entier) échoue. On découpe donc le texte en
 // morceaux raisonnables, coupés sur des fins de phrase, et on les enchaîne.
-const MAIL_SPEECH_CHUNK_MAX = 1400;
+// Petits morceaux (quelques phrases) : c'est ce qui marche le plus
+// sûrement sur Android, et ça évite aussi le bug de Chrome qui coupe une
+// lecture longue au bout de ~15s — sans avoir besoin de l'astuce
+// pause()/resume(), qui sur Android ARRÊTE carrément la lecture (c'était la
+// cause de la coupure entre deux morceaux).
+const MAIL_SPEECH_CHUNK_MAX = 260;
 function mailSplitTextForSpeech(text){
-  text = text.trim();
-  if(text.length <= MAIL_SPEECH_CHUNK_MAX) return [text];
+  // Un retour à la ligne sans ponctuation devient une petite pause (". ").
+  text = String(text||"").replace(/([^.!?…,;:\s])[ \t]*\n+\s*/g, "$1. ").replace(/\s*\n+\s*/g, " ").replace(/\s{2,}/g," ").trim();
+  if(!text) return [];
+  // Découpe en phrases, puis regroupe les phrases jusqu'à la taille max.
+  const sentences = text.match(/[^.!?…]+[.!?…]*\s*/g) || [text];
   const chunks = [];
-  let rest = text;
-  while(rest.length > MAIL_SPEECH_CHUNK_MAX){
-    let cut = -1;
-    [". ", "! ", "? ", "\n"].forEach(sep=>{
-      const idx = rest.lastIndexOf(sep, MAIL_SPEECH_CHUNK_MAX);
-      if(idx > cut) cut = idx + sep.length;
-    });
-    if(cut < 200) cut = rest.lastIndexOf(" ", MAIL_SPEECH_CHUNK_MAX); // repli : coupe sur un espace
-    if(cut < 1) cut = MAIL_SPEECH_CHUNK_MAX; // dernier repli : coupe brute
-    chunks.push(rest.slice(0, cut).trim());
-    rest = rest.slice(cut).trim();
-  }
-  if(rest) chunks.push(rest);
+  let cur = "";
+  sentences.forEach(s=>{
+    s = s.trim(); if(!s) return;
+    // Phrase à elle seule trop longue : on la coupe sur des espaces.
+    while(s.length > MAIL_SPEECH_CHUNK_MAX){
+      let cut = s.lastIndexOf(",", MAIL_SPEECH_CHUNK_MAX);
+      if(cut < 80) cut = s.lastIndexOf(" ", MAIL_SPEECH_CHUNK_MAX);
+      if(cut < 1) cut = MAIL_SPEECH_CHUNK_MAX;
+      if(cur){ chunks.push(cur); cur = ""; }
+      chunks.push(s.slice(0, cut+1).trim());
+      s = s.slice(cut+1).trim();
+    }
+    if(!s) return;
+    if(cur && (cur.length + 1 + s.length) > MAIL_SPEECH_CHUNK_MAX){ chunks.push(cur); cur = s; }
+    else cur = cur ? cur+" "+s : s;
+  });
+  if(cur) chunks.push(cur);
   return chunks;
 }
+// Garde une référence à chaque énoncé en cours : sinon Chrome peut le
+// "ramasser" (garbage collector) et ne jamais déclencher sa fin.
+const mailLiveUtterances = [];
 function mailSpeakOneChunk(text, gen, onDone, opts){
   if(gen !== mailSpeakGeneration) return; // une lecture plus récente (ou un arrêt) a pris le relais
-  // Chrome (surtout mobile) a un bug connu : enchaîner deux appels speak()
-  // trop rapprochés (y compris d'un morceau au suivant) peut faire échouer
-  // silencieusement la lecture (aucun son, aucune erreur). Un petit délai
-  // entre chaque morceau/message évite ça.
   setTimeout(()=>{
     if(gen !== mailSpeakGeneration) return;
+    const synth = window.speechSynthesis;
     const u = new SpeechSynthesisUtterance(text);
     const voice = opts.forceDefaultVoice ? null : mailGetSelectedVoice();
     if(voice){ u.voice = voice; u.lang = voice.lang; } else { u.lang = "fr-FR"; }
-    // Un débit légèrement plus lent et un ton naturel (pas de suraigu artificiel)
-    // rendent la lecture moins robotique, surtout avec les voix "standard".
     u.rate = 0.95;
     u.pitch = 1;
-    let settled = false, started = false;
-    u.onstart = ()=>{
-      started = true;
-      // Certains navigateurs (Chrome desktop/Android) mettent la lecture en
-      // pause au bout d'environ 15s sur un texte long — on la relance
-      // régulièrement tant qu'elle est en cours pour éviter qu'elle se coupe.
+    let settled = false, started = false, idleTicks = 0;
+    mailLiveUtterances.push(u);
+    function finish(){
+      if(settled) return;
+      settled = true;
       mailClearKeepAlive();
-      mailSpeakKeepAlive = setInterval(()=>{
-        if(!window.speechSynthesis.speaking){ mailClearKeepAlive(); return; }
-        window.speechSynthesis.pause();
-        window.speechSynthesis.resume();
-      }, 12000);
-    };
-    u.onend = ()=>{
-      settled = true; mailClearKeepAlive();
+      const k = mailLiveUtterances.indexOf(u); if(k>=0) mailLiveUtterances.splice(k,1);
       if(gen===mailSpeakGeneration) onDone();
-    };
+    }
+    u.onstart = ()=>{ started = true; };
+    u.onend = finish;
     u.onerror = (ev)=>{
+      if(settled) return;
+      // "interrupted"/"canceled" = arrêt volontaire (autre lecture, bouton stop).
+      if(ev.error==="interrupted" || ev.error==="canceled"){ settled = true; mailClearKeepAlive(); return; }
       settled = true; mailClearKeepAlive();
       console.warn("Erreur de lecture vocale :", ev.error);
       if(gen !== mailSpeakGeneration) return;
       if(!opts.forceDefaultVoice && voice){
-        // La voix choisie a échoué (ex. voix réseau indisponible) — on
-        // retente aussitôt ce même morceau avec la voix par défaut de
-        // l'appareil plutôt que de rester silencieux sans explication.
         mailSpeakOneChunk(text, gen, onDone, {forceDefaultVoice:true});
       } else {
-        alert("La lecture vocale a échoué (" + (ev.error||"erreur inconnue") + "). Vérifie le volume de ton téléphone et qu'une voix française est installée dans ses réglages.");
+        // On ne bloque pas toute la lecture pour un morceau raté : on passe au suivant.
+        console.warn("Morceau ignoré après échec :", text.slice(0,60));
+        if(gen===mailSpeakGeneration) onDone();
       }
     };
     mailCurrentUtterance = u;
-    window.speechSynthesis.speak(u);
-    // Filet de sécurité : si au bout de 1,8s la lecture n'a même pas
-    // démarré (ni "onstart" ni "onerror"), c'est qu'elle a échoué en
-    // silence (bug connu de speechSynthesis) — on retente une fois avec la
-    // voix par défaut. On ne se base plus sur "speaking"/"pending" seuls :
-    // sur certains appareils ils repassent brièvement à faux entre la fin
-    // réelle d'un morceau et l'événement "onend" correspondant, ce qui
-    // déclenchait à tort une relance en double et coupait l'enchaînement.
+    synth.speak(u);
+    // Surveillance : sur certains Android, "onend" ne se déclenche parfois
+    // pas. Si le moteur est redevenu silencieux après avoir parlé, on
+    // considère le morceau terminé et on enchaîne quand même.
+    mailClearKeepAlive();
+    mailSpeakKeepAlive = setInterval(()=>{
+      if(settled || gen!==mailSpeakGeneration){ mailClearKeepAlive(); return; }
+      if(synth.speaking) started = true;
+      if(started && !synth.speaking && !synth.pending){
+        idleTicks++;
+        if(idleTicks >= 3) finish(); // ~0,9s de silence après la fin sans "onend"
+      } else idleTicks = 0;
+    }, 300);
+    // Filet de sécurité : si rien n'a démarré au bout de 2,5s, on retente
+    // une fois avec la voix par défaut de l'appareil.
     setTimeout(()=>{
-      if(settled || started || gen!==mailSpeakGeneration) return;
-      if(!opts.forceDefaultVoice){ mailSpeakOneChunk(text, gen, onDone, {forceDefaultVoice:true}); }
-    }, 1800);
-  }, 250);
+      if(settled || started || synth.speaking || gen!==mailSpeakGeneration) return;
+      settled = true; mailClearKeepAlive();
+      synth.cancel();
+      if(!opts.forceDefaultVoice) mailSpeakOneChunk(text, gen, onDone, {forceDefaultVoice:true});
+      else onDone();
+    }, 2500);
+  }, 120);
 }
 function mailSpeak(text, onEnd, opts){
   opts = opts || {};
