@@ -4881,47 +4881,24 @@ function showDriveModal(){
 ========================================================================= */
 // Cuts off the signature block and any quoted earlier thread, so only the
 // actual new message content gets read aloud / attached to a task.
-function stripEmailSignature(text){
-  if(!text) return "";
-  let lines = text.replace(/\r\n/g,"\n").split("\n");
-
-  // 1) Remove standalone separator lines a mail client inserts to delimit a
-  //    quoted/forwarded block (Outlook's "________________________________",
-  //    plain "-----", etc.) — pure visual noise, never actual content.
-  lines = lines.filter(l=> !/^_{5,}$/.test(l.trim()) && !/^-{5,}$/.test(l.trim()));
-
-  // 2) Remove the metadata header block a forward/reply inserts before each
-  //    quoted message ("De : / Envoyé : / À : / Objet :" in French, or
-  //    "From: / Sent: / To: / Subject:" in English) — wherever it appears,
-  //    not just at the very top. A forwarded conversation can have several
-  //    of these (one per message in the thread); we drop only the header
-  //    LINES themselves so the actual written text of every message in the
-  //    thread is kept and read in full, instead of stopping at the first one.
-  const headerLineRe = /^(De|From|Envoyé|Sent|Date|À|A|To|Cc|Objet|Subject)\s*:\s*.+$/i;
-  const withoutHeaders = [];
-  for(let i=0;i<lines.length;i++){
-    if(headerLineRe.test(lines[i].trim())){
-      // Consume this whole contiguous run of header lines (a full block).
-      while(i<lines.length && (headerLineRe.test(lines[i].trim()) || lines[i].trim()==="")) i++;
-      i--; // compensate for the loop's own i++
-      continue;
-    }
-    withoutHeaders.push(lines[i]);
-  }
-  lines = withoutHeaders;
-
-  // 3) Drop "Le X a écrit :" / "On X wrote:" quote-intro lines (just that
-  //    line — the quoted message itself, right after, is real content).
+const MAIL_HEADER_LINE_RE = /^(De|From|Envoyé|Sent|Date|À|A|To|Cc|Objet|Subject)\s*:\s*(.*)$/i;
+// Étapes de nettoyage communes à un message (déjà isolé de ses voisins dans
+// le fil) : on-écrit/le-a-écrit, dé-citation des "> ", et la signature de
+// fin — partagées par stripEmailSignature (un seul bloc de texte aplati) et
+// splitMailThreadMessages (un message individuel du fil).
+function cleanMessageLines(lines){
+  // Drop "Le X a écrit :" / "On X wrote:" quote-intro lines (just that
+  // line — the quoted message itself, right after, is real content).
   lines = lines.filter(l=> !/^le .+ a écrit\s*:?\s*$/i.test(l.trim()) && !/^on .+ wrote:\s*$/i.test(l.trim()));
 
-  // 4) Un-quote "> " lines instead of cutting the message there, so a
-  //    forwarded conversation reads as normal prose, in full.
+  // Un-quote "> " lines instead of cutting the message there, so a
+  // forwarded conversation reads as normal prose, in full.
   lines = lines.map(l=> l.replace(/^>+\s?/, ""));
 
-  // 5) Only strip a genuine trailing signature/footer — scan back from the
-  //    very end and cut once there, so a similar-looking line in the middle
-  //    of a thread is never mistaken for a sign-off and doesn't truncate
-  //    the rest of the conversation.
+  // Only strip a genuine trailing signature/footer — scan back from the
+  // very end and cut once there, so a similar-looking line in the middle
+  // of a thread is never mistaken for a sign-off and doesn't truncate
+  // the rest of the conversation.
   const footerMarkers = [
     /^--\s*$/,
     /^(cordialement|bien à vous|bien cordialement|sincèrement|meilleures salutations|salutations distinguées|merci d'avance)\s*,?\s*$/i,
@@ -4940,6 +4917,92 @@ function stripEmailSignature(text){
   }
 
   return lines.join("\n").replace(/\n{3,}/g,"\n\n").trim();
+}
+function stripEmailSignature(text){
+  if(!text) return "";
+  let lines = text.replace(/\r\n/g,"\n").split("\n");
+
+  // 1) Remove standalone separator lines a mail client inserts to delimit a
+  //    quoted/forwarded block (Outlook's "________________________________",
+  //    plain "-----", etc.) — pure visual noise, never actual content.
+  lines = lines.filter(l=> !/^_{5,}$/.test(l.trim()) && !/^-{5,}$/.test(l.trim()));
+
+  // 2) Remove the metadata header block a forward/reply inserts before each
+  //    quoted message ("De : / Envoyé : / À : / Objet :" in French, or
+  //    "From: / Sent: / To: / Subject:" in English) — wherever it appears,
+  //    not just at the very top. A forwarded conversation can have several
+  //    of these (one per message in the thread); we drop only the header
+  //    LINES themselves so the actual written text of every message in the
+  //    thread is kept and read in full, instead of stopping at the first one.
+  const withoutHeaders = [];
+  for(let i=0;i<lines.length;i++){
+    if(MAIL_HEADER_LINE_RE.test(lines[i].trim())){
+      // Consume this whole contiguous run of header lines (a full block).
+      while(i<lines.length && (MAIL_HEADER_LINE_RE.test(lines[i].trim()) || lines[i].trim()==="")) i++;
+      i--; // compensate for the loop's own i++
+      continue;
+    }
+    withoutHeaders.push(lines[i]);
+  }
+  lines = withoutHeaders;
+
+  return cleanMessageLines(lines);
+}
+// Découpe un fil de mails (forward Outlook/Nine avec plusieurs messages
+// chaînés par des blocs "De :/Envoyé :/Objet :" ou des lignes "Le X a
+// écrit :") en messages individuels {from, date, body}, du plus récent
+// (en tête) au plus ancien — pour compter les messages et permettre d'en
+// choisir un précis à écouter, plutôt qu'un seul bloc de texte aplati.
+function splitMailThreadMessages(rawBody, topFrom){
+  const text = String(rawBody||"").replace(/\r\n/g,"\n");
+  if(!text.trim()) return [{from:topFrom||"", date:"", body:""}];
+  const lines = text.split("\n");
+  const leWroteRe = /^le (.+) a écrit\s*:?\s*$/i;
+  const onWroteRe = /^on (.+) wrote:\s*$/i;
+  const sepRe = /^_{5,}$|^-{5,}$/;
+
+  const boundaries = []; // {headerLine, contentStart, from, date}
+  let i = 0;
+  while(i < lines.length){
+    const trimmed = lines[i].trim();
+    if(sepRe.test(trimmed)){ i++; continue; }
+    if(MAIL_HEADER_LINE_RE.test(trimmed)){
+      const headerLine = i;
+      let from="", date="";
+      while(i<lines.length && MAIL_HEADER_LINE_RE.test(lines[i].trim())){
+        const hm = lines[i].trim().match(MAIL_HEADER_LINE_RE);
+        const field = hm[1].toLowerCase();
+        const val = hm[2].trim();
+        if(field==="de"||field==="from") from = mailDisplayName(val) || val;
+        else if(field==="envoyé"||field==="sent"||field==="date") date = val;
+        i++;
+      }
+      boundaries.push({headerLine, contentStart:i, from, date});
+      continue;
+    }
+    const leM = trimmed.match(leWroteRe) || trimmed.match(onWroteRe);
+    if(leM){
+      boundaries.push({headerLine:i, contentStart:i+1, from: leM[1].trim(), date:""});
+      i++;
+      continue;
+    }
+    i++;
+  }
+
+  if(boundaries.length===0){
+    return [{from:topFrom||"", date:"", body:cleanMessageLines(lines)}];
+  }
+
+  const segs = [];
+  const firstBody = cleanMessageLines(lines.slice(0, boundaries[0].headerLine));
+  if(firstBody) segs.push({from:topFrom||"", date:"", body:firstBody});
+  for(let b=0; b<boundaries.length; b++){
+    const start = boundaries[b].contentStart;
+    const end = (b+1<boundaries.length) ? boundaries[b+1].headerLine : lines.length;
+    const body = cleanMessageLines(lines.slice(start, end));
+    if(body || boundaries[b].from) segs.push({from: boundaries[b].from, date: boundaries[b].date, body});
+  }
+  return segs.length ? segs : [{from:topFrom||"", date:"", body:cleanMessageLines(lines)}];
 }
 function cleanMailSubject(subject){
   // Ce compte ne reçoit que des mails transférés — enlève le "Tr :"/"Fwd:"
@@ -5023,7 +5086,8 @@ async function msFetchRecent(count){
       subject: m.subject || "(sans objet)",
       date: m.receivedDateTime,
       unread: !m.isRead,
-      body: stripEmailSignature(bodyText)
+      body: stripEmailSignature(bodyText),
+      threadMessages: splitMailThreadMessages(bodyText, msDisplayName(m.from))
     };
   });
 }
@@ -5152,9 +5216,10 @@ function mailSplitTextForSpeech(text){
 }
 function mailSpeakOneChunk(text, gen, onDone, opts){
   if(gen !== mailSpeakGeneration) return; // une lecture plus récente (ou un arrêt) a pris le relais
-  // Chrome (surtout mobile) a un bug connu : enchaîner cancel() puis speak()
-  // dans le même tour d'exécution peut faire échouer silencieusement la
-  // lecture (aucun son, aucune erreur). Un tout petit délai suffit à l'éviter.
+  // Chrome (surtout mobile) a un bug connu : enchaîner deux appels speak()
+  // trop rapprochés (y compris d'un morceau au suivant) peut faire échouer
+  // silencieusement la lecture (aucun son, aucune erreur). Un petit délai
+  // entre chaque morceau/message évite ça.
   setTimeout(()=>{
     if(gen !== mailSpeakGeneration) return;
     const u = new SpeechSynthesisUtterance(text);
@@ -5164,8 +5229,9 @@ function mailSpeakOneChunk(text, gen, onDone, opts){
     // rendent la lecture moins robotique, surtout avec les voix "standard".
     u.rate = 0.95;
     u.pitch = 1;
-    let settled = false;
+    let settled = false, started = false;
     u.onstart = ()=>{
+      started = true;
       // Certains navigateurs (Chrome desktop/Android) mettent la lecture en
       // pause au bout d'environ 15s sur un texte long — on la relance
       // régulièrement tant qu'elle est en cours pour éviter qu'elle se coupe.
@@ -5195,16 +5261,18 @@ function mailSpeakOneChunk(text, gen, onDone, opts){
     };
     mailCurrentUtterance = u;
     window.speechSynthesis.speak(u);
-    // Filet de sécurité : si au bout d'1s rien n'est parti ni en attente,
-    // la lecture a échoué silencieusement (bug connu de speechSynthesis) —
-    // on retente une fois avec la voix par défaut de l'appareil.
+    // Filet de sécurité : si au bout de 1,8s la lecture n'a même pas
+    // démarré (ni "onstart" ni "onerror"), c'est qu'elle a échoué en
+    // silence (bug connu de speechSynthesis) — on retente une fois avec la
+    // voix par défaut. On ne se base plus sur "speaking"/"pending" seuls :
+    // sur certains appareils ils repassent brièvement à faux entre la fin
+    // réelle d'un morceau et l'événement "onend" correspondant, ce qui
+    // déclenchait à tort une relance en double et coupait l'enchaînement.
     setTimeout(()=>{
-      if(settled || gen!==mailSpeakGeneration) return;
-      if(!window.speechSynthesis.speaking && !window.speechSynthesis.pending){
-        if(!opts.forceDefaultVoice){ mailSpeakOneChunk(text, gen, onDone, {forceDefaultVoice:true}); }
-      }
-    }, 1000);
-  }, 60);
+      if(settled || started || gen!==mailSpeakGeneration) return;
+      if(!opts.forceDefaultVoice){ mailSpeakOneChunk(text, gen, onDone, {forceDefaultVoice:true}); }
+    }, 1800);
+  }, 250);
 }
 function mailSpeak(text, onEnd, opts){
   opts = opts || {};
@@ -5225,6 +5293,23 @@ function mailSpeak(text, onEnd, opts){
   next();
 }
 function mailStopSpeaking(){ mailSpeakGeneration++; mailClearKeepAlive(); if("speechSynthesis" in window) window.speechSynthesis.cancel(); }
+// Lit une conversation message par message à partir de startIndex, en
+// annonçant "Message X sur N" avant chacun (onProgress permet d'afficher un
+// compteur à l'écran) et en enchaînant automatiquement au suivant.
+function mailSpeakMessages(messages, startIndex, onAllDone, onProgress){
+  let idx = Math.max(0, startIndex||0);
+  function step(){
+    if(idx >= messages.length){ if(onAllDone) onAllDone(); return; }
+    const msg = messages[idx];
+    if(onProgress) onProgress(idx+1, messages.length, msg);
+    const label = (messages.length>1 ? ("Message "+(idx+1)+" sur "+messages.length+". ") : "")
+      + (msg.from ? "De "+msg.from+". " : "")
+      + (msg.body && msg.body.trim() ? msg.body : "Ce message n'a pas de contenu texte lisible.");
+    idx++;
+    mailSpeak(label, step);
+  }
+  step();
+}
 
 /* ---------- Gmail (boîte dédiée pour les mails transférés depuis Nine) ---------- */
 const MAIL_DEFAULT_ACCOUNT = "germain.sensique.eufy@gmail.com";
@@ -5414,7 +5499,8 @@ async function gmailFetchInbox(count){
         from, to, cc, subject: cleanMailSubject(subject),
         date: Date.now(),
         unread: (m.labelIds||[]).includes("UNREAD"),
-        body: stripEmailSignature(body)
+        body: stripEmailSignature(body),
+        threadMessages: splitMailThreadMessages(body, mailDisplayName(from))
       });
     }catch(e){
       skipped++;
@@ -5448,11 +5534,17 @@ function buildMailRow(mail, opts){
         <div style="font-size:11px;color:var(--text-sub);white-space:nowrap;display:${mailGetProcessedIds().has(mailKey) ? 'block' : 'none'};" title="Déjà écouté dans SensiTâche">👂 Déjà écouté</div>
       </div>
     </div>
-    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center;">
       <button class="btn small" data-listen>🔊 Écouter</button>
       <button class="btn small" data-reply>✍️ Répondre</button>
       ${opts.allowDelete ? '<button class="btn small danger" data-delete>🗑️ Supprimer</button>' : ''}
+      <span data-mailCounter style="font-size:11px;font-weight:700;color:var(--accent);display:none;"></span>
     </div>
+    ${mail.threadMessages && mail.threadMessages.length>1 ? `
+    <details style="margin-top:8px;">
+      <summary style="cursor:pointer;font-size:11.5px;color:var(--text-sub);">🧵 ${mail.threadMessages.length} messages dans cette conversation — touche-en un pour l'écouter</summary>
+      <div data-threadList style="display:flex;flex-direction:column;gap:4px;margin-top:6px;"></div>
+    </details>` : ''}
     <div data-replyPane style="display:none;margin-top:8px;">
       <textarea data-replyText placeholder="Dicte ou tape ta réponse ici…" style="width:100%;min-height:80px;border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;background:var(--bg-app);color:var(--text-main);font-size:13px;resize:vertical;"></textarea>
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
@@ -5468,6 +5560,51 @@ function buildMailRow(mail, opts){
   function openReply(){
     replyPane.style.display = "block";
     textarea.focus();
+  }
+
+  /* ---- Lecture vocale : la conversation entière, message par message ----
+     mail.threadMessages contient chaque message du fil séparément (le plus
+     récent en premier) — on les enchaîne à l'oral avec un compteur "Message
+     X/N", et la liste dépliable permet d'en choisir un précis d'où démarrer
+     plutôt que de toujours tout réécouter depuis le début. */
+  const mailMessages = (mail.threadMessages && mail.threadMessages.length) ? mail.threadMessages : [{from:fromName, date:"", body:mail.body||""}];
+  const counterEl = row.querySelector("[data-mailCounter]");
+  function updateMailCounter(idx, total){
+    if(!counterEl) return;
+    if(total>1){ counterEl.style.display="inline"; counterEl.textContent = "🔊 Message "+idx+"/"+total; }
+    else counterEl.style.display="none";
+  }
+  function hideMailCounter(){ if(counterEl) counterEl.style.display="none"; }
+  const threadListEl = row.querySelector("[data-threadList]");
+  function startListenFrom(startIndex){
+    const withIntro = startIndex===0;
+    function playThread(){
+      mailSpeakMessages(mailMessages, startIndex, ()=>{
+        hideMailCounter();
+        mailSpeak("Veux-tu dicter une réponse ? Touche « Répondre », puis « Dicter la réponse » et parle.", ()=> openReply());
+      }, updateMailCounter);
+    }
+    if(withIntro){
+      const parts = ["Mail de "+(fromName||"expéditeur inconnu")+"."];
+      if(mail.to) parts.push("À "+mailDisplayName(mail.to)+".");
+      if(mail.cc) parts.push("Copie à "+mailDisplayName(mail.cc)+".");
+      parts.push("Objet : "+(mail.subject||"sans objet")+".");
+      mailSpeak(parts.join(" "), playThread);
+    } else {
+      playThread();
+    }
+    if(opts.onRead) opts.onRead(mail);
+  }
+  if(threadListEl){
+    mailMessages.forEach((msg,i)=>{
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "btn small ghost";
+      item.style.cssText = "justify-content:flex-start;text-align:left;width:100%;font-size:11.5px;";
+      item.textContent = "▶ "+(i+1)+". "+(msg.from||"Expéditeur inconnu")+(msg.date?" · "+msg.date:"");
+      item.addEventListener("click", (e)=>{ e.stopPropagation(); mailStopSpeaking(); startListenFrom(i); });
+      threadListEl.appendChild(item);
+    });
   }
 
   /* ---- Dictée vocale de la réponse (reconnaissance de la parole) ----
@@ -5527,7 +5664,7 @@ function buildMailRow(mail, opts){
   } else {
     dictateBtn.addEventListener("click", ()=>{
       if(recognizing){ stopDictation(); return; }
-      mailStopSpeaking();
+      mailStopSpeaking(); hideMailCounter();
       dictationStoppedManually = false;
       startRecognitionInstance();
       try{
@@ -5539,24 +5676,14 @@ function buildMailRow(mail, opts){
     });
   }
   row.querySelector("[data-listen]").addEventListener("click", ()=>{
-    const parts = ["Mail de "+(fromName||"expéditeur inconnu")+"."];
-    if(mail.to) parts.push("À "+mailDisplayName(mail.to)+".");
-    if(mail.cc) parts.push("Copie à "+mailDisplayName(mail.cc)+".");
-    parts.push("Objet : "+(mail.subject||"sans objet")+".");
-    parts.push(mail.body ? "Contenu : "+mail.body : "Ce mail n'a pas de contenu texte lisible.");
-    mailSpeak(parts.join(" "), ()=>{
-      // Once the mail itself has been read, offer out loud to dictate
-      // a reply — this is the "propose à l'oral" part.
-      mailSpeak("Veux-tu dicter une réponse ? Touche « Répondre », puis « Dicter la réponse » et parle.", ()=> openReply());
-    });
-    if(opts.onRead) opts.onRead(mail);
+    startListenFrom(0);
   });
-  row.querySelector("[data-reply]").addEventListener("click", ()=>{ mailStopSpeaking(); openReply(); });
+  row.querySelector("[data-reply]").addEventListener("click", ()=>{ mailStopSpeaking(); hideMailCounter(); openReply(); });
   row.querySelector("[data-cancelReply]").addEventListener("click", ()=>{ stopDictation(); replyPane.style.display="none"; textarea.value=""; });
   if(opts.allowDelete){
     row.querySelector("[data-delete]").addEventListener("click", async ()=>{
       if(!confirm("Supprimer ce mail (déplacé dans la corbeille Gmail) ?")) return;
-      mailStopSpeaking();
+      mailStopSpeaking(); hideMailCounter();
       stopDictation();
       if(opts.onDelete) await opts.onDelete(mail);
       row.remove();
@@ -5834,7 +5961,8 @@ function showMailModal(){
       subject: cleanMailSubject(manualSubject || parsed.subject) || "(sans objet)",
       date: Date.now(),
       unread: false,
-      body: stripEmailSignature(parsed.body || raw)
+      body: stripEmailSignature(parsed.body || raw),
+      threadMessages: splitMailThreadMessages(parsed.body || raw, mailDisplayName(parsed.from || ""))
     };
     const result = overlay.querySelector("#pasteMailResult");
     result.innerHTML = "";
