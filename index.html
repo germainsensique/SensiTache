@@ -5120,19 +5120,43 @@ function wireVoicePicker(container){
 
 let mailCurrentUtterance = null;
 let mailSpeakKeepAlive = null;
+let mailSpeakGeneration = 0;
 function mailClearKeepAlive(){
   if(mailSpeakKeepAlive){ clearInterval(mailSpeakKeepAlive); mailSpeakKeepAlive = null; }
 }
-function mailSpeak(text, onEnd, opts){
-  opts = opts || {};
-  if(!("speechSynthesis" in window)){ alert("La lecture vocale n'est pas prise en charge par ce navigateur."); if(onEnd) onEnd(); return; }
-  if(!text || !text.trim()){ if(onEnd) onEnd(); return; }
-  window.speechSynthesis.cancel();
-  mailClearKeepAlive();
+// Le moteur de synthèse vocale d'Android refuse tout net (erreur
+// "synthesis-failed", sans le moindre son) au-delà d'une certaine longueur
+// de texte par appel — ça correspond bien au cas signalé : "Tester la voix"
+// (texte court) marche, "Écouter" un mail (texte souvent long, surtout un
+// fil de conversation lu en entier) échoue. On découpe donc le texte en
+// morceaux raisonnables, coupés sur des fins de phrase, et on les enchaîne.
+const MAIL_SPEECH_CHUNK_MAX = 1400;
+function mailSplitTextForSpeech(text){
+  text = text.trim();
+  if(text.length <= MAIL_SPEECH_CHUNK_MAX) return [text];
+  const chunks = [];
+  let rest = text;
+  while(rest.length > MAIL_SPEECH_CHUNK_MAX){
+    let cut = -1;
+    [". ", "! ", "? ", "\n"].forEach(sep=>{
+      const idx = rest.lastIndexOf(sep, MAIL_SPEECH_CHUNK_MAX);
+      if(idx > cut) cut = idx + sep.length;
+    });
+    if(cut < 200) cut = rest.lastIndexOf(" ", MAIL_SPEECH_CHUNK_MAX); // repli : coupe sur un espace
+    if(cut < 1) cut = MAIL_SPEECH_CHUNK_MAX; // dernier repli : coupe brute
+    chunks.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  if(rest) chunks.push(rest);
+  return chunks;
+}
+function mailSpeakOneChunk(text, gen, onDone, opts){
+  if(gen !== mailSpeakGeneration) return; // une lecture plus récente (ou un arrêt) a pris le relais
   // Chrome (surtout mobile) a un bug connu : enchaîner cancel() puis speak()
   // dans le même tour d'exécution peut faire échouer silencieusement la
   // lecture (aucun son, aucune erreur). Un tout petit délai suffit à l'éviter.
   setTimeout(()=>{
+    if(gen !== mailSpeakGeneration) return;
     const u = new SpeechSynthesisUtterance(text);
     const voice = opts.forceDefaultVoice ? null : mailGetSelectedVoice();
     if(voice){ u.voice = voice; u.lang = voice.lang; } else { u.lang = "fr-FR"; }
@@ -5154,16 +5178,17 @@ function mailSpeak(text, onEnd, opts){
     };
     u.onend = ()=>{
       settled = true; mailClearKeepAlive();
-      if(onEnd) onEnd();
+      if(gen===mailSpeakGeneration) onDone();
     };
     u.onerror = (ev)=>{
       settled = true; mailClearKeepAlive();
       console.warn("Erreur de lecture vocale :", ev.error);
+      if(gen !== mailSpeakGeneration) return;
       if(!opts.forceDefaultVoice && voice){
         // La voix choisie a échoué (ex. voix réseau indisponible) — on
-        // retente aussitôt avec la voix par défaut de l'appareil plutôt que
-        // de rester silencieux sans explication.
-        mailSpeak(text, onEnd, {forceDefaultVoice:true});
+        // retente aussitôt ce même morceau avec la voix par défaut de
+        // l'appareil plutôt que de rester silencieux sans explication.
+        mailSpeakOneChunk(text, gen, onDone, {forceDefaultVoice:true});
       } else {
         alert("La lecture vocale a échoué (" + (ev.error||"erreur inconnue") + "). Vérifie le volume de ton téléphone et qu'une voix française est installée dans ses réglages.");
       }
@@ -5174,14 +5199,32 @@ function mailSpeak(text, onEnd, opts){
     // la lecture a échoué silencieusement (bug connu de speechSynthesis) —
     // on retente une fois avec la voix par défaut de l'appareil.
     setTimeout(()=>{
-      if(settled) return;
+      if(settled || gen!==mailSpeakGeneration) return;
       if(!window.speechSynthesis.speaking && !window.speechSynthesis.pending){
-        if(!opts.forceDefaultVoice){ mailSpeak(text, onEnd, {forceDefaultVoice:true}); }
+        if(!opts.forceDefaultVoice){ mailSpeakOneChunk(text, gen, onDone, {forceDefaultVoice:true}); }
       }
     }, 1000);
   }, 60);
 }
-function mailStopSpeaking(){ mailClearKeepAlive(); if("speechSynthesis" in window) window.speechSynthesis.cancel(); }
+function mailSpeak(text, onEnd, opts){
+  opts = opts || {};
+  if(!("speechSynthesis" in window)){ alert("La lecture vocale n'est pas prise en charge par ce navigateur."); if(onEnd) onEnd(); return; }
+  if(!text || !text.trim()){ if(onEnd) onEnd(); return; }
+  window.speechSynthesis.cancel();
+  mailClearKeepAlive();
+  mailSpeakGeneration++;
+  const gen = mailSpeakGeneration;
+  const chunks = mailSplitTextForSpeech(text);
+  let i = 0;
+  function next(){
+    if(gen !== mailSpeakGeneration) return;
+    if(i >= chunks.length){ if(onEnd) onEnd(); return; }
+    const chunkText = chunks[i++];
+    mailSpeakOneChunk(chunkText, gen, next, {forceDefaultVoice: opts.forceDefaultVoice});
+  }
+  next();
+}
+function mailStopSpeaking(){ mailSpeakGeneration++; mailClearKeepAlive(); if("speechSynthesis" in window) window.speechSynthesis.cancel(); }
 
 /* ---------- Gmail (boîte dédiée pour les mails transférés depuis Nine) ---------- */
 const MAIL_DEFAULT_ACCOUNT = "germain.sensique.eufy@gmail.com";
