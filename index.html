@@ -5119,21 +5119,69 @@ function wireVoicePicker(container){
 }
 
 let mailCurrentUtterance = null;
-function mailSpeak(text, onEnd){
-  if(!("speechSynthesis" in window)){ alert("La lecture vocale n'est pas prise en charge par ce navigateur."); if(onEnd) onEnd(); return; }
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  const voice = mailGetSelectedVoice();
-  if(voice){ u.voice = voice; u.lang = voice.lang; } else { u.lang = "fr-FR"; }
-  // Un débit légèrement plus lent et un ton naturel (pas de suraigu artificiel)
-  // rendent la lecture moins robotique, surtout avec les voix "standard".
-  u.rate = 0.95;
-  u.pitch = 1;
-  if(onEnd) u.onend = onEnd;
-  mailCurrentUtterance = u;
-  window.speechSynthesis.speak(u);
+let mailSpeakKeepAlive = null;
+function mailClearKeepAlive(){
+  if(mailSpeakKeepAlive){ clearInterval(mailSpeakKeepAlive); mailSpeakKeepAlive = null; }
 }
-function mailStopSpeaking(){ if("speechSynthesis" in window) window.speechSynthesis.cancel(); }
+function mailSpeak(text, onEnd, opts){
+  opts = opts || {};
+  if(!("speechSynthesis" in window)){ alert("La lecture vocale n'est pas prise en charge par ce navigateur."); if(onEnd) onEnd(); return; }
+  if(!text || !text.trim()){ if(onEnd) onEnd(); return; }
+  window.speechSynthesis.cancel();
+  mailClearKeepAlive();
+  // Chrome (surtout mobile) a un bug connu : enchaîner cancel() puis speak()
+  // dans le même tour d'exécution peut faire échouer silencieusement la
+  // lecture (aucun son, aucune erreur). Un tout petit délai suffit à l'éviter.
+  setTimeout(()=>{
+    const u = new SpeechSynthesisUtterance(text);
+    const voice = opts.forceDefaultVoice ? null : mailGetSelectedVoice();
+    if(voice){ u.voice = voice; u.lang = voice.lang; } else { u.lang = "fr-FR"; }
+    // Un débit légèrement plus lent et un ton naturel (pas de suraigu artificiel)
+    // rendent la lecture moins robotique, surtout avec les voix "standard".
+    u.rate = 0.95;
+    u.pitch = 1;
+    let settled = false;
+    u.onstart = ()=>{
+      // Certains navigateurs (Chrome desktop/Android) mettent la lecture en
+      // pause au bout d'environ 15s sur un texte long — on la relance
+      // régulièrement tant qu'elle est en cours pour éviter qu'elle se coupe.
+      mailClearKeepAlive();
+      mailSpeakKeepAlive = setInterval(()=>{
+        if(!window.speechSynthesis.speaking){ mailClearKeepAlive(); return; }
+        window.speechSynthesis.pause();
+        window.speechSynthesis.resume();
+      }, 12000);
+    };
+    u.onend = ()=>{
+      settled = true; mailClearKeepAlive();
+      if(onEnd) onEnd();
+    };
+    u.onerror = (ev)=>{
+      settled = true; mailClearKeepAlive();
+      console.warn("Erreur de lecture vocale :", ev.error);
+      if(!opts.forceDefaultVoice && voice){
+        // La voix choisie a échoué (ex. voix réseau indisponible) — on
+        // retente aussitôt avec la voix par défaut de l'appareil plutôt que
+        // de rester silencieux sans explication.
+        mailSpeak(text, onEnd, {forceDefaultVoice:true});
+      } else {
+        alert("La lecture vocale a échoué (" + (ev.error||"erreur inconnue") + "). Vérifie le volume de ton téléphone et qu'une voix française est installée dans ses réglages.");
+      }
+    };
+    mailCurrentUtterance = u;
+    window.speechSynthesis.speak(u);
+    // Filet de sécurité : si au bout d'1s rien n'est parti ni en attente,
+    // la lecture a échoué silencieusement (bug connu de speechSynthesis) —
+    // on retente une fois avec la voix par défaut de l'appareil.
+    setTimeout(()=>{
+      if(settled) return;
+      if(!window.speechSynthesis.speaking && !window.speechSynthesis.pending){
+        if(!opts.forceDefaultVoice){ mailSpeak(text, onEnd, {forceDefaultVoice:true}); }
+      }
+    }, 1000);
+  }, 60);
+}
+function mailStopSpeaking(){ mailClearKeepAlive(); if("speechSynthesis" in window) window.speechSynthesis.cancel(); }
 
 /* ---------- Gmail (boîte dédiée pour les mails transférés depuis Nine) ---------- */
 const MAIL_DEFAULT_ACCOUNT = "germain.sensique.eufy@gmail.com";
@@ -5902,8 +5950,7 @@ function openQuickAddModal(prefill){
       <div id="qaPhotoPreview" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;"></div>
       <input type="file" id="qaPhotoInput" accept="image/*" capture="environment" multiple style="display:none">
       <button class="btn small" id="qaAddPhoto" style="width:100%;justify-content:center;margin-bottom:10px;">📷 Ajouter une photo</button>
-      <button class="btn small" id="qaToggleMore" style="width:100%;justify-content:center;margin-bottom:10px;">+ Plus d'options</button>
-      <div id="qaMoreOptions" style="display:none;">
+      <div id="qaMoreOptions">
         <textarea id="qaDesc" placeholder="Description…" style="width:100%;min-height:70px;border:1px solid var(--border-soft);border-radius:8px;padding:9px 11px;font-size:13.5px;background:var(--bg-card);color:var(--text-main);margin-bottom:10px;"></textarea>
         <div class="chiprow" style="margin-bottom:12px;">
           <button class="btn chip small flame" id="qaChipToday">🔥 Aujourd'hui</button>
@@ -5926,12 +5973,6 @@ function openQuickAddModal(prefill){
   updateDriveIndicator();
   overlay.querySelector("#qaTitle").focus();
   overlay.querySelector("#qaSettingsBtn").addEventListener("click", ()=> showSettingsModal());
-  overlay.querySelector("#qaToggleMore").addEventListener("click", (e)=>{
-    const box = overlay.querySelector("#qaMoreOptions");
-    const isHidden = box.style.display==="none";
-    box.style.display = isHidden ? "block" : "none";
-    e.currentTarget.textContent = isHidden ? "− Moins d'options" : "+ Plus d'options";
-  });
   let qaToday=false, qaUrgent=false, qaQuick=false, qaKnowledge=false;
   overlay.querySelector("#qaChipToday").addEventListener("click", e=>{ qaToday=!qaToday; e.currentTarget.classList.toggle("on", qaToday); });
   overlay.querySelector("#qaChipUrgent").addEventListener("click", e=>{ qaUrgent=!qaUrgent; e.currentTarget.classList.toggle("on", qaUrgent); });
