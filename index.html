@@ -4882,71 +4882,113 @@ function showDriveModal(){
 // Cuts off the signature block and any quoted earlier thread, so only the
 // actual new message content gets read aloud / attached to a task.
 const MAIL_HEADER_LINE_RE = /^(De|From|Envoyé|Sent|Date|À|A|To|Cc|Objet|Subject)\s*:\s*(.*)$/i;
-// Étapes de nettoyage communes à un message (déjà isolé de ses voisins dans
-// le fil) : on-écrit/le-a-écrit, dé-citation des "> ", et la signature de
-// fin — partagées par stripEmailSignature (un seul bloc de texte aplati) et
-// splitMailThreadMessages (un message individuel du fil).
+// ---------- Nettoyage d'un message : citations + signatures ----------
+// Formules de politesse qui ouvrent une signature (ligne seule, courte).
+const MAIL_SIGNOFF_RE = /^(cordialement|bien cordialement|tr[eè]s cordialement|cdlt|bien [àa] (vous|toi)|bien [àa] vous tous|sinc[eè]rement|salutations|meilleures salutations|salutations distingu[ée]es|bonne (journ[ée]e|soir[ée]e|fin de journ[ée]e|semaine|fin de semaine|continuation)|belle (journ[ée]e|soir[ée]e)|merci( beaucoup| encore| d'avance| par avance| [àa] (toi|vous))?|a\+|@\+|a bient[ôo]t|amicalement|bises|regards|best regards|kind regards|best|thanks( and regards)?|thank you|many thanks|cheers)\s*[,.!]*\s*$/i;
+// Lignes de "bruit" typiques d'une signature ou d'un pied de mail, à retirer où qu'elles soient.
+const MAIL_NOISE_LINE_RES = [
+  /^\[?cid:[^\]]*\]?$/i,                                   // images intégrées [cid:image001.png@...]
+  /^<?image\d*\.(png|jpe?g|gif)>?$/i,
+  /^\[(https?:\/\/|mailto:)[^\]]*\]$/i,                      // liens entre crochets laissés par Outlook
+  /^(https?:\/\/|www\.)\S+$/i,                               // URL seule
+  /^(mailto:)?[\w.+-]+@[\w-]+\.[\w.-]+$/i,                   // adresse mail seule
+  /^(t[ée]l(\.|[ée]phone)?|tel|mob(ile)?|portable|port\.?|gsm|fax|phone|cell|direct|standard|office|m|t|p|f)\s*[.:]?\s*[+(\d][\d\s().+-]{6,}$/i,
+  /^[+(]?\d[\d\s().-]{8,}\d$/,                               // numéro de téléphone seul
+  /^envoy[ée] (de|depuis|à partir de) (mon|ma|votre|outlook|nine|gmail|yahoo|l'application)/i,
+  /^(sent from|get outlook for|obtenir outlook pour|t[ée]l[ée]charger outlook)/i,
+  /^(pensez|merci de penser|please consider|think) .*(environnement|imprimer|print|environment)/i,
+  /^(suivez-nous|follow us|retrouvez-nous|rejoignez-nous)/i,
+  /^(linkedin|twitter|facebook|instagram|youtube)\b/i
+];
+// Début d'un avertissement légal/confidentialité : tout ce qui suit est coupé.
+const MAIL_DISCLAIMER_RE = /(ce (message|courriel|mail|e-?mail)( et (toutes )?(les|ses) pi[eè]ces jointes)? (est|sont|peut|contient|pourrait)|this (e-?mail|message|communication)( and any (attachments?|files))? (is|are|may|contains)|confidentiel(le)?s? et (sont |est )?(destin|[ée]tabli)|strictly confidential|intended (only|solely) for|if you (are not|have received) th|si vous (avez re[çc]u|n'[êe]tes pas le destinataire)|disclaimer|avis de confidentialit[ée]|mention l[ée]gale)/i;
+// Indices qu'une ligne fait partie d'un bloc de coordonnées.
+const MAIL_SIG_HINT_RE = /(\+33|\+\d{2}\s?\d|\b0[1-9]([\s.]?\d{2}){4}\b|@[\w-]+\.\w|https?:\/\/|www\.|\b\d{5}\s+[A-ZÉÈ][\w-]+|\b(rue|avenue|av\.|boulevard|bd|chemin|all[ée]e|place|cedex|bp)\b|\b(directeur|directrice|responsable|manager|chef de|charg[ée]e? d|assistante?|ing[ée]nieur|consultant|pr[ée]sident|g[ée]rant|coordinat|technicien|commercial|comptable|d[ée]l[ée]gu[ée]|head of|director|officer)\b|\b(sas|sarl|s\.a\.|sa|gmbh|ltd|inc|group[e]?)\b)/i;
+function mailLooksLikeSignatureBlock(lines){
+  const nonEmpty = lines.map(l=>l.trim()).filter(Boolean);
+  if(!nonEmpty.length) return true;
+  if(nonEmpty.length > 14) return false;               // trop long pour une signature
+  if(nonEmpty.some(l=> l.length > 110)) return false;  // une vraie phrase de contenu
+  // Un vrai contenu contient des phrases qui se terminent par . ? ! sur des lignes longues.
+  const proseLines = nonEmpty.filter(l=> l.length > 60 && /[.?!]$/.test(l));
+  return proseLines.length === 0;
+}
 function cleanMessageLines(lines){
-  // Drop "Le X a écrit :" / "On X wrote:" quote-intro lines (just that
-  // line — the quoted message itself, right after, is real content).
-  lines = lines.filter(l=> !/^le .+ a écrit\s*:?\s*$/i.test(l.trim()) && !/^on .+ wrote:\s*$/i.test(l.trim()));
+  lines = lines.map(l=> l.replace(/ /g," "));
+  // Séparateurs visuels ("_____", "-----", "=====").
+  lines = lines.filter(l=> !/^\s*([_=*~-])\1{4,}\s*$/.test(l));
+  // Lignes d'intro de citation "Le X a écrit :" / "On X wrote:".
+  lines = lines.filter(l=> !/^le .+ a [ée]crit\s*:?\s*$/i.test(l.trim()) && !/^on .+ wrote:\s*$/i.test(l.trim()));
+  // Dé-citation des "> " pour lire la conversation comme de la prose.
+  lines = lines.map(l=> l.replace(/^(\s*>)+\s?/, ""));
+  // Bruit (images, URL seules, téléphones, "Envoyé depuis mon iPhone"...).
+  lines = lines.filter(l=>{ const t = l.trim(); return !t || !MAIL_NOISE_LINE_RES.some(re=> re.test(t)); });
 
-  // Un-quote "> " lines instead of cutting the message there, so a
-  // forwarded conversation reads as normal prose, in full.
-  lines = lines.map(l=> l.replace(/^>+\s?/, ""));
-
-  // Only strip a genuine trailing signature/footer — scan back from the
-  // very end and cut once there, so a similar-looking line in the middle
-  // of a thread is never mistaken for a sign-off and doesn't truncate
-  // the rest of the conversation.
-  const footerMarkers = [
-    /^--\s*$/,
-    /^(cordialement|bien à vous|bien cordialement|sincèrement|meilleures salutations|salutations distinguées|merci d'avance)\s*,?\s*$/i,
-    /^envoyé (de|depuis) (mon|votre) (iphone|ipad|android|smartphone|téléphone)/i,
-    /^sent from my (iphone|ipad|android)/i,
-    /^get outlook for/i
-  ];
+  // Avertissement légal : on coupe tout à partir de là (s'il est dans la 2e moitié).
+  for(let k=0; k<lines.length; k++){
+    if(MAIL_DISCLAIMER_RE.test(lines[k]) && k >= Math.floor(lines.length*0.3)){ lines = lines.slice(0,k); break; }
+  }
   while(lines.length && lines[lines.length-1].trim()==="") lines.pop();
-  // Scan forward within the last few lines so the cut lands at the START of
-  // the trailing signature block (e.g. "Cordialement,") rather than at some
-  // later line within it (e.g. a device footer under the name).
-  const scanFrom = Math.max(0, lines.length-6);
-  for(let k=scanFrom; k<lines.length; k++){
-    const l = lines[k].trim();
-    if(l && footerMarkers.some(re=> re.test(l))){ lines = lines.slice(0,k); break; }
+
+  // Délimiteur de signature standard "-- ".
+  const dashIdx = lines.findIndex(l=> /^--\s*$/.test(l));
+  if(dashIdx > 0) lines = lines.slice(0, dashIdx);
+
+  // Formule de politesse suivie d'un bloc qui ressemble à une signature :
+  // on coupe à partir de la formule (nom, fonction, société, adresse...).
+  // On cherche la dernière formule dans les ~20 dernières lignes.
+  const searchFrom = Math.max(0, lines.length-20);
+  for(let k=lines.length-1; k>=searchFrom; k--){
+    const t = lines[k].trim();
+    if(t && MAIL_SIGNOFF_RE.test(t) && mailLooksLikeSignatureBlock(lines.slice(k+1))){
+      // "Merci" seul en toute fin sans rien après : on le garde (c'est du contenu),
+      // sauf s'il est suivi d'un nom/bloc.
+      const after = lines.slice(k+1).filter(l=> l.trim());
+      if(/^merci/i.test(t) && after.length===0) break;
+      lines = lines.slice(0,k);
+      break;
+    }
+  }
+  while(lines.length && lines[lines.length-1].trim()==="") lines.pop();
+
+  // Pas de formule mais un bloc de coordonnées en fin (nom / fonction /
+  // société / adresse / tél) : on remonte depuis la fin tant que les lignes
+  // sont courtes et sans phrase, et on coupe si on y trouve des coordonnées.
+  let k = lines.length-1, hints = 0, start = lines.length;
+  while(k >= 0 && lines.length-k <= 10){
+    const t = lines[k].trim();
+    if(t){
+      if(t.length > 70 || /[.?!:]$/.test(t) && t.length > 35) break;
+      if(MAIL_SIG_HINT_RE.test(t)) hints++;
+    }
+    start = k; k--;
+  }
+  // Il faut du contenu avant, et au moins 1 indice de coordonnées dans le bloc.
+  const blockLines = lines.slice(start).filter(l=> l.trim()).length;
+  if(hints >= 1 && blockLines >= 2 && start > 0 && lines.slice(0,start).some(l=> l.trim())){
+    // Si juste au-dessus du bloc il y a un prénom/nom seul (1-3 mots), il part avec.
+    lines = lines.slice(0, start);
+  }
+  while(lines.length && lines[lines.length-1].trim()==="") lines.pop();
+  // Nom seul en toute dernière ligne après une phrase (ex. "Brigitte") : c'est la signature.
+  if(lines.length >= 2){
+    const last = lines[lines.length-1].trim();
+    if(/^[A-ZÉÈÀÂÎÔÛÇ][\wÀ-ÿ'-]+(\s+[A-ZÉÈÀÂÎÔÛÇ][\wÀ-ÿ'-]+){0,2}\.?$/.test(last) && last.length <= 30){
+      lines = lines.slice(0,-1);
+      while(lines.length && lines[lines.length-1].trim()==="") lines.pop();
+      // ...et la formule juste au-dessus, s'il y en a une.
+      if(lines.length && MAIL_SIGNOFF_RE.test(lines[lines.length-1].trim()) && !/^merci/i.test(lines[lines.length-1].trim())) lines = lines.slice(0,-1);
+    }
   }
 
-  return lines.join("\n").replace(/\n{3,}/g,"\n\n").trim();
+  return lines.join("\n").replace(/[ \t]+\n/g,"\n").replace(/\n{3,}/g,"\n\n").trim();
 }
+// Version "texte aplati" : chaque message du fil est nettoyé séparément
+// (donc chaque signature intermédiaire est retirée, pas seulement la dernière),
+// puis on les remet bout à bout.
 function stripEmailSignature(text){
   if(!text) return "";
-  let lines = text.replace(/\r\n/g,"\n").split("\n");
-
-  // 1) Remove standalone separator lines a mail client inserts to delimit a
-  //    quoted/forwarded block (Outlook's "________________________________",
-  //    plain "-----", etc.) — pure visual noise, never actual content.
-  lines = lines.filter(l=> !/^_{5,}$/.test(l.trim()) && !/^-{5,}$/.test(l.trim()));
-
-  // 2) Remove the metadata header block a forward/reply inserts before each
-  //    quoted message ("De : / Envoyé : / À : / Objet :" in French, or
-  //    "From: / Sent: / To: / Subject:" in English) — wherever it appears,
-  //    not just at the very top. A forwarded conversation can have several
-  //    of these (one per message in the thread); we drop only the header
-  //    LINES themselves so the actual written text of every message in the
-  //    thread is kept and read in full, instead of stopping at the first one.
-  const withoutHeaders = [];
-  for(let i=0;i<lines.length;i++){
-    if(MAIL_HEADER_LINE_RE.test(lines[i].trim())){
-      // Consume this whole contiguous run of header lines (a full block).
-      while(i<lines.length && (MAIL_HEADER_LINE_RE.test(lines[i].trim()) || lines[i].trim()==="")) i++;
-      i--; // compensate for the loop's own i++
-      continue;
-    }
-    withoutHeaders.push(lines[i]);
-  }
-  lines = withoutHeaders;
-
-  return cleanMessageLines(lines);
+  return splitMailThreadMessages(text, "").map(m=> m.body).filter(Boolean).join("\n\n");
 }
 // Découpe un fil de mails (forward Outlook/Nine avec plusieurs messages
 // chaînés par des blocs "De :/Envoyé :/Objet :" ou des lignes "Le X a
@@ -5092,15 +5134,18 @@ async function msFetchRecent(count){
   });
 }
 
-/* ---------- Voix du narrateur (voix féminine paramétrable) ---------- */
+/* ---------- Voix du narrateur : uniquement français de France, voix féminines ---------- */
 const FEMALE_VOICE_HINTS = ["amelie","amélie","audrey","aurelie","aurélie","marie","chantal","celine","céline",
-  "victoire","lea","léa","julie","hortense","denise","charline","claire","manon","emma","female","femme",
-  "google français","google francais","samantha","zira","salli","joanna","ines","inès"];
-// Les voix "Amélioré/Enhanced/Premium/Neural" sont générées différemment
-// (souvent par un réseau de neurones) et sonnent nettement moins robotiques
-// que les voix "standard" du même nom — on les préfère quand elles existent.
+  "victoire","lea","léa","julie","hortense","denise","eloise","éloïse","vivienne","brigitte","celeste","céleste",
+  "coralie","jacqueline","josephine","joséphine","yvette","charline","claire","manon","emma","female","femme",
+  "google français","google francais","ines","inès","fr-fr-x-fra","fr-fr-x-frc","fr-fr-x-vlf"];
+const MALE_VOICE_HINTS = ["henri","paul","thomas","nicolas","rémi","remi","alain","claude","jérôme","jerome","yves",
+  "maurice","antoine","jean","fabrice","gérard","gerard","daniel","alexandre","lucien","sébastien","sebastien",
+  "mathieu","guillaume","louis","olivier","fr-fr-x-frb","fr-fr-x-frd","homme"];
+// Les voix "Amélioré/Enhanced/Premium/Neural" sonnent nettement moins robotiques.
 const QUALITY_VOICE_HINTS = ["enhanced","amélioré","ameliore","premium","neural","natural","plus","hd"];
 let mailVoiceURI = localStorage.getItem("sensitache.mailVoiceURI") || "";
+let mailSpeechRate = parseFloat(localStorage.getItem("sensitache.mailSpeechRate")) || 1;
 let mailVoicesCache = [];
 function mailRefreshVoices(){
   if(!("speechSynthesis" in window)) return [];
@@ -5111,63 +5156,75 @@ if("speechSynthesis" in window){
   mailRefreshVoices();
   window.speechSynthesis.addEventListener("voiceschanged", mailRefreshVoices);
 }
+function mailVoiceText(v){ return ((v.name||"")+" "+(v.voiceURI||"")).toLowerCase(); }
+function mailIsFrFr(v){ return String(v.lang||"").replace("_","-").toLowerCase()==="fr-fr"; }
+function mailIsMaleVoice(v){
+  const n = mailVoiceText(v);
+  return MALE_VOICE_HINTS.some(h=> n.includes(h)) || /\bmale\b/.test(n.replace(/female/g,""));
+}
 function mailVoiceScore(v){
-  const n = v.name.toLowerCase();
+  const n = mailVoiceText(v);
   let score = 0;
   if(FEMALE_VOICE_HINTS.some(h=> n.includes(h))) score += 2;
   if(QUALITY_VOICE_HINTS.some(h=> n.includes(h))) score += 3;
-  if(!v.localService) score += 1; // les voix réseau sont souvent plus naturelles que les voix embarquées
+  if(!v.localService) score += 1;
   return score;
 }
-function mailPickDefaultVoice(){
+// Liste proposée : français de France uniquement, sans les voix identifiées
+// comme masculines (sur Android les voix n'indiquent souvent pas leur genre :
+// elles restent proposées).
+function mailAllowedVoices(){
   const voices = mailVoicesCache.length ? mailVoicesCache : mailRefreshVoices();
-  if(!voices.length) return null;
-  const fr = voices.filter(v=> v.lang && v.lang.toLowerCase().startsWith("fr"));
-  const pool = fr.length ? fr : voices;
-  const sorted = pool.slice().sort((a,b)=> mailVoiceScore(b)-mailVoiceScore(a));
-  return sorted[0] || pool[0];
+  let list = voices.filter(v=> mailIsFrFr(v) && !mailIsMaleVoice(v));
+  if(!list.length) list = voices.filter(mailIsFrFr);
+  return list.slice().sort((a,b)=> mailVoiceScore(b)-mailVoiceScore(a));
+}
+function mailPickDefaultVoice(){
+  const allowed = mailAllowedVoices();
+  if(allowed.length) return allowed[0];
+  const voices = mailVoicesCache.length ? mailVoicesCache : mailRefreshVoices();
+  return voices.find(v=> String(v.lang||"").toLowerCase().startsWith("fr")) || null;
 }
 function mailGetSelectedVoice(){
-  const voices = mailVoicesCache.length ? mailVoicesCache : mailRefreshVoices();
+  const allowed = mailAllowedVoices();
   if(mailVoiceURI){
-    const found = voices.find(v=> v.voiceURI===mailVoiceURI);
+    const found = allowed.find(v=> v.voiceURI===mailVoiceURI);
     if(found) return found;
   }
   return mailPickDefaultVoice();
 }
+function mailFormatRate(r){ return r.toFixed(2).replace(".",",")+"×"; }
 function buildVoicePickerHtml(){
   return `
     <div style="border:1px solid var(--border-soft);border-radius:10px;padding:10px 12px;margin-bottom:12px;">
-      <div style="font-weight:700;font-size:13px;margin-bottom:6px;">🎙️ Voix du narrateur</div>
-      <p style="font-size:11.5px;color:var(--text-sub);margin:0 0 6px;">Les voix proposées viennent de ton appareil (pas de SensiTâche). Les voix marquées ⭐ sont les versions « Améliorée/Enhanced/Neural » — nettement moins robotiques ; installe-les dans les réglages vocaux de ton téléphone si tu n'en as pas encore. Choisis une voix française dans la liste, puis teste-la.</p>
-      <select id="mailVoiceSelect" style="width:100%;border:1px solid var(--border-soft);border-radius:8px;padding:7px 9px;background:var(--bg-app);color:var(--text-main);font-size:12.5px;margin-bottom:6px;"></select>
-      <button class="btn small" id="mailVoiceTestBtn">🔊 Tester la voix</button>
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px;">🎙️ Voix de lecture (français de France, voix féminine)</div>
+      <select id="mailVoiceSelect" style="width:100%;border:1px solid var(--border-soft);border-radius:8px;padding:7px 9px;background:var(--bg-app);color:var(--text-main);font-size:12.5px;margin-bottom:10px;"></select>
+      <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--text-sub);margin-bottom:4px;">
+        <span>Vitesse de lecture</span><b id="mailRateLabel" style="color:var(--text-main);">${mailFormatRate(mailSpeechRate)}</b>
+      </div>
+      <input type="range" id="mailRateInput" min="0.6" max="1.8" step="0.05" value="${mailSpeechRate}" style="width:100%;margin-bottom:8px;">
+      <button class="btn small" id="mailVoiceTestBtn">🔊 Tester</button>
+      <details style="margin-top:8px;">
+        <summary style="cursor:pointer;font-size:11.5px;color:var(--text-sub);">Ajouter d'autres voix féminines françaises</summary>
+        <p style="font-size:11.5px;color:var(--text-sub);margin:6px 0 0;line-height:1.5;">Les voix viennent de ton téléphone, pas de SensiTâche. Sur Android : Réglages → Gestion générale (ou Système) → Langue → Synthèse vocale → ⚙️ à côté de « Moteur Google » → Installer les données vocales → <b>Français (France)</b> → choisis une voix féminine (et touche l'icône de téléchargement pour la version haute qualité). Chrome utilise ensuite la voix choisie là. Recharge la page pour la voir apparaître.</p>
+      </details>
     </div>`;
 }
 function wireVoicePicker(container){
   const select = container.querySelector("#mailVoiceSelect");
   function fillOptions(){
-    const voices = mailRefreshVoices();
-    if(!voices.length){
-      select.innerHTML = '<option value="">(aucune voix disponible sur cet appareil — voir les instructions de configuration ci-dessous)</option>';
+    const list = mailAllowedVoices();
+    select.innerHTML = "";
+    if(!list.length){
+      select.innerHTML = '<option value="">(aucune voix française de France sur cet appareil — voir ci-dessous)</option>';
       return;
     }
-    const fr = voices.filter(v=> v.lang && v.lang.toLowerCase().startsWith("fr")).sort((a,b)=> mailVoiceScore(b)-mailVoiceScore(a));
-    const others = voices.filter(v=> !fr.includes(v));
-    select.innerHTML = "";
-    const addGroup = (label, list)=>{
-      if(!list.length) return;
-      const grp = document.createElement("optgroup"); grp.label = label;
-      list.forEach(v=>{
-        const opt = document.createElement("option");
-        const star = mailVoiceScore(v)>=3 ? "⭐ " : "";
-        opt.value = v.voiceURI; opt.textContent = star+v.name+" ("+v.lang+")";
-        grp.appendChild(opt);
-      });
-      select.appendChild(grp);
-    };
-    addGroup("Français", fr);
-    addGroup("Autres langues", others);
+    list.forEach(v=>{
+      const opt = document.createElement("option");
+      const star = mailVoiceScore(v)>=3 ? "⭐ " : "";
+      opt.value = v.voiceURI; opt.textContent = star+v.name;
+      select.appendChild(opt);
+    });
     const current = mailGetSelectedVoice();
     if(current) select.value = current.voiceURI;
   }
@@ -5177,8 +5234,15 @@ function wireVoicePicker(container){
     mailVoiceURI = select.value;
     localStorage.setItem("sensitache.mailVoiceURI", mailVoiceURI);
   });
+  const rateInput = container.querySelector("#mailRateInput");
+  const rateLabel = container.querySelector("#mailRateLabel");
+  rateInput.addEventListener("input", ()=>{
+    mailSpeechRate = parseFloat(rateInput.value) || 1;
+    rateLabel.textContent = mailFormatRate(mailSpeechRate);
+    localStorage.setItem("sensitache.mailSpeechRate", String(mailSpeechRate));
+  });
   container.querySelector("#mailVoiceTestBtn").addEventListener("click", ()=>{
-    mailSpeak("Bonjour, voici un exemple de ma voix pour la lecture de vos mails.");
+    mailSpeak("Bonjour, voici un exemple de ma voix et de ma vitesse pour la lecture de vos mails.");
   });
 }
 
@@ -5237,7 +5301,7 @@ function mailSpeakOneChunk(text, gen, onDone, opts){
     const u = new SpeechSynthesisUtterance(text);
     const voice = opts.forceDefaultVoice ? null : mailGetSelectedVoice();
     if(voice){ u.voice = voice; u.lang = voice.lang; } else { u.lang = "fr-FR"; }
-    u.rate = 0.95;
+    u.rate = mailSpeechRate;
     u.pitch = 1;
     let settled = false, started = false, idleTicks = 0;
     mailLiveUtterances.push(u);
@@ -5730,13 +5794,37 @@ function buildMailRow(mail, opts){
 }
 
 /* ---------- Onglet Mail (mails non traités, reçus par transfert vers Gmail) ---------- */
+let mailSettingsOpen = false;
 function renderMailTab(el){
   el.innerHTML = "";
   mailRequestWakeLock();
 
+  // Barre compacte : état de connexion + bouton Actualiser (icône blanche,
+  // toujours visible) + icône Paramètres qui déplie voix/vitesse/Gmail.
+  const toolbar = document.createElement("div");
+  toolbar.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:10px;";
+  toolbar.innerHTML = `
+    <div id="mailGmailStatus" style="flex:1;min-width:0;font-size:12px;color:var(--text-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+    <button id="mailGmailRefreshBtn" title="Actualiser" aria-label="Actualiser" style="width:42px;height:42px;border-radius:50%;border:none;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);flex-shrink:0;">
+      <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+    </button>
+    <button id="mailSettingsBtn" title="Paramètres" aria-label="Paramètres" style="width:42px;height:42px;border-radius:50%;border:1px solid var(--border-soft);background:${mailSettingsOpen?'var(--bg-panel-2)':'transparent'};color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>`;
+  el.appendChild(toolbar);
+
+  const settingsPanel = document.createElement("div");
+  settingsPanel.style.display = mailSettingsOpen ? "block" : "none";
+  el.appendChild(settingsPanel);
+  toolbar.querySelector("#mailSettingsBtn").addEventListener("click", (e)=>{
+    mailSettingsOpen = !mailSettingsOpen;
+    settingsPanel.style.display = mailSettingsOpen ? "block" : "none";
+    e.currentTarget.style.background = mailSettingsOpen ? "var(--bg-panel-2)" : "transparent";
+  });
+
   const voiceBox = document.createElement("div");
   voiceBox.innerHTML = buildVoicePickerHtml();
-  el.appendChild(voiceBox);
+  settingsPanel.appendChild(voiceBox);
   wireVoicePicker(voiceBox);
 
   const configBox = document.createElement("div");
@@ -5746,23 +5834,21 @@ function renderMailTab(el){
     <p style="font-size:11.5px;color:var(--text-sub);margin:0 0 6px;">Crée une boîte Gmail dédiée, transfère-lui tes mails depuis Nine, connecte-la ici. Toute la boîte de réception s'affiche ci-dessous (lus et non lus) — « 👂 Déjà écouté » et « ✅ Tâche créée » indiquent ceux déjà traités, sans les masquer.</p>
     <label style="font-size:11.5px;color:var(--text-sub);display:block;margin-bottom:4px;">Identifiant client Google (OAuth)</label>
     <input type="text" id="mailGmailClientIdInput" placeholder="xxxxxxxx.apps.googleusercontent.com" value="${escapeHtml(mailGmailClientId)}" style="width:100%;border:1px solid var(--border-soft);border-radius:8px;padding:7px 9px;background:var(--bg-app);color:var(--text-main);font-size:12.5px;margin-bottom:6px;">
-    <div id="mailGmailStatus" style="font-size:12px;color:var(--text-sub);margin-bottom:6px;"></div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;">
       <button class="btn small" id="mailGmailSaveId">Enregistrer l'identifiant</button>
       <button class="btn small primary" id="mailGmailConnectBtn">Se connecter (Google)</button>
-      <button class="btn small" id="mailGmailRefreshBtn">🔄 Actualiser</button>
     </div>
   `;
-  el.appendChild(configBox);
+  settingsPanel.appendChild(configBox);
 
   const listBox = document.createElement("div");
   listBox.id = "mailTabList";
   listBox.style.cssText = "display:flex;flex-direction:column;gap:8px;";
-  listBox.innerHTML = '<div class="empty-hint">Connecte ta boîte Gmail puis touche « Actualiser » pour voir les mails non traités.</div>';
+  listBox.innerHTML = '<div class="empty-hint">Touche le bouton Actualiser (flèche ronde) pour charger tes mails. Réglages de voix, vitesse et connexion Gmail : icône ⚙️.</div>';
   el.appendChild(listBox);
 
   function updateStatus(){
-    configBox.querySelector("#mailGmailStatus").textContent = gmailIsConnected() ? "✅ Connecté" : (mailGmailClientId ? "⚠️ Identifiant enregistré, pas encore connecté." : "⚠️ Non connecté.");
+    toolbar.querySelector("#mailGmailStatus").textContent = gmailIsConnected() ? "✅ Gmail connecté" : (mailGmailClientId ? "⚠️ Identifiant enregistré, pas encore connecté." : "⚠️ Non connecté.");
   }
   updateStatus();
   if(!gmailIsConnected() && mailGmailClientId){
@@ -5784,10 +5870,10 @@ function renderMailTab(el){
     try{
       await gmailRequestToken(true);
       updateStatus();
-      configBox.querySelector("#mailGmailRefreshBtn").click();
+      toolbar.querySelector("#mailGmailRefreshBtn").click();
     }catch(e){ alert("Connexion annulée ou refusée : "+(e.errorMessage||e.message||e.error||"")); }
   });
-  configBox.querySelector("#mailGmailRefreshBtn").addEventListener("click", async ()=>{
+  toolbar.querySelector("#mailGmailRefreshBtn").addEventListener("click", async ()=>{
     if(!gmailIsConnected()){
       // La page a pu être rechargée entre-temps (le jeton d'accès ne
       // survit pas à un rechargement) — retente une reconnexion silencieuse
