@@ -2015,9 +2015,19 @@ function formatDueDateFr(dateStr){
 }
 let trajectoireFilterId = "all";
 function renderTrajectoireTab(el){
-  const allTasks = wsTasks().filter(t=> t.dueDate);
-  if(!allTasks.length){
-    el.innerHTML = '<div class="empty-hint">Aucune tâche avec une date limite pour le moment. Règle une « date butoir » sur une tâche pour la voir apparaître ici — elle y restera même une fois cochée comme terminée.</div>';
+  // Éléments de la frise : les tâches avec date butoir ET les sous-tâches
+  // avec date limite (affectées à leur propre responsable, sinon à ceux de
+  // la tâche). Tous restent visibles une fois cochés.
+  const items = [];
+  wsTasks().forEach(t=>{
+    if(t.dueDate) items.push({kind:"task", t, date:t.dueDate, done:!!t.done, title:t.title, who:(t.assignedTo||[])});
+    (t.subtasks||[]).forEach(sub=>{
+      if(!sub.dueDate) return;
+      items.push({kind:"sub", t, s:sub, date:sub.dueDate, done:!!sub.done, title:sub.text||"(sous-tâche sans titre)", who: sub.assignedTo ? [sub.assignedTo] : (t.assignedTo||[])});
+    });
+  });
+  if(!items.length){
+    el.innerHTML = '<div class="empty-hint">Aucune tâche ni sous-tâche avec une date limite pour le moment. Règle une date sur une tâche ou une sous-tâche pour la voir apparaître ici — elle y restera même une fois cochée comme terminée.</div>';
     return;
   }
   const people = DATA.collaborators.slice().sort((a,b)=> a.name.localeCompare(b.name));
@@ -2037,16 +2047,23 @@ function renderTrajectoireTab(el){
     filterBar.appendChild(chip);
   });
 
-  const tasks = (trajectoireFilterId==="all" ? allTasks : allTasks.filter(t=> (t.assignedTo||[]).includes(trajectoireFilterId)))
-    .slice().sort((a,b)=> a.dueDate.localeCompare(b.dueDate));
+  const shown = (trajectoireFilterId==="all" ? items : items.filter(it=> it.who.includes(trajectoireFilterId)))
+    .slice().sort((a,b)=> a.date.localeCompare(b.date) || (a.kind===b.kind ? 0 : (a.kind==="task" ? -1 : 1)));
 
-  if(!tasks.length){
+  if(!shown.length){
     const empty = document.createElement("div");
     empty.className = "empty-hint";
-    empty.textContent = "Aucune tâche avec une date limite pour cette personne.";
+    empty.textContent = "Aucune tâche ni sous-tâche avec une date limite pour cette personne.";
     el.appendChild(empty);
     return;
   }
+
+  const avatarsFor = ids=>{
+    const cs = ids.map(id=> collabById(id)).filter(Boolean);
+    if(!cs.length) return `<span class="avatar" style="background:#666">?</span>`;
+    return cs.slice(0,3).map((c,i)=> `<span class="avatar" style="background:${c.color};${i>0?'margin-left:-7px;':''}border:2px solid var(--bg-card);" title="${escapeHtml(c.name)}">${escapeHtml(c.name.slice(0,2).toUpperCase())}</span>`).join("")
+      + (cs.length===1 ? `<span style="font-size:11px;color:var(--text-sub);margin-left:6px;">${escapeHtml(cs[0].name)}</span>` : "");
+  };
 
   const today = todayStr();
   const wrap = document.createElement("div");
@@ -2055,31 +2072,39 @@ function renderTrajectoireTab(el){
   el.appendChild(wrap);
   const list = wrap.querySelector("[data-trajList]");
   let todayMarked = false;
-  tasks.forEach(t=>{
-    if(!todayMarked && t.dueDate >= today){
+  shown.forEach(it=>{
+    if(!todayMarked && it.date >= today){
       todayMarked = true;
       const marker = document.createElement("div");
       marker.style.cssText = "position:relative;margin:2px 0 12px;font-size:11px;font-weight:700;color:var(--accent);";
       marker.innerHTML = '<div style="position:absolute;left:-26px;top:3px;width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--bg-app);"></div>Aujourd\'hui';
       list.appendChild(marker);
     }
-    const overdue = !t.done && t.dueDate < today;
-    const dotColor = t.done ? "var(--knowledge)" : (overdue ? "var(--danger)" : "var(--accent)");
+    const isSub = it.kind==="sub";
+    const overdue = !it.done && it.date < today;
+    const dotColor = it.done ? "var(--knowledge)" : (overdue ? "var(--danger)" : "var(--accent)");
     const row = document.createElement("div");
-    row.style.cssText = "position:relative;padding:9px 12px;margin-bottom:10px;border:1px solid var(--border-soft);border-radius:10px;background:var(--bg-panel-2);cursor:pointer;";
+    row.style.cssText = "position:relative;padding:9px 12px;margin-bottom:10px;border:1px solid var(--border-soft);border-radius:10px;background:var(--bg-panel-2);cursor:pointer;"+(isSub?"margin-left:14px;border-style:dashed;":"");
     row.innerHTML = `
-      <div style="position:absolute;left:-26px;top:16px;width:10px;height:10px;border-radius:50%;background:${dotColor};box-shadow:0 0 0 3px var(--bg-app);"></div>
+      <div style="position:absolute;left:${isSub?-40:-26}px;top:16px;width:${isSub?8:10}px;height:${isSub?8:10}px;border-radius:50%;background:${isSub?'var(--bg-app)':dotColor};border:${isSub?'2px solid '+dotColor:'none'};box-shadow:0 0 0 3px var(--bg-app);"></div>
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
         <div style="min-width:0;">
-          <div style="font-size:11px;font-weight:700;color:${overdue?'var(--danger)':'var(--text-sub)'};text-transform:capitalize;">${formatDueDateFr(t.dueDate)}${overdue?' · en retard':''}</div>
-          <div style="font-size:13.5px;margin-top:2px;${t.done?'text-decoration:line-through;color:var(--text-sub);':''}">${escapeHtml(t.title)}</div>
-          <div style="margin-top:5px;">${assigneeAvatarsHtml(t)}</div>
+          <div style="font-size:11px;font-weight:700;color:${overdue?'var(--danger)':'var(--text-sub)'};text-transform:capitalize;">${formatDueDateFr(it.date)}${overdue?' · en retard':''}</div>
+          ${isSub ? `<div style="font-size:10.5px;color:var(--text-sub);margin-top:2px;">↳ Sous-tâche de « ${escapeHtml(it.t.title)} »</div>` : ""}
+          <div style="font-size:${isSub?13:13.5}px;margin-top:2px;${it.done?'text-decoration:line-through;color:var(--text-sub);':''}">${escapeHtml(it.title)}</div>
+          <div style="margin-top:5px;display:flex;align-items:center;">${avatarsFor(it.who)}</div>
         </div>
-        <div class="task-check${t.done?' checked':''}" data-check style="flex-shrink:0;" title="${t.done?'Terminée — touche pour rouvrir':'Marquer comme terminée'}">${t.done?'✓':''}</div>
+        <div class="task-check${it.done?' checked':''}" data-check style="flex-shrink:0;" title="${it.done?'Terminée — touche pour rouvrir':'Marquer comme terminée'}">${it.done?'✓':''}</div>
       </div>
     `;
-    row.querySelector("[data-check]").addEventListener("click", (e)=>{ e.stopPropagation(); toggleTaskDone(t); });
-    row.addEventListener("click", ()=> openTaskDrawer(t.id));
+    row.querySelector("[data-check]").addEventListener("click", (e)=>{
+      e.stopPropagation();
+      if(isSub){
+        it.s.done = !it.s.done; it.s.doneAt = it.s.done ? Date.now() : null;
+        it.t.updatedAt = Date.now(); saveData(); renderMain();
+      } else toggleTaskDone(it.t);
+    });
+    row.addEventListener("click", ()=> openTaskDrawer(it.t.id));
     list.appendChild(row);
   });
 }
