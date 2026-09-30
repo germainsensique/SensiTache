@@ -1764,31 +1764,54 @@ function buildCollabEmailText(){
     else if(e.t.urgent) groups.p2.push(e);
     else groups.p3.push(e);
   });
+  // Mise en forme explicite : chaque information est étiquetée (Objet,
+  // Affecté à, Dernier délai, Description, Sous-tâches) pour qu'on sache
+  // toujours de quoi il s'agit et qui en est responsable.
+  const wrapWith = (text, first, rest, width)=>{
+    width = width || 78;
+    const words = String(text).split(/\s+/).filter(Boolean);
+    const out = []; let cur = "";
+    words.forEach(w=>{
+      const test = cur ? cur+" "+w : w;
+      const pre = out.length ? rest : first;
+      if(cur && (pre.length + test.length) > width){ out.push(cur); cur = w; }
+      else cur = test;
+    });
+    if(cur) out.push(cur);
+    return out.map((l,i)=> (i===0?first:rest)+l).join("\n");
+  };
   const lineFor = ({t, status})=>{
     const names = assigneeNamesForTask(t).join(", ");
-    let line = "- " + t.title;
-    if(names) line += " (" + names + ")";
-    if(status==="done") line += " — ✅ terminée";
-    if(status==="deleted") line += " — ❌ abandonnée";
-    if(t.dueDate && status==="active") line += " — échéance : " + frDate(t.dueDate);
+    const out = [];
+    out.push(wrapWith("Objet : " + t.title, "- ", "  "));
+    out.push("    Affecté à : " + (names || "non affecté"));
+    if(status==="done") out.push("    Statut : ✅ terminée");
+    else if(status==="deleted") out.push("    Statut : ❌ abandonnée");
+    else if(t.dueDate) out.push("    Dernier délai : " + frDate(t.dueDate));
     if(t.description && t.description.trim()){
-      const descLines = t.description.trim().split("\n").filter(l=>l.trim()!=="").map(l=> wrapBullet(l.trim()));
-      line += "\n" + descLines.join("\n");
+      out.push("    Description :");
+      t.description.trim().split("\n").filter(l=>l.trim()!=="").forEach(l=> out.push(wrapWith(l.trim(), "      ", "      ")));
     }
-    const subLines = (t.subtasks||[]).filter(s=> !s.done || (collabMeetingStartedAt && s.doneAt && s.doneAt >= collabMeetingStartedAt)).map(s=>{
-      const sc = s.assignedTo ? DATA.collaborators.find(c=>c.id===s.assignedTo) : null;
-      let txt = (s.done ? "✓ " : "") + s.text + (sc ? " (" + sc.name + ")" : "");
-      if(s.done) txt += " — fait";
-      else if(s.dueDate) txt += " — pour le " + frDate(s.dueDate);
-      return wrapBullet(txt);
-    });
-    if(subLines.length) line += "\n" + subLines.join("\n");
-    return line;
+    const subs = (t.subtasks||[]).filter(s=> !s.done || (collabMeetingStartedAt && s.doneAt && s.doneAt >= collabMeetingStartedAt));
+    if(subs.length){
+      out.push("    Sous-tâches :");
+      subs.forEach(s=>{
+        const sc = s.assignedTo ? DATA.collaborators.find(c=>c.id===s.assignedTo) : null;
+        out.push(wrapWith((s.done ? "✓ " : "") + s.text + (s.done ? " — fait" : ""), "      · ", "        "));
+        if(!s.done){
+          const meta = [];
+          meta.push("Affecté à : " + (sc ? sc.name : (names || "non affecté")));
+          if(s.dueDate) meta.push("Dernier délai : " + frDate(s.dueDate));
+          out.push("        " + meta.join(" — "));
+        }
+      });
+    }
+    return out.join("\n");
   };
   const sections = [];
-  if(groups.p1.length) sections.push("Priorité 1 :\n" + groups.p1.map(lineFor).join("\n"));
-  if(groups.p2.length) sections.push("Priorité 2 :\n" + groups.p2.map(lineFor).join("\n"));
-  if(groups.p3.length) sections.push("Priorité 3 :\n" + groups.p3.map(lineFor).join("\n"));
+  if(groups.p1.length) sections.push("Priorité 1 :\n\n" + groups.p1.map(lineFor).join("\n\n"));
+  if(groups.p2.length) sections.push("Priorité 2 :\n\n" + groups.p2.map(lineFor).join("\n\n"));
+  if(groups.p3.length) sections.push("Priorité 3 :\n\n" + groups.p3.map(lineFor).join("\n\n"));
   const when = collabMeetingStartedAt ? " du " + new Date(collabMeetingStartedAt).toLocaleDateString("fr-FR") : "";
   const intro = "Bonjour,\n\nTu trouveras ci-dessous le compte rendu de notre réunion"+when+" :\n\n";
   return intro + sections.join("\n\n");
