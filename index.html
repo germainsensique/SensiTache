@@ -1053,7 +1053,13 @@ const TAB_DEFS = {
 let tabOrder = (function(){
   try{
     const saved = JSON.parse(localStorage.getItem("sensitache.tabOrder"));
-    if(Array.isArray(saved) && saved.every(id=>TAB_DEFS[id])) return saved;
+    if(Array.isArray(saved)){
+      // Garde l'ordre personnalisé, mais ajoute à la fin les onglets créés
+      // depuis (sinon un ordre enregistré avant leur ajout les masquait).
+      const kept = saved.filter(id=> TAB_DEFS[id]);
+      Object.keys(TAB_DEFS).forEach(id=>{ if(!kept.includes(id)) kept.push(id); });
+      return kept;
+    }
   }catch(e){}
   return Object.keys(TAB_DEFS);
 })();
