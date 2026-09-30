@@ -568,14 +568,18 @@ function saveData(){
   // an older-but-"newer-stamped" copy of the same task. Stamping the owner
   // here, on every save while a process is open, keeps that edit tagged as
   // the freshest copy no matter which field inside PROC changed.
-  if(typeof PROC !== "undefined" && PROC){
-    const procOwner = DATA.tasks.find(x=> x.process === PROC);
-    if(procOwner) procOwner.updatedAt = Date.now();
-  }
+  // (try : au tout premier démarrage d'un nouvel appareil, saveData() est
+  // appelé avant que PROC et d'autres variables plus bas soient déclarées.)
+  try{
+    if(PROC){
+      const procOwner = DATA.tasks.find(x=> x.process === PROC);
+      if(procOwner) procOwner.updatedAt = Date.now();
+    }
+  }catch(e){}
   try{ syncStampLocalChanges(); }catch(e){ /* pas encore initialisé au tout premier démarrage */ }
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); }
   catch(e){ alert("Impossible d'enregistrer (stockage plein ?). Exporte ta sauvegarde régulièrement.\n"+e.message); }
-  scheduleAutoBackup();
+  try{ scheduleAutoBackup(); }catch(e){}
   try{ collabMeetingOnSave(); }catch(e){}
 }
 function uid(p){ return (p||"id")+"_"+Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4); }
@@ -737,7 +741,7 @@ function collabMeetingEnd(){
   renderMain();
 }
 let suppressNextPopstate = false;
-let lastLocalEditAt = 0;
+var lastLocalEditAt = 0; // var : utilisé par saveData() dès le tout premier démarrage (avant cette ligne)
 
 /* =========================================================
    SIDEBAR
@@ -4453,20 +4457,55 @@ function driveEnsureTokenClient(){
   }
   return driveTokenClient;
 }
+/* ---- Deux comptes Google, deux accès séparés ----
+   Sauvegardes Drive = germain.sensique@gmail.com ; boîte mail = compte
+   eufy. Le navigateur étant connecté aux deux comptes, une demande d'accès
+   silencieuse pouvait revenir avec le MAUVAIS compte : Drive créait alors
+   une sauvegarde vide dans l'autre compte (deux « clouds » séparés, d'où
+   des appareils qui n'affichent plus la même chose), ou l'onglet Mail
+   ouvrait la mauvaise boîte. Désormais : les deux demandes ne partent
+   jamais en même temps, le compte est présélectionné (login_hint), puis
+   VÉRIFIÉ ; un jeton du mauvais compte est refusé et révoqué. */
+let googleAuthChain = Promise.resolve();
+function googleAuthSerial(fn){
+  const p = googleAuthChain.then(fn, fn);
+  googleAuthChain = p.catch(()=>{});
+  return p;
+}
+let driveWrongAccount = null, mailWrongAccount = null, driveCreateDeclinedToken = null;
+function googleRevokeQuietly(token){
+  try{ google.accounts.oauth2.revoke(token, ()=>{}); }catch(e){}
+}
 function driveRequestToken(interactive){
-  return new Promise((resolve, reject)=>{
+  return googleAuthSerial(()=> new Promise((resolve, reject)=>{
     let client;
     try{ client = driveEnsureTokenClient(); }catch(e){ reject(e); return; }
-    client.callback = (resp)=>{
+    let settled = false;
+    const guard = setTimeout(()=>{ if(!settled){ settled = true; reject({error:"timeout"}); } }, interactive ? 180000 : 25000);
+    client.callback = async (resp)=>{
+      if(settled) return;
+      settled = true; clearTimeout(guard);
       if(resp.error){ reject(resp); return; }
+      try{
+        const r = await fetch("https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)", {headers:{Authorization:"Bearer "+resp.access_token}});
+        if(r.ok){
+          const email = (((await r.json()).user||{}).emailAddress||"").toLowerCase();
+          if(email && email !== DRIVE_DEFAULT_ACCOUNT.toLowerCase()){
+            googleRevokeQuietly(resp.access_token);
+            driveWrongAccount = email;
+            if(interactive) alert("Ce compte Google ("+email+") n'est pas celui des sauvegardes.\nReconnecte-toi en choisissant "+DRIVE_DEFAULT_ACCOUNT+".");
+            reject({error:"wrong_account", email}); return;
+          }
+        }
+      }catch(e){ /* vérification impossible (hors ligne) : le garde-fou de création de fichier prend le relais */ }
+      driveWrongAccount = null;
       driveAccessToken = resp.access_token;
       driveTokenExpiry = Date.now() + (resp.expires_in*1000 - 60000);
       resolve(driveAccessToken);
     };
-    // Présélectionne le compte Google utilisé pour les sauvegardes de l'appli,
-    // pour éviter de se tromper de compte entre Drive et la boîte mail dédiée.
-    client.requestAccessToken({prompt: interactive ? "consent" : "", hint: DRIVE_DEFAULT_ACCOUNT});
-  });
+    // Présélectionne le compte des sauvegardes (login_hint ; hint gardé pour compatibilité).
+    client.requestAccessToken({prompt: interactive ? "consent" : "", login_hint: DRIVE_DEFAULT_ACCOUNT, hint: DRIVE_DEFAULT_ACCOUNT});
+  }));
 }
 async function driveGetToken(){
   if(driveAccessToken && Date.now() < driveTokenExpiry) return driveAccessToken;
@@ -4508,6 +4547,15 @@ async function driveFindOrCreateFile(token){
     driveFileId = data.files[0].id;
     moveFileToRoot(token, driveFileId, data.files[0].parents); // best-effort tidy-up, fire-and-forget
   } else {
+    // Garde-fou : un appareil qui a déjà synchronisé ne devrait jamais
+    // « perdre » son fichier — si on ne le trouve pas, c'est très
+    // probablement le mauvais compte Google. On ne crée pas de sauvegarde
+    // vide en silence, on demande.
+    if(localStorage.getItem("sensitache.driveLastSync") && (driveCreateDeclinedToken===token ||
+       !confirm("Aucune sauvegarde SensiTâche trouvée sur ce compte Google.\nTu es peut-être connecté au mauvais compte (les sauvegardes sont sur "+DRIVE_DEFAULT_ACCOUNT+").\n\nCréer quand même une nouvelle sauvegarde sur ce compte ?"))){
+      driveCreateDeclinedToken = token; // ne pas redemander toutes les 15 s avec le même accès
+      throw new Error("Sauvegarde introuvable sur ce compte Google — vérifie le compte ("+DRIVE_DEFAULT_ACCOUNT+").");
+    }
     const createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
       method:"POST",
       headers:{Authorization:"Bearer "+token, "Content-Type":"application/json"},
@@ -5885,11 +5933,28 @@ function gmailEnsureTokenClient(){
   return mailGmailTokenClient;
 }
 function gmailRequestToken(interactive){
-  return new Promise((resolve, reject)=>{
+  return googleAuthSerial(()=> new Promise((resolve, reject)=>{
     let client;
     try{ client = gmailEnsureTokenClient(); }catch(e){ reject(e); return; }
-    client.callback = (resp)=>{
+    let settled = false;
+    const guard = setTimeout(()=>{ if(!settled){ settled = true; reject({error:"timeout"}); } }, interactive ? 180000 : 25000);
+    client.callback = async (resp)=>{
+      if(settled) return;
+      settled = true; clearTimeout(guard);
       if(resp.error){ reject(resp); return; }
+      try{
+        const r = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {headers:{Authorization:"Bearer "+resp.access_token}});
+        if(r.ok){
+          const email = ((await r.json()).emailAddress||"").toLowerCase();
+          if(email && email !== MAIL_DEFAULT_ACCOUNT.toLowerCase()){
+            googleRevokeQuietly(resp.access_token);
+            mailWrongAccount = email;
+            if(interactive) alert("Ce compte Google ("+email+") n'est pas la boîte mail dédiée.\nReconnecte-toi en choisissant "+MAIL_DEFAULT_ACCOUNT+".");
+            reject({error:"wrong_account", email}); return;
+          }
+        }
+      }catch(e){}
+      mailWrongAccount = null;
       mailGmailAccessToken = resp.access_token;
       mailGmailTokenExpiry = Date.now() + (resp.expires_in||3600)*1000 - 60000;
       resolve(resp);
@@ -5899,8 +5964,8 @@ function gmailRequestToken(interactive){
     // interactive=false tente une reconnexion silencieuse (sans fenêtre),
     // ce qui marche tant que le compte a déjà donné son accord une fois —
     // utilisé pour ne pas redemander de se connecter à chaque actualisation.
-    client.requestAccessToken({prompt: interactive ? "consent" : "", hint: MAIL_DEFAULT_ACCOUNT});
-  });
+    client.requestAccessToken({prompt: interactive ? "consent" : "", login_hint: MAIL_DEFAULT_ACCOUNT, hint: MAIL_DEFAULT_ACCOUNT});
+  }));
 }
 // Essaie de restaurer la session Gmail au chargement de la page, pour qu'une
 // actualisation ou une réouverture de l'appli ne redemande pas de se
@@ -6290,7 +6355,7 @@ function renderMailTab(el){
   el.appendChild(listBox);
 
   function updateStatus(){
-    toolbar.querySelector("#mailGmailStatus").textContent = gmailIsConnected() ? "✅ Gmail connecté" : (mailGmailClientId ? "⚠️ Identifiant enregistré, pas encore connecté." : "⚠️ Non connecté.");
+    toolbar.querySelector("#mailGmailStatus").textContent = gmailIsConnected() ? "✅ Gmail connecté ("+MAIL_DEFAULT_ACCOUNT+")" : (mailWrongAccount ? "⚠️ Mauvais compte ("+mailWrongAccount+") — reconnecte-toi via ⚙️" : (mailGmailClientId ? "⚠️ Identifiant enregistré, pas encore connecté." : "⚠️ Non connecté."));
   }
   updateStatus();
   if(!gmailIsConnected() && mailGmailClientId){
@@ -6979,15 +7044,18 @@ let driveRenewing = false;
 function driveSyncBanner(show){
   let b = document.getElementById("driveSyncBanner");
   if(!show){ if(b) b.remove(); return; }
-  if(b) return;
+  if(b){
+    b.textContent = driveWrongAccount ? ("⚠️ Mauvais compte Google ("+driveWrongAccount+") — touche ici et choisis "+DRIVE_DEFAULT_ACCOUNT) : "⚠️ Synchro Drive interrompue — touche ici pour la relancer";
+    return;
+  }
   if(!localStorage.getItem("sensitache.driveLastSync")) return; // appareil jamais synchronisé : rien à signaler
   b = document.createElement("div");
   b.id = "driveSyncBanner";
   b.style.cssText = "position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:200;background:var(--danger);color:#fff;font-size:13px;font-weight:700;padding:9px 14px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.35);cursor:pointer;max-width:92vw;text-align:center;";
-  b.textContent = "⚠️ Synchro Drive interrompue — touche ici pour la relancer";
+  b.textContent = driveWrongAccount ? ("⚠️ Mauvais compte Google ("+driveWrongAccount+") — touche ici et choisis "+DRIVE_DEFAULT_ACCOUNT) : "⚠️ Synchro Drive interrompue — touche ici pour la relancer";
   b.addEventListener("click", ()=>{
     b.textContent = "Reconnexion…";
-    driveRequestToken(false).catch(()=> driveRequestToken(true)).then(()=>{
+    (driveWrongAccount ? driveRequestToken(true) : driveRequestToken(false).catch(()=> driveRequestToken(true))).then(()=>{
       driveSyncBanner(false); updateDriveIndicator(); updateDriveStatus(); writeDriveBackup();
     }).catch(()=>{ b.textContent = "⚠️ Synchro Drive interrompue — touche ici pour la relancer"; });
   });
