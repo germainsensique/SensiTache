@@ -575,6 +575,7 @@ function saveData(){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); }
   catch(e){ alert("Impossible d'enregistrer (stockage plein ?). Exporte ta sauvegarde régulièrement.\n"+e.message); }
   scheduleAutoBackup();
+  try{ collabMeetingOnSave(); }catch(e){}
 }
 function uid(p){ return (p||"id")+"_"+Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4); }
 // Pointer-based drag-reorder (subtasks, task list, tabs) all share this: if
@@ -649,9 +650,52 @@ let currentWsId = (function(){
 })();
 let currentTab = localStorage.getItem("sensitache.lastTab") || "tasks";
 let openTaskId = null;
+// Mode réunion (onglet Collaboration) : coches de sélection + compte rendu par mail.
 let collabEmailMode = false;
 let collabEmailSelected = new Set();
 let collabEmailTheme = "";
+let collabMeetingStartedAt = null;
+let collabMeetingSnapshots = {}; // dernière copie connue de chaque tâche cochée (pour celles supprimées ensuite)
+let collabFocusId = null, collabFocusScroll = 0;
+(function(){
+  try{
+    const m = JSON.parse(localStorage.getItem("sensitache.collabMeeting")||"null");
+    if(m && m.startedAt){
+      collabEmailMode = true;
+      collabMeetingStartedAt = m.startedAt;
+      collabEmailSelected = new Set(m.selected||[]);
+      collabMeetingSnapshots = m.snapshots||{};
+      collabEmailTheme = m.theme||"";
+    }
+  }catch(e){}
+})();
+function collabMeetingRefreshSnapshots(){
+  if(!collabEmailMode) return;
+  collabEmailSelected.forEach(id=>{
+    const t = DATA.tasks.find(x=> x.id===id);
+    if(t) collabMeetingSnapshots[id] = JSON.parse(JSON.stringify({id:t.id, title:t.title, description:t.description||"", assignedTo:t.assignedTo||[], dueDate:t.dueDate||null, today:!!t.today, urgent:!!t.urgent, subtasks:t.subtasks||[]}));
+  });
+}
+function collabMeetingPersist(){
+  try{
+    if(collabEmailMode) localStorage.setItem("sensitache.collabMeeting", JSON.stringify({startedAt:collabMeetingStartedAt, selected:Array.from(collabEmailSelected), snapshots:collabMeetingSnapshots, theme:collabEmailTheme}));
+    else localStorage.removeItem("sensitache.collabMeeting");
+  }catch(e){}
+}
+function collabMeetingOnSave(){
+  if(!collabEmailMode) return;
+  collabMeetingRefreshSnapshots();
+  collabMeetingPersist();
+}
+function collabMeetingEnd(){
+  collabEmailMode = false;
+  collabEmailSelected.clear();
+  collabMeetingSnapshots = {};
+  collabMeetingStartedAt = null;
+  collabEmailTheme = "";
+  collabMeetingPersist();
+  renderMain();
+}
 let suppressNextPopstate = false;
 let lastLocalEditAt = 0;
 
@@ -1259,6 +1303,11 @@ function renderMain(){
   if(!ws){ el.innerHTML = '<div class="empty-hint">Crée un espace de travail pour commencer.</div>'; return; }
   const prevScrollTop = el.scrollTop;
   if(currentTab!=="mail") mailReleaseWakeLock();
+  if(currentTab!=="collab" && collabFocusId){
+    collabFocusId = null;
+    const fo = document.getElementById("collabFocusOverlay"); if(fo) fo.remove();
+    try{ if(document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(()=>{}); }catch(e){}
+  }
   if(currentTab==="tasks") renderTasksTab(el);
   else if(currentTab==="collab") renderCollabTab(el);
   else if(currentTab==="recurrence") renderRecurrenceTab(el);
@@ -1454,7 +1503,7 @@ function renderTaskRow(t, bucketList, forCollabId){
   row.innerHTML = `
     ${bucketList ? '<span class="task-handle" style="cursor:grab;color:var(--text-sub);touch-action:none;padding:2px 4px;flex-shrink:0;">⠿</span>' : ''}
     <div class="task-check" data-check></div>
-    <div class="task-title">${escapeHtml(t.title)}${nextSub ? ` <span class="subtask-inline" style="font-weight:400;color:var(--text-sub);font-size:12.5px;">— <span class="subtask-inline-check" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" style="pointer-events:none;">${escapeHtml(nextSub.text)}</span></span>` : ""}</div>
+    <div class="task-title">${escapeHtml(t.title)}${nextSub ? ` <span class="subtask-inline" style="font-weight:400;color:var(--text-sub);font-size:12.5px;">— <span class="subtask-inline-check" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" style="pointer-events:none;">${escapeHtml(nextSub.text)}${nextSub.dueDate ? ` <span style="color:${(!nextSub.done && nextSub.dueDate<todayStr())?'var(--danger)':'var(--text-sub)'};">📅 ${formatSubDue(nextSub.dueDate)}</span>` : ""}</span></span>` : ""}</div>
     <div class="badges">${badges}</div>
   `;
   if(bucketList){
@@ -1525,7 +1574,71 @@ function toggleTaskDone(t){
 }
 
 /* ---------- COLLABORATION TAB ---------- */
+function buildCollabGroup(c, list, opts){
+  opts = opts || {};
+  const group = document.createElement("div");
+  group.className = "collab-group";
+  const allChecked = list.length>0 && list.every(t=> collabEmailSelected.has(t.id));
+  group.innerHTML = `<div class="collab-head" style="display:flex;align-items:center;gap:8px;">
+    <span class="avatar" style="background:${c.color}">${escapeHtml(c.name.slice(0,2).toUpperCase())}</span>
+    <span style="flex:1;min-width:0;">${escapeHtml(c.name)} <span style="color:var(--text-sub);font-weight:400;">(${list.length})</span></span>
+    ${collabEmailMode ? `<button class="btn small ghost" data-checkAll title="Cocher / décocher toutes ses tâches">${allChecked?'☑ Tout décocher':'☐ Tout cocher'}</button>` : ''}
+    ${opts.focus ? '' : `<button class="btn small ghost" data-focus title="Afficher uniquement ses tâches, en plein écran" style="padding:4px 8px;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button>`}
+  </div>`;
+  list.sort((a,b)=>{
+    const ao=a.sortOrder, bo=b.sortOrder;
+    if(ao!==undefined && bo!==undefined) return ao-bo;
+    if(ao!==undefined) return -1;
+    if(bo!==undefined) return 1;
+    return sortCategory(a)-sortCategory(b);
+  });
+  list.forEach(t=>{
+    const row = renderTaskRow(t, list, c.id);
+    if(collabEmailMode){
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = collabEmailSelected.has(t.id);
+      cb.style.cssText = "flex-shrink:0;width:19px;height:19px;margin:0 3px 0 0;cursor:pointer;accent-color:var(--accent);";
+      cb.addEventListener("click", e=>{
+        e.stopPropagation();
+        collabMeetingToggle(t, cb.checked);
+        const counter = document.getElementById("emailSelCount");
+        if(counter) counter.textContent = collabEmailSelected.size + " sélectionnée(s)";
+      });
+      row.insertBefore(cb, row.firstChild);
+    }
+    group.appendChild(row);
+  });
+  const checkAllBtn = group.querySelector("[data-checkAll]");
+  if(checkAllBtn) checkAllBtn.addEventListener("click", e=>{
+    e.stopPropagation();
+    list.forEach(t=> collabMeetingToggle(t, !allChecked));
+    renderMain();
+  });
+  const focusBtn = group.querySelector("[data-focus]");
+  if(focusBtn) focusBtn.addEventListener("click", e=>{
+    e.stopPropagation();
+    collabFocusId = c.id;
+    collabFocusScroll = 0;
+    try{ if(document.documentElement.requestFullscreen && !document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{}); }catch(err){}
+    renderMain();
+  });
+  return group;
+}
+function collabMeetingToggle(t, checked){
+  if(checked){ collabEmailSelected.add(t.id); }
+  else { collabEmailSelected.delete(t.id); delete collabMeetingSnapshots[t.id]; }
+  collabMeetingRefreshSnapshots();
+  collabMeetingPersist();
+}
+function collabCloseFocus(){
+  collabFocusId = null;
+  try{ if(document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(()=>{}); }catch(err){}
+  renderMain();
+}
 function renderCollabTab(el){
+  const prevFocus = document.getElementById("collabFocusOverlay");
+  if(prevFocus){ collabFocusScroll = prevFocus.scrollTop; prevFocus.remove(); }
   el.innerHTML = "";
   const tasks = activeTasks().filter(t=>!recurrenceNotDueYet(t));
   const byCollab = {};
@@ -1541,25 +1654,41 @@ function renderCollabTab(el){
 
   const toolbar = document.createElement("div");
   toolbar.style.cssText = "display:flex;flex-direction:column;gap:8px;margin-bottom:14px;";
-  toolbar.innerHTML = `
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-      <button class="btn small${collabEmailMode?' primary':''}" id="btnToggleEmailMode">✉️ ${collabEmailMode ? "Annuler la sélection" : "Générer un e-mail"}</button>
-      ${collabEmailMode ? `<span id="emailSelCount" style="font-size:12px;color:var(--text-sub);">${collabEmailSelected.size} sélectionnée(s)</span><button class="btn small primary" id="btnGenEmail" style="margin-left:auto;">📋 Générer le texte</button>` : ""}
-    </div>
-    ${collabEmailMode ? `<input type="text" id="emailThemeInput" class="fieldinput" placeholder="Thème (pour l'objet du mail)" value="${escapeHtml(collabEmailTheme)}" style="max-width:320px;">` : ""}
-  `;
+  if(collabEmailMode){
+    const since = collabMeetingStartedAt ? new Date(collabMeetingStartedAt).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}) : "";
+    toolbar.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;border:1px solid var(--accent);border-radius:10px;padding:8px 10px;background:var(--bg-panel-2);">
+        <span style="font-size:12.5px;font-weight:700;color:var(--accent);">🔴 Réunion en cours${since?' depuis '+since:''}</span>
+        <span id="emailSelCount" style="font-size:12px;color:var(--text-sub);">${collabEmailSelected.size} sélectionnée(s)</span>
+        <span style="flex:1;"></span>
+        <button class="btn small ghost" id="btnCancelMeeting">Annuler</button>
+        <button class="btn small primary" id="btnGenEmail">✅ Terminer la réunion</button>
+      </div>
+      <input type="text" id="emailThemeInput" class="fieldinput" placeholder="Thème de la réunion (pour l'objet du mail)" value="${escapeHtml(collabEmailTheme)}" style="max-width:320px;">
+      <div style="font-size:11.5px;color:var(--text-sub);">Coche les tâches abordées. Tu peux les modifier, les terminer ou les supprimer pendant la réunion : le mail reprendra leur état au moment où tu termines.</div>`;
+  } else {
+    toolbar.innerHTML = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><button class="btn small" id="btnStartMeeting">🗓️ Démarrer une réunion</button></div>`;
+  }
   el.appendChild(toolbar);
-  toolbar.querySelector("#btnToggleEmailMode").addEventListener("click", ()=>{
-    collabEmailMode = !collabEmailMode;
-    if(!collabEmailMode) collabEmailSelected.clear();
+  const startBtn = toolbar.querySelector("#btnStartMeeting");
+  if(startBtn) startBtn.addEventListener("click", ()=>{
+    collabEmailMode = true;
+    collabMeetingStartedAt = Date.now();
+    collabEmailSelected.clear();
+    collabMeetingSnapshots = {};
+    collabMeetingPersist();
     renderMain();
   });
   if(collabEmailMode){
     toolbar.querySelector("#btnGenEmail").addEventListener("click", ()=>{
-      if(collabEmailSelected.size===0){ alert("Coche au moins une tâche à inclure dans l'e-mail."); return; }
+      if(collabEmailSelected.size===0){ alert("Coche au moins une tâche abordée pendant la réunion."); return; }
       showCollabEmailModal();
     });
-    toolbar.querySelector("#emailThemeInput").addEventListener("input", e=>{ collabEmailTheme = e.target.value; });
+    toolbar.querySelector("#btnCancelMeeting").addEventListener("click", ()=>{
+      if(!confirm("Annuler la réunion ? La sélection sera perdue et aucun mail ne sera généré.")) return;
+      collabMeetingEnd();
+    });
+    toolbar.querySelector("#emailThemeInput").addEventListener("input", e=>{ collabEmailTheme = e.target.value; collabMeetingPersist(); });
   }
 
   if(!hasAny){
@@ -1567,40 +1696,36 @@ function renderCollabTab(el){
     hint.className = "empty-hint";
     hint.textContent = "Aucune tâche active affectée à d’autres collaborateurs.";
     el.appendChild(hint);
-    return;
+  } else {
+    DATA.collaborators.forEach(c=>{
+      if(c.id===DATA.currentUserId) return;
+      const list = byCollab[c.id]; if(!list || list.length===0) return;
+      el.appendChild(buildCollabGroup(c, list));
+    });
   }
-  DATA.collaborators.forEach(c=>{
-    if(c.id===DATA.currentUserId) return;
-    const list = byCollab[c.id]; if(!list || list.length===0) return;
-    const group = document.createElement("div");
-    group.className = "collab-group";
-    group.innerHTML = `<div class="collab-head"><span class="avatar" style="background:${c.color}">${escapeHtml(c.name.slice(0,2).toUpperCase())}</span> ${escapeHtml(c.name)} <span style="color:var(--text-sub);font-weight:400;">(${list.length})</span></div>`;
-    list.sort((a,b)=>{
-      const ao=a.sortOrder, bo=b.sortOrder;
-      if(ao!==undefined && bo!==undefined) return ao-bo;
-      if(ao!==undefined) return -1;
-      if(bo!==undefined) return 1;
-      return sortCategory(a)-sortCategory(b);
-    });
-    list.forEach(t=>{
-      const row = renderTaskRow(t, list, c.id);
-      if(collabEmailMode){
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.checked = collabEmailSelected.has(t.id);
-        cb.style.cssText = "flex-shrink:0;width:17px;height:17px;margin:0 2px 0 0;cursor:pointer;";
-        cb.addEventListener("click", e=>{
-          e.stopPropagation();
-          if(cb.checked) collabEmailSelected.add(t.id); else collabEmailSelected.delete(t.id);
-          const counter = document.getElementById("emailSelCount");
-          if(counter) counter.textContent = collabEmailSelected.size + " sélectionnée(s)";
-        });
-        row.insertBefore(cb, row.firstChild);
-      }
-      group.appendChild(row);
-    });
-    el.appendChild(group);
-  });
+
+  // Vue plein écran d'un seul collaborateur (confidentialité : rien d'autre
+  // n'est visible derrière). Redessinée à chaque rendu pour rester à jour.
+  if(collabFocusId){
+    const c = DATA.collaborators.find(x=> x.id===collabFocusId);
+    if(!c){ collabFocusId = null; return; }
+    const list = (byCollab[c.id]||[]).slice();
+    const ov = document.createElement("div");
+    ov.id = "collabFocusOverlay";
+    ov.style.cssText = "position:fixed;inset:0;z-index:58;background:var(--bg-app);overflow-y:auto;padding:14px 14px 90px;";
+    const head = document.createElement("div");
+    head.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:12px;position:sticky;top:-14px;background:var(--bg-app);padding:8px 0;z-index:2;";
+    head.innerHTML = `<span style="flex:1;font-size:15px;font-weight:700;">Tâches de ${escapeHtml(c.name)}</span>
+      ${collabEmailMode ? `<span style="font-size:11.5px;font-weight:700;color:var(--accent);">🔴 Réunion</span>` : ''}
+      <button class="btn small" id="collabFocusClose" title="Quitter le plein écran">✕ Fermer</button>`;
+    ov.appendChild(head);
+    if(list.length) ov.appendChild(buildCollabGroup(c, list, {focus:true}));
+    else { const h = document.createElement("div"); h.className="empty-hint"; h.textContent = "Aucune tâche active pour "+c.name+"."; ov.appendChild(h); }
+    document.body.appendChild(ov);
+    ov.scrollTop = collabFocusScroll || 0;
+    ov.addEventListener("scroll", ()=>{ collabFocusScroll = ov.scrollTop; });
+    head.querySelector("#collabFocusClose").addEventListener("click", collabCloseFocus);
+  }
 }
 function assigneeNamesForTask(t){
   return (t.assignedTo||[]).map(id=> DATA.collaborators.find(c=>c.id===id)).filter(Boolean).map(c=>c.name);
@@ -1626,26 +1751,36 @@ function wrapBullet(text, width){
   return lines.map((l,i)=> (i===0?prefixFirst:prefixRest) + l).join("\n");
 }
 function buildCollabEmailText(){
-  const ids = Array.from(collabEmailSelected);
-  const tasks = ids.map(id=> DATA.tasks.find(t=>t.id===id)).filter(Boolean);
+  const frDate = d=> String(d).split("-").reverse().join("/");
+  const entries = Array.from(collabEmailSelected).map(id=>{
+    const cur = DATA.tasks.find(t=>t.id===id);
+    if(cur) return {t:cur, status: cur.done ? "done" : "active"};
+    if(collabMeetingSnapshots[id]) return {t:collabMeetingSnapshots[id], status:"deleted"};
+    return null;
+  }).filter(Boolean);
   const groups = { p1: [], p2: [], p3: [] };
-  tasks.forEach(t=>{
-    if(t.today) groups.p1.push(t);
-    else if(t.urgent) groups.p2.push(t);
-    else groups.p3.push(t);
+  entries.forEach(e=>{
+    if(e.t.today) groups.p1.push(e);
+    else if(e.t.urgent) groups.p2.push(e);
+    else groups.p3.push(e);
   });
-  const lineFor = t=>{
+  const lineFor = ({t, status})=>{
     const names = assigneeNamesForTask(t).join(", ");
     let line = "- " + t.title;
     if(names) line += " (" + names + ")";
-    if(t.dueDate) line += " — échéance : " + t.dueDate.split("-").reverse().join("/");
+    if(status==="done") line += " — ✅ terminée";
+    if(status==="deleted") line += " — ❌ abandonnée";
+    if(t.dueDate && status==="active") line += " — échéance : " + frDate(t.dueDate);
     if(t.description && t.description.trim()){
       const descLines = t.description.trim().split("\n").filter(l=>l.trim()!=="").map(l=> wrapBullet(l.trim()));
       line += "\n" + descLines.join("\n");
     }
-    const subLines = (t.subtasks||[]).filter(s=>!s.done).map(s=>{
+    const subLines = (t.subtasks||[]).filter(s=> !s.done || (collabMeetingStartedAt && s.doneAt && s.doneAt >= collabMeetingStartedAt)).map(s=>{
       const sc = s.assignedTo ? DATA.collaborators.find(c=>c.id===s.assignedTo) : null;
-      return wrapBullet(s.text + (sc ? " (" + sc.name + ")" : ""));
+      let txt = (s.done ? "✓ " : "") + s.text + (sc ? " (" + sc.name + ")" : "");
+      if(s.done) txt += " — fait";
+      else if(s.dueDate) txt += " — pour le " + frDate(s.dueDate);
+      return wrapBullet(txt);
     });
     if(subLines.length) line += "\n" + subLines.join("\n");
     return line;
@@ -1654,7 +1789,8 @@ function buildCollabEmailText(){
   if(groups.p1.length) sections.push("Priorité 1 :\n" + groups.p1.map(lineFor).join("\n"));
   if(groups.p2.length) sections.push("Priorité 2 :\n" + groups.p2.map(lineFor).join("\n"));
   if(groups.p3.length) sections.push("Priorité 3 :\n" + groups.p3.map(lineFor).join("\n"));
-  const intro = "Bonjour,\n\nTu trouveras ci-dessous les points abordés lors de notre échange :\n\n";
+  const when = collabMeetingStartedAt ? " du " + new Date(collabMeetingStartedAt).toLocaleDateString("fr-FR") : "";
+  const intro = "Bonjour,\n\nTu trouveras ci-dessous le compte rendu de notre réunion"+when+" :\n\n";
   return intro + sections.join("\n\n");
 }
 function buildCollabEmailSubject(){
@@ -1678,9 +1814,10 @@ function showCollabEmailModal(){
       </div>
       <div class="field-label">Corps du message</div>
       <textarea readonly style="width:100%;min-height:260px;font-size:13px;line-height:1.5;border:1px solid var(--border-soft);border-radius:8px;padding:10px 12px;background:var(--bg-app);color:var(--text-main);margin:8px 0 12px;white-space:pre-wrap;">${escapeHtml(text)}</textarea>
-      <div class="modal-actions">
-        <button class="btn ghost" id="ceClose">Fermer</button>
-        <button class="btn primary" id="ceCopy">Copier le texte</button>
+      <div class="modal-actions" style="flex-wrap:wrap;">
+        <button class="btn ghost" id="ceResume">↩ Reprendre la réunion</button>
+        <button class="btn" id="ceCopy">Copier le texte</button>
+        <button class="btn primary" id="ceClose">Clore la réunion</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
@@ -1704,11 +1841,13 @@ function showCollabEmailModal(){
       alert("Impossible de copier automatiquement — sélectionne le texte ci-dessus et copie-le manuellement (Ctrl+C).");
     }
   });
+  overlay.querySelector("#ceResume").addEventListener("click", ()=> overlay.remove());
   overlay.querySelector("#ceClose").addEventListener("click", ()=>{
+    if(!confirm("Clore la réunion ? Pense à copier le texte avant : la sélection sera effacée.")) return;
     overlay.remove();
-    collabEmailMode = false; collabEmailSelected.clear(); renderMain();
+    collabMeetingEnd();
   });
-  overlay.addEventListener("click", e=>{ if(e.target===overlay){ overlay.remove(); collabEmailMode=false; collabEmailSelected.clear(); renderMain(); } });
+  overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
 }
 
 /* ---------- RECURRENCE TAB ---------- */
@@ -2402,6 +2541,10 @@ document.getElementById("attachInput").addEventListener("change", (e)=>{
   });
   e.target.value="";
 });
+function formatSubDue(d){
+  const p = String(d||"").split("-");
+  return p.length===3 ? p[2]+"/"+p[1] : d;
+}
 function nextUndoneSubtask(t){
   return (t.subtasks||[]).find(s=> !s.done) || null;
 }
@@ -2416,10 +2559,12 @@ function renderSubtaskList(t){
     row.dataset.id = s.id;
     row.style.cssText = "display:flex;align-items:center;gap:6px;background:var(--bg-card);border:1px solid var(--border-soft);border-radius:8px;padding:6px 8px;";
     const c = s.assignedTo ? collabById(s.assignedTo) : null;
+    const subDueOverdue = !!(s.dueDate && !s.done && s.dueDate < todayStr());
     row.innerHTML = `
       <span class="subtask-handle" style="cursor:grab;color:var(--text-sub);touch-action:none;padding:2px 4px;">⠿</span>
       <input type="checkbox" ${s.done?"checked":""} style="flex-shrink:0;">
       <input type="text" value="${escapeHtml(s.text)}" style="flex:1;min-width:0;background:transparent;border:none;color:var(--text-main);font-size:13px;${s.done?'text-decoration:line-through;color:var(--text-sub);':''}">
+      <span class="subtask-due" title="Date limite de la sous-tâche" style="position:relative;flex-shrink:0;display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:600;padding:2px 6px;border-radius:12px;cursor:pointer;white-space:nowrap;border:1px solid ${subDueOverdue?'var(--danger)':(s.dueDate?'var(--border-light)':'var(--border-soft)')};color:${subDueOverdue?'var(--danger)':(s.dueDate?'var(--text-main)':'var(--text-sub)')};">📅${s.dueDate?' '+formatSubDue(s.dueDate):''}<input type="date" data-subDue value="${s.dueDate||''}" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:none;padding:0;"></span>
       <span class="subtask-avatar" title="${c?escapeHtml(c.name):'Non affecté'}" style="flex-shrink:0;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:700;cursor:pointer;background:${c?c.color:'var(--bg-app)'};border:1px solid ${c?c.color:'var(--border-soft)'};color:${c?'#15171C':'var(--text-sub)'};">${c?escapeHtml(c.name.slice(0,2).toUpperCase()):'—'}</span>
       ${s.done && s.doneAt ? '<span style="font-size:10.5px;color:var(--text-sub);white-space:nowrap;flex-shrink:0;">'+new Date(s.doneAt).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"2-digit"})+'</span>' : ''}
       <button class="btn small danger" data-del style="flex-shrink:0;">✕</button>
@@ -2451,6 +2596,13 @@ function renderSubtaskList(t){
     });
     row.querySelector('input[type="text"]').addEventListener("input", e=>{
       s.text = e.target.value; t.updatedAt = Date.now(); saveData();
+    });
+    const dueInput = row.querySelector("[data-subDue]");
+    dueInput.addEventListener("pointerdown", e=> e.stopPropagation());
+    dueInput.addEventListener("click", e=>{ e.stopPropagation(); try{ if(dueInput.showPicker) dueInput.showPicker(); }catch(err){} });
+    dueInput.addEventListener("change", e=>{
+      s.dueDate = e.target.value || null;
+      t.updatedAt = Date.now(); saveData(); renderSubtaskList(t); renderMain();
     });
     row.querySelector("[data-del]").addEventListener("click", ()=>{
       snapshot();
@@ -5805,8 +5957,8 @@ function renderMailTab(el){
   toolbar.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:10px;";
   toolbar.innerHTML = `
     <div id="mailGmailStatus" style="flex:1;min-width:0;font-size:12px;color:var(--text-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
-    <button id="mailGmailRefreshBtn" title="Actualiser" aria-label="Actualiser" style="width:42px;height:42px;border-radius:50%;border:none;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);flex-shrink:0;">
-      <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+    <button id="mailGmailRefreshBtn" title="Synchroniser" aria-label="Synchroniser" style="width:42px;height:42px;border-radius:50%;border:none;background:transparent;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-15.36 6.36L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 15.36-6.36L21 8"/><path d="M21 3v5h-5"/></svg>
     </button>
     <button id="mailSettingsBtn" title="Paramètres" aria-label="Paramètres" style="width:42px;height:42px;border-radius:50%;border:1px solid var(--border-soft);background:${mailSettingsOpen?'var(--bg-panel-2)':'transparent'};color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
