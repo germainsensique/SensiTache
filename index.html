@@ -572,6 +572,7 @@ function saveData(){
     const procOwner = DATA.tasks.find(x=> x.process === PROC);
     if(procOwner) procOwner.updatedAt = Date.now();
   }
+  try{ syncStampLocalChanges(); }catch(e){ /* pas encore initialisé au tout premier démarrage */ }
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); }
   catch(e){ alert("Impossible d'enregistrer (stockage plein ?). Exporte ta sauvegarde régulièrement.\n"+e.message); }
   scheduleAutoBackup();
@@ -625,11 +626,50 @@ if(!DATA.tombstones) DATA.tombstones = {workspaces:{}, tasks:{}, collaborators:{
 });
 
 /* ---- undo ---- */
-let undoStack = [];
-function snapshot(){ undoStack.push(JSON.stringify(DATA)); if(undoStack.length>25) undoStack.shift(); }
+let undoStack = [], undoTimes = [];
+function snapshot(){
+  undoStack.push(JSON.stringify(DATA)); undoTimes.push(Date.now());
+  if(undoStack.length>25){ undoStack.shift(); undoTimes.shift(); }
+}
 function undo(){
   if(undoStack.length===0){ alert("Rien à annuler."); return; }
-  DATA = JSON.parse(undoStack.pop());
+  const snapTs = undoTimes.pop() || 0;
+  const snap = JSON.parse(undoStack.pop());
+  try{ syncStampLocalChanges(); }catch(e){}
+  // N'annule que ce qui a été fait SUR CET APPAREIL depuis ce point : les
+  // modifications reçues de l'autre appareil entre-temps sont conservées,
+  // et ce qui est rétabli est daté maintenant pour l'emporter à la synchro
+  // (sinon la synchro suivante défaisait l'annulation).
+  const cur = DATA, now = Date.now();
+  const touched = id=> (typeof syncLocalTouch!=="undefined" && (syncLocalTouch.get(id)||0) >= snapTs);
+  const snapMap = new Map((snap.tasks||[]).map(t=>[t.id, t]));
+  const curMap = new Map((cur.tasks||[]).map(t=>[t.id, t]));
+  const tomb = cur.tombstones || {workspaces:{}, tasks:{}, collaborators:{}};
+  const tasks = [];
+  new Set([...snapMap.keys(), ...curMap.keys()]).forEach(id=>{
+    const sv = snapMap.get(id), cv = curMap.get(id);
+    if(touched(id)){
+      if(sv){ if(!cv){ sv.updatedAt = now; sv._stampedAt = now; delete tomb.tasks[id]; } tasks.push(sv); }
+      else tomb.tasks[id] = now;               // créée ici après ce point → retirée
+    } else if(cv) tasks.push(cv);              // pas touchée ici → on garde l'état actuel
+  });
+  // Espaces et collaborateurs : on rétablit ceux qui avaient été supprimés,
+  // sans jamais retirer ceux apparus entre-temps (ils peuvent venir de l'autre appareil).
+  const restoreKind = (kind)=>{
+    tomb[kind] = tomb[kind] || {};
+    const curIds = new Set((cur[kind]||[]).map(x=>x.id));
+    const list = (snap[kind]||[]).map(x=>{ if(!curIds.has(x.id)){ x.updatedAt = now; delete tomb[kind][x.id]; } return x; });
+    const snapIds = new Set(list.map(x=>x.id));
+    (cur[kind]||[]).forEach(x=>{ if(!snapIds.has(x.id)) list.push(x); });
+    return list;
+  };
+  DATA = Object.assign({}, snap, {
+    currentUserId: cur.currentUserId,
+    tasks,
+    workspaces: restoreKind("workspaces"),
+    collaborators: restoreKind("collaborators"),
+    tombstones: tomb
+  });
   saveData(); renderSidebar(); renderMain();
 }
 
@@ -3494,6 +3534,7 @@ function procAssignShapeToCollaborator(shape, collabId){
       const linked = DATA.tasks.find(t=>t.id===shape.linkedTaskId);
       if(linked) cleanupTaskAttachments(linked);
       DATA.tasks = DATA.tasks.filter(t=>t.id!==shape.linkedTaskId);
+      DATA.tombstones.tasks[shape.linkedTaskId] = Date.now();
       shape.linkedTaskId = null;
     }
   }
@@ -3706,6 +3747,7 @@ function procDeleteMultiSelected(){
       const linked = DATA.tasks.find(t=>t.id===shape.linkedTaskId);
       if(linked) cleanupTaskAttachments(linked);
       DATA.tasks = DATA.tasks.filter(t=>t.id!==shape.linkedTaskId);
+      DATA.tombstones.tasks[shape.linkedTaskId] = Date.now();
     }
   });
   PROC.shapes = PROC.shapes.filter(s=>!toDelete.has(s.id));
@@ -3721,6 +3763,7 @@ function procDeleteShape(id){
       const linked = DATA.tasks.find(t=>t.id===shape.linkedTaskId);
       if(linked) cleanupTaskAttachments(linked);
       DATA.tasks = DATA.tasks.filter(t=>t.id!==shape.linkedTaskId);
+      DATA.tombstones.tasks[shape.linkedTaskId] = Date.now();
     }
   }
   PROC.shapes = PROC.shapes.filter(s=>s.id!==id);
@@ -4477,6 +4520,145 @@ async function driveFindOrCreateFile(token){
   localStorage.setItem("sensitache.driveFileId", driveFileId);
   return driveFileId;
 }
+/* =========================================================================
+   SYNCHRO FINE (v2) — horodatage par champ et par sous-tâche
+   Chaque enregistrement compare la tâche à sa dernière version connue sur
+   cet appareil et date précisément ce qui a changé (_ft[champ], _u sur
+   chaque sous-tâche / pièce jointe, _subDel pour celles supprimées). La
+   fusion avec Drive garde ainsi, champ par champ, la modification la plus
+   récente — deux modifications faites en parallèle sur le téléphone et le
+   PC dans la même tâche ne s'écrasent plus.
+   _stampedAt = updatedAt au moment du dernier horodatage : si un appareil
+   encore sur l'ancienne version modifie la tâche (sans horodater), son
+   updatedAt dépasse _stampedAt et la fusion retombe sur « tâche la plus
+   récente » pour ne rien ignorer.
+========================================================================= */
+const SYNC_META_KEYS = new Set(["updatedAt","_ft","_subDel","_stampedAt","subtasks","attachments"]);
+const SYNC_KEYED_ARRAYS = ["subtasks","attachments"];
+let syncBaseline = new Map();          // id de tâche -> dernière version connue (JSON par champ)
+let syncLocalTouch = new Map();        // id de tâche -> dernière modification faite SUR CET APPAREIL
+let syncClockOffset = 0;               // décalage de l'horloge locale par rapport à celle de Google
+function syncNow(){ return Date.now() + syncClockOffset; }
+function syncSnapshotTask(t){
+  const fields = {};
+  Object.keys(t).forEach(k=>{ if(!SYNC_META_KEYS.has(k)) fields[k] = JSON.stringify(t[k]===undefined ? null : t[k]); });
+  const arrays = {}, orders = {};
+  SYNC_KEYED_ARRAYS.forEach(name=>{
+    const arr = Array.isArray(t[name]) ? t[name] : [];
+    const m = {};
+    arr.forEach(x=>{ if(x && x.id) m[x.id] = JSON.stringify(Object.assign({}, x, {_u:undefined})); });
+    arrays[name] = m;
+    orders[name] = arr.map(x=> x && x.id).join(",");
+  });
+  return {fields, arrays, orders};
+}
+function syncResetBaseline(){
+  syncBaseline = new Map();
+  (DATA.tasks||[]).forEach(t=>{
+    syncBaseline.set(t.id, syncSnapshotTask(t));
+    if(!t._stampedAt || (t.updatedAt||0) > t._stampedAt) t._stampedAt = t.updatedAt||0;
+  });
+}
+function syncStampLocalChanges(){
+  const now = syncNow();
+  const present = new Set();
+  (DATA.tasks||[]).forEach(t=>{
+    present.add(t.id);
+    const prev = syncBaseline.get(t.id);
+    const cur = syncSnapshotTask(t);
+    if(!prev){
+      // Nouvelle sur cet appareil (créée ici, ou restaurée).
+      t.updatedAt = Math.max(t.updatedAt||0, now);
+      t._stampedAt = t.updatedAt;
+      syncBaseline.set(t.id, cur);
+      syncLocalTouch.set(t.id, Date.now());
+      return;
+    }
+    let changed = false;
+    const ft = Object.assign({}, t._ft||{});
+    const keys = new Set(Object.keys(cur.fields).concat(Object.keys(prev.fields)));
+    keys.forEach(k=>{ if(cur.fields[k] !== prev.fields[k]){ ft[k] = now; changed = true; } });
+    SYNC_KEYED_ARRAYS.forEach(name=>{
+      const arr = Array.isArray(t[name]) ? t[name] : [];
+      const pa = prev.arrays[name]||{}, ca = cur.arrays[name]||{};
+      arr.forEach(x=>{ if(x && x.id && ca[x.id] !== pa[x.id]){ x._u = now; changed = true; } });
+      Object.keys(pa).forEach(id=>{ if(!(id in ca)){ t._subDel = Object.assign({}, t._subDel||{}); t._subDel[id] = now; changed = true; } });
+      if(cur.orders[name] !== prev.orders[name]){ ft["_order_"+name] = now; changed = true; }
+    });
+    if(changed){
+      t._ft = ft;
+      t.updatedAt = Math.max(now, t.updatedAt||0);
+      syncBaseline.set(t.id, cur);
+      syncLocalTouch.set(t.id, Date.now());
+    }
+    // Cet appareil horodate tout : un updatedAt avancé sans changement de
+    // champ (ex. éditeur de processus ouvert) n'est pas une modif « non datée ».
+    t._stampedAt = t.updatedAt||0;
+  });
+  // Tâches disparues localement depuis la dernière version connue = suppressions faites ici.
+  Array.from(syncBaseline.keys()).forEach(id=>{
+    if(!present.has(id)){ syncBaseline.delete(id); syncLocalTouch.set(id, Date.now()); }
+  });
+}
+syncResetBaseline();
+// Fusionne la copie distante r DANS la copie locale l (en place, pour garder
+// les références utilisées par l'interface) et renvoie l.
+function syncMergeTask(l, r){
+  if(l === r) return l;
+  const lU = l.updatedAt||0, rU = r.updatedAt||0;
+  const lft = l._ft||{}, rft = r._ft||{};
+  // Modifs non datées (ancienne version de l'appli) : toute la tâche compte à son updatedAt.
+  const lLoose = lU > (l._stampedAt||0), rLoose = rU > (r._stampedAt||0);
+  const tl = k=> lLoose ? lU : (lft[k] || lU);
+  const tr = k=> rLoose ? rU : (rft[k] || rU);
+  const ft = Object.assign({}, lft);
+  Object.keys(rft).forEach(k=>{ if(!ft[k] || rft[k] > ft[k]) ft[k] = rft[k]; });
+  const keys = new Set(Object.keys(l).concat(Object.keys(r)));
+  keys.forEach(k=>{
+    if(SYNC_META_KEYS.has(k)) return;
+    const a = tl(k), b = tr(k);
+    if(b > a){
+      if(k in r) l[k] = r[k]; else delete l[k];
+      ft[k] = b;
+    } else if(a > (ft[k]||0)) ft[k] = a;
+  });
+  // Sous-tâches et pièces jointes : union par identifiant, la version la
+  // plus récente de chacune gagne, les suppressions datées sont respectées.
+  const del = Object.assign({}, r._subDel||{});
+  Object.keys(l._subDel||{}).forEach(id=>{ if(!del[id] || l._subDel[id] > del[id]) del[id] = l._subDel[id]; });
+  SYNC_KEYED_ARRAYS.forEach(name=>{
+    const la = Array.isArray(l[name]) ? l[name] : [], ra = Array.isArray(r[name]) ? r[name] : [];
+    if(!la.length && !ra.length) return;
+    const lm = new Map(la.filter(x=> x && x.id).map(x=>[x.id, x]));
+    const rm = new Map(ra.filter(x=> x && x.id).map(x=>[x.id, x]));
+    const pick = new Map(lm);
+    rm.forEach((x,id)=>{
+      const cur = pick.get(id);
+      if(!cur){ pick.set(id, x); return; }
+      const lt = rLoose || lLoose ? (cur._u || lU) : (cur._u || 0);
+      const rt = rLoose || lLoose ? (x._u || rU) : (x._u || 0);
+      if(rt > lt) pick.set(id, x);
+    });
+    const orderLocal = tl("_order_"+name) >= tr("_order_"+name);
+    const primary = orderLocal ? la : ra, secondary = orderLocal ? ra : la;
+    const out = [], seen = new Set();
+    primary.concat(secondary).forEach(x=>{
+      if(!x || !x.id || seen.has(x.id)) return;
+      seen.add(x.id);
+      const chosen = pick.get(x.id);
+      if(del[x.id] && del[x.id] >= (chosen._u||0)) return;
+      out.push(chosen);
+    });
+    const noId = (lU >= rU ? la : ra).filter(x=> !x || !x.id);
+    l[name] = out.concat(noId);
+  });
+  if(Object.keys(del).length) l._subDel = del;
+  l._ft = ft;
+  l.updatedAt = Math.max(lU, rU);
+  l._stampedAt = l.updatedAt;
+  return l;
+}
+
 function mergeAppData(local, remote){
   if(!remote || !remote.workspaces || !remote.tasks) return local;
   // Shallow-clone the top level and the three record arrays only — each
@@ -4565,7 +4747,10 @@ function mergeAppData(local, remote){
   (remote.tasks||[]).forEach(rt=>{
     if(deletedAfter("tasks", rt.id, rt.updatedAt)) return;
     const lt = taskMap.get(rt.id);
-    if(!lt || (rt.updatedAt||0) > (lt.updatedAt||0)) taskMap.set(rt.id, rt);
+    if(!lt){ taskMap.set(rt.id, rt); return; }
+    // Fusion champ par champ (voir SYNCHRO FINE) au lieu de « la tâche la
+    // plus récente remplace l'autre en entier ».
+    syncMergeTask(lt, rt);
   });
   merged.tasks = Array.from(taskMap.values()).filter(t=> !deletedAfter("tasks", t.id, t.updatedAt));
   merged.tasks.forEach(t=>{ if(!Array.isArray(t.assignedTo)) t.assignedTo = t.assignedTo ? [t.assignedTo] : [merged.currentUserId]; });
@@ -4960,12 +5145,27 @@ async function writeDriveBackup(){
     // device to sync silently overwriting what another device had added.
     try{
       const res = await fetch("https://www.googleapis.com/drive/v3/files/"+fileId+"?alt=media", {headers:{Authorization:"Bearer "+token}});
+      // Recale l'horloge sur celle de Google si l'appareil est décalé (> 2 s),
+      // pour que « le plus récent gagne » compare des heures comparables.
+      try{
+        const srv = Date.parse(res.headers.get("date")||"");
+        if(srv){ const off = srv - Date.now(); syncClockOffset = Math.abs(off) > 2000 ? off : 0; }
+      }catch(e){}
       if(res.ok){
         const text = await res.text();
         if(text.trim()){
           const remote = JSON.parse(text);
+          // Filet de sécurité : une copie locale complète avant la toute
+          // première fusion avec la nouvelle synchro (récupérable dans les
+          // sauvegardes de l'appli).
+          if(!localStorage.getItem("sensitache.syncV2Ready")){
+            try{ createBackupSnapshotNow(); }catch(e){}
+            localStorage.setItem("sensitache.syncV2Ready", String(Date.now()));
+          }
+          try{ syncStampLocalChanges(); }catch(e){}
           const merged = mergeAppData(DATA, remote);
           DATA = merged;
+          syncResetBaseline();
           localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
           if(!DATA.workspaces.find(w=>w.id===currentWsId)) currentWsId = DATA.workspaces[0] ? DATA.workspaces[0].id : null;
           if(document.getElementById("procOverlay").classList.contains("show") && openTaskId){
@@ -5014,7 +5214,9 @@ async function driveImport(){
     const remote = JSON.parse(text);
     if(!remote.workspaces || !remote.tasks) throw new Error("Contenu du fichier Drive invalide.");
     snapshot();
+    try{ syncStampLocalChanges(); }catch(e){}
     DATA = mergeAppData(DATA, remote);
+    syncResetBaseline();
     if(!DATA.workspaces.find(w=>w.id===currentWsId)) currentWsId = DATA.workspaces[0] ? DATA.workspaces[0].id : null;
     saveData(); renderSidebar(); renderMain();
     alert("Fusion avec Google Drive terminée.");
@@ -6766,6 +6968,47 @@ function attemptDriveReconnect(){
 }
 setTimeout(attemptDriveReconnect, 700);
 setInterval(updateDriveIndicator, 30000);
+
+/* ---- Renouvellement automatique de l'accès Drive ----
+   L'autorisation Google expire au bout d'environ une heure. Avant, rien ne
+   la renouvelait tant que la page restait ouverte : le PC ouvert toute la
+   journée arrêtait de synchroniser sans prévenir. On la renouvelle donc
+   quelques minutes avant l'échéance (et au retour sur l'appli), et si ça
+   ne passe pas, un bandeau bien visible propose de relancer en un geste. */
+let driveRenewing = false;
+function driveSyncBanner(show){
+  let b = document.getElementById("driveSyncBanner");
+  if(!show){ if(b) b.remove(); return; }
+  if(b) return;
+  if(!localStorage.getItem("sensitache.driveLastSync")) return; // appareil jamais synchronisé : rien à signaler
+  b = document.createElement("div");
+  b.id = "driveSyncBanner";
+  b.style.cssText = "position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:200;background:var(--danger);color:#fff;font-size:13px;font-weight:700;padding:9px 14px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.35);cursor:pointer;max-width:92vw;text-align:center;";
+  b.textContent = "⚠️ Synchro Drive interrompue — touche ici pour la relancer";
+  b.addEventListener("click", ()=>{
+    b.textContent = "Reconnexion…";
+    driveRequestToken(false).catch(()=> driveRequestToken(true)).then(()=>{
+      driveSyncBanner(false); updateDriveIndicator(); updateDriveStatus(); writeDriveBackup();
+    }).catch(()=>{ b.textContent = "⚠️ Synchro Drive interrompue — touche ici pour la relancer"; });
+  });
+  document.body.appendChild(b);
+}
+function driveEnsureFreshToken(){
+  if(!driveClientId || driveRenewing) return;
+  if(driveAccessToken && Date.now() < driveTokenExpiry - 5*60000){ driveSyncBanner(false); return; }
+  driveRenewing = true;
+  const giveUp = setTimeout(()=>{ driveRenewing = false; updateDriveIndicator(); if(!(driveAccessToken && Date.now() < driveTokenExpiry)) driveSyncBanner(true); }, 20000);
+  driveRequestToken(false).then(()=>{
+    clearTimeout(giveUp); driveRenewing = false;
+    driveSyncBanner(false); updateDriveIndicator(); updateDriveStatus();
+    writeDriveBackup();
+  }).catch(()=>{
+    clearTimeout(giveUp); driveRenewing = false; updateDriveIndicator();
+    if(!(driveAccessToken && Date.now() < driveTokenExpiry)) driveSyncBanner(true);
+  });
+}
+setTimeout(()=> setInterval(driveEnsureFreshToken, 60000), 30000);
+document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") setTimeout(driveEnsureFreshToken, 1500); });
 // Periodically pull in whatever another device may have synced, and also
 // whenever this tab/app comes back to the foreground (e.g. switching back
 // from another app on the phone, or back to this browser tab on the PC).
