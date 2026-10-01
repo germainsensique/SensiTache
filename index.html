@@ -5783,14 +5783,44 @@ function mailSplitTextForSpeech(text){
 // Garde une référence à chaque énoncé en cours : sinon Chrome peut le
 // "ramasser" (garbage collector) et ne jamais déclencher sa fin.
 const mailLiveUtterances = [];
+// Voix qui ont échoué pendant cette session (ex. « Français (France) »
+// choisie mais ses données vocales ne sont pas installées sur le téléphone :
+// Android répond « synthesis-failed » sans le moindre son).
+const mailBadVoices = new Set();
+let mailFallbackWarned = false;
+// Ordre d'essai : la voix choisie, les autres voix françaises de France,
+// puis n'importe quelle voix française (Canada, Belgique…), puis la voix par
+// défaut du téléphone. On passe à la suivante dès qu'une voix échoue.
+function mailVoiceCandidates(){
+  const voices = mailVoicesCache.length ? mailVoicesCache : mailRefreshVoices();
+  const list = [];
+  const add = v=>{ if(v && !mailBadVoices.has(v.voiceURI) && !list.includes(v)) list.push(v); };
+  add(mailGetSelectedVoice());
+  mailAllowedVoices().forEach(add);
+  voices.filter(v=> String(v.lang||"").toLowerCase().startsWith("fr") && !mailIsMaleVoice(v)).forEach(add);
+  voices.filter(v=> String(v.lang||"").toLowerCase().startsWith("fr")).forEach(add);
+  if(!mailBadVoices.has("__default_fr")) list.push("__default_fr");   // voix par défaut, en demandant le français
+  if(!mailBadVoices.has("__default")) list.push("__default");         // voix par défaut, sans rien imposer
+  return list;
+}
 function mailSpeakOneChunk(text, gen, onDone, opts){
   if(gen !== mailSpeakGeneration) return; // une lecture plus récente (ou un arrêt) a pris le relais
   setTimeout(()=>{
     if(gen !== mailSpeakGeneration) return;
     const synth = window.speechSynthesis;
     const u = new SpeechSynthesisUtterance(text);
-    const voice = opts.forceDefaultVoice ? null : mailGetSelectedVoice();
-    if(voice){ u.voice = voice; u.lang = voice.lang; } else { u.lang = "fr-FR"; }
+    const candidates = mailVoiceCandidates();
+    const cand = candidates[0];
+    if(!cand){
+      // Tout a échoué : on prévient une fois au lieu de rester muet.
+      if(!mailFallbackWarned){ mailFallbackWarned = true; alert("Aucune voix de ce téléphone n'arrive à lire le texte. Vérifie dans les réglages Android → Synthèse vocale que le moteur Google est actif et que la langue « Français (France) » est installée, puis recharge la page."); }
+      mailBadVoices.clear();
+      if(gen===mailSpeakGeneration) onDone();
+      return;
+    }
+    const candKey = typeof cand==="string" ? cand : cand.voiceURI;
+    if(cand==="__default_fr") u.lang = "fr-FR";
+    else if(cand!=="__default"){ u.voice = cand; u.lang = cand.lang; }
     u.rate = mailSpeechRate;
     u.pitch = 1;
     let settled = false, started = false, idleTicks = 0;
@@ -5809,15 +5839,10 @@ function mailSpeakOneChunk(text, gen, onDone, opts){
       // "interrupted"/"canceled" = arrêt volontaire (autre lecture, bouton stop).
       if(ev.error==="interrupted" || ev.error==="canceled"){ settled = true; mailClearKeepAlive(); return; }
       settled = true; mailClearKeepAlive();
-      console.warn("Erreur de lecture vocale :", ev.error);
+      console.warn("Erreur de lecture vocale ("+candKey+") :", ev.error);
       if(gen !== mailSpeakGeneration) return;
-      if(!opts.forceDefaultVoice && voice){
-        mailSpeakOneChunk(text, gen, onDone, {forceDefaultVoice:true});
-      } else {
-        // On ne bloque pas toute la lecture pour un morceau raté : on passe au suivant.
-        console.warn("Morceau ignoré après échec :", text.slice(0,60));
-        if(gen===mailSpeakGeneration) onDone();
-      }
+      mailVoiceFailed(cand, candKey);
+      mailSpeakOneChunk(text, gen, onDone, opts); // réessaie avec la voix suivante
     };
     mailCurrentUtterance = u;
     synth.speak(u);
@@ -5839,10 +5864,21 @@ function mailSpeakOneChunk(text, gen, onDone, opts){
       if(settled || started || synth.speaking || gen!==mailSpeakGeneration) return;
       settled = true; mailClearKeepAlive();
       synth.cancel();
-      if(!opts.forceDefaultVoice) mailSpeakOneChunk(text, gen, onDone, {forceDefaultVoice:true});
-      else onDone();
+      mailVoiceFailed(cand, candKey);
+      mailSpeakOneChunk(text, gen, onDone, opts);
     }, 2500);
   }, 120);
+}
+function mailVoiceFailed(cand, candKey){
+  mailBadVoices.add(candKey);
+  // Prévient une seule fois quand la voix choisie ne marche pas sur ce téléphone.
+  if(typeof cand!=="string" && !mailFallbackWarned){
+    const sel = mailGetSelectedVoice();
+    if(sel && sel.voiceURI===candKey){
+      mailFallbackWarned = true;
+      setTimeout(()=> alert("La voix « "+cand.name+" » ne fonctionne pas sur ce téléphone (données vocales probablement non installées). La lecture continue avec une autre voix française.\n\nPour l'utiliser : Réglages Android → Synthèse vocale → ⚙️ Moteur Google → Installer les données vocales → Français (France)."), 50);
+    }
+  }
 }
 function mailSpeak(text, onEnd, opts){
   opts = opts || {};
