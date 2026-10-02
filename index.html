@@ -2165,6 +2165,7 @@ function openTaskDrawer(id){
   document.getElementById("drawer").classList.add("show");
   document.getElementById("taskTitleInput").value = t.title;
   document.getElementById("taskDescInput").value = t.description||"";
+  renderTaskDescLinks(t);
   document.getElementById("chipToday").classList.toggle("on", !!t.today);
   document.getElementById("chipUrgent").classList.toggle("on", !!t.urgent);
   document.getElementById("chipQuick").classList.toggle("on", !!t.quick);
@@ -2302,6 +2303,7 @@ document.getElementById("taskTitleInput").addEventListener("input", e=>{
 });
 document.getElementById("taskDescInput").addEventListener("input", e=>{
   const t = curTask(); if(!t) return; t.description = e.target.value; t.updatedAt = Date.now(); saveData();
+  renderTaskDescLinks(t);
 });
 document.getElementById("chipToday").addEventListener("click", e=>{
   const t = curTask(); if(!t) return; snapshot(); t.today = !t.today; t.updatedAt=Date.now(); saveData();
@@ -3061,19 +3063,21 @@ function parseEml(raw){
     return s
       .replace(/\[cid:[^\]]*\]/gi, "")           // inline-image placeholders Outlook leaves in plain text
       .split("\n")
-      .filter(line => !/^\s*<https?:\/\/\S+>\s*$/i.test(line)) // bare tracking/signature links left alone on a line
+      .map(line => line.replace(/^\s*<(https?:\/\/\S+)>\s*$/i, "$1")) // lien seul sur sa ligne : on le garde, sans les chevrons
       .join("\n")
       .replace(/\n{3,}/g, "\n\n")
       .trim();
   }
-  const finalBody = cleanEmailBody((plain!==null && plain!==undefined ? plain : (html ? stripHtml(html) : "")).replace(/\r/g,""));
+  const finalBody = cleanEmailBody((plain!==null && plain!==undefined ? plain : (html ? htmlToTextKeepLinks(html) : "")).replace(/\r/g,""));
+  const links = extractLinks(finalBody, html);
   return {
     subject: decodeMimeWord(headers["subject"]) || "(sans objet)",
     from: decodeMimeWord(headers["from"]) || "—",
     to: decodeMimeWord(headers["to"]) || "—",
     cc: decodeMimeWord(headers["cc"]) || "",
     date: headers["date"] || "",
-    body: finalBody || "(message vide ou format non reconnu)"
+    body: finalBody || "(message vide ou format non reconnu)",
+    links
   };
 }
 async function showEmailPreviewModal(a){
@@ -3097,7 +3101,8 @@ async function showEmailPreviewModal(a){
         ${parsed.cc ? '<div><b style="color:var(--text-main);">Cc :</b> '+escapeHtml(parsed.cc)+'</div>' : ''}
         ${parsed.date ? '<div><b style="color:var(--text-main);">Date :</b> '+escapeHtml(parsed.date)+'</div>' : ''}
       </div>
-      <div style="border-top:1px solid var(--border-soft);padding-top:12px;font-size:13.5px;white-space:pre-wrap;line-height:1.5;">${escapeHtml(parsed.body)}</div>
+      ${parsed.links && parsed.links.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">${linksChipsHtml(parsed.links)}</div>` : ''}
+      <div style="border-top:1px solid var(--border-soft);padding-top:12px;font-size:13.5px;white-space:pre-wrap;line-height:1.5;word-break:break-word;">${linkifyText(parsed.body)}</div>
       <div class="modal-actions" style="margin-top:16px;">
         <button class="btn small" id="emailDownloadOrig">⬇️ Télécharger l'original (.eml)</button>
         <button class="btn primary" id="emailClose">Fermer</button>
@@ -3512,6 +3517,91 @@ function procShowMultiFloatToolbar(){
     procDeleteMultiSelected();
   });
 }
+/* ---------- Liens (URL) dans les descriptions et les mails ---------- */
+const LINK_URL_RE = /\b((?:https?:\/\/|www\.)[^\s<>"'`]+[^\s<>"'`.,;:!?)\]}»])/gi;
+// Outlook réécrit souvent les liens en « safelinks » illisibles : on remet l'adresse réelle.
+function unwrapSafeLink(url){
+  try{
+    const u = new URL(url.startsWith("www.") ? "https://"+url : url);
+    if(/safelinks\.protection\.outlook\.com$/i.test(u.hostname) && u.searchParams.get("url")) return u.searchParams.get("url");
+    if(/^(www\.)?google\.[a-z.]+$/i.test(u.hostname) && u.pathname==="/url" && u.searchParams.get("q")) return u.searchParams.get("q");
+  }catch(e){}
+  return url;
+}
+function linkIsNoise(url){
+  return /^(cid:|data:|javascript:)/i.test(url) || /\.(png|jpe?g|gif|bmp|ico)(\?|$)/i.test(url);
+}
+// HTML → texte en gardant les liens : <a href="URL">libellé</a> devient « libellé (URL) ».
+function htmlToTextKeepLinks(html){
+  const d = document.createElement("div");
+  d.innerHTML = String(html||"").replace(/<(script|style|head)[\s\S]*?<\/\1>/gi, "");
+  d.querySelectorAll("a[href]").forEach(a=>{
+    const href = unwrapSafeLink(a.getAttribute("href")||"").trim();
+    const label = (a.textContent||"").trim();
+    if(!href || linkIsNoise(href) || /^mailto:/i.test(href)){ return; }
+    const same = !label || label.replace(/^https?:\/\//i,"").replace(/\/$/,"") === href.replace(/^https?:\/\//i,"").replace(/\/$/,"");
+    a.textContent = same ? href : label+" ("+href+")";
+  });
+  d.querySelectorAll("br").forEach(b=> b.replaceWith("\n"));
+  d.querySelectorAll("p,div,li,tr,h1,h2,h3,h4,h5,h6").forEach(el=> el.append("\n"));
+  d.querySelectorAll("li").forEach(li=> li.prepend("• "));
+  return (d.textContent||"").replace(/ /g," ").replace(/[ \t]+\n/g,"\n").replace(/\n{3,}/g,"\n\n").trim();
+}
+// Liste des liens d'un texte (et d'un éventuel HTML d'origine), sans doublons.
+function extractLinks(text, html){
+  const out = [], seen = new Set();
+  const add = (url, label)=>{
+    url = unwrapSafeLink(String(url||"").trim());
+    if(!url || linkIsNoise(url)) return;
+    if(url.startsWith("www.")) url = "https://"+url;
+    const key = url.replace(/\/$/,"");
+    if(seen.has(key)) return;
+    seen.add(key);
+    out.push({url, label: (label||"").trim()});
+  };
+  if(html){
+    const d = document.createElement("div");
+    d.innerHTML = html;
+    d.querySelectorAll("a[href]").forEach(a=>{ const h = a.getAttribute("href")||""; if(/^(https?:|www\.)/i.test(h)) add(h, a.textContent); });
+  }
+  const t = String(text||"");
+  // « libellé <https://…> » (texte brut Outlook) et <a href> collés dans une description
+  t.replace(/([^\n<>]{2,80}?)\s*<((?:https?:\/\/)[^>\s]+)>/g, (m, label, url)=>{ add(url, label.replace(/^[\s:–-]+|[\s:–-]+$/g,"")); return m; });
+  t.replace(/<a\s[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (m, url, label)=>{ add(url, label.replace(/<[^>]+>/g,"")); return m; });
+  (t.match(LINK_URL_RE)||[]).forEach(u=> add(u, ""));
+  return out;
+}
+function linkLabel(l){
+  if(l.label && !/^https?:\/\//i.test(l.label)) return l.label;
+  try{ const u = new URL(l.url); return u.hostname.replace(/^www\./,"") + (u.pathname.length>1 ? u.pathname.slice(0,28)+(u.pathname.length>28?"…":"") : ""); }catch(e){ return l.url; }
+}
+function linksChipsHtml(links){
+  return links.map(l=> `<a href="${escapeHtml(l.url)}" target="_blank" rel="noopener" title="${escapeHtml(l.url)}" style="display:inline-flex;align-items:center;gap:4px;max-width:100%;padding:4px 10px;border-radius:14px;border:1px solid var(--border-soft);background:var(--bg-panel-2);color:var(--accent);font-size:12px;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🔗 ${escapeHtml(linkLabel(l))}</a>`).join("");
+}
+// Texte → HTML échappé avec les adresses cliquables.
+function linkifyText(text){
+  return escapeHtml(String(text||"")).replace(LINK_URL_RE, (m)=>{
+    const raw = m.replace(/&amp;/g,"&");
+    let url = unwrapSafeLink(raw); if(url.startsWith("www.")) url = "https://"+url;
+    return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener" style="color:var(--accent);word-break:break-all;">${m}</a>`;
+  });
+}
+// Liens de la description, affichés sous le champ (un champ de saisie ne peut pas contenir de lien cliquable).
+function renderTaskDescLinks(t){
+  const ta = document.getElementById("taskDescInput");
+  if(!ta) return;
+  let box = document.getElementById("taskDescLinks");
+  if(!box){
+    box = document.createElement("div");
+    box.id = "taskDescLinks";
+    box.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;margin:-8px 0 14px;";
+    ta.insertAdjacentElement("afterend", box);
+  }
+  const links = t ? extractLinks(t.description||"") : [];
+  box.style.display = links.length ? "flex" : "none";
+  box.innerHTML = linksChipsHtml(links);
+}
+
 function stripHtml(html){ const d=document.createElement("div"); d.innerHTML=html||""; return (d.textContent||"").trim(); }
 function procAssignShapeToCollaborator(shape, collabId){
   shape.collabTag = collabId || null;
@@ -5608,7 +5698,8 @@ async function msFetchRecent(count){
   const data = await res.json();
   return (data.value||[]).map(m=>{
     const bodyRaw = m.body ? m.body.content : "";
-    const bodyText = m.body && m.body.contentType==="html" ? stripHtml(bodyRaw) : bodyRaw;
+    const isHtml = m.body && m.body.contentType==="html";
+    const bodyText = isHtml ? htmlToTextKeepLinks(bodyRaw) : bodyRaw;
     return {
       id: "ms_"+m.id,
       source: "outlook",
@@ -5619,6 +5710,7 @@ async function msFetchRecent(count){
       date: m.receivedDateTime,
       unread: !m.isRead,
       body: stripEmailSignature(bodyText),
+      links: extractLinks(bodyText, isHtml ? bodyRaw : ""),
       threadMessages: splitMailThreadMessages(bodyText, msDisplayName(m.from))
     };
   });
@@ -5755,6 +5847,8 @@ function mailClearKeepAlive(){
 // cause de la coupure entre deux morceaux).
 const MAIL_SPEECH_CHUNK_MAX = 260;
 function mailSplitTextForSpeech(text){
+  // Les adresses web ne sont pas lues à voix haute (illisibles) : on dit juste « lien ».
+  text = String(text||"").replace(/<?\b(?:https?:\/\/|www\.)[^\s<>]+>?/gi, " lien ").replace(/\(\s*lien\s*\)?/g, " lien ");
   // Un retour à la ligne sans ponctuation devient une petite pause (". ").
   text = String(text||"").replace(/([^.!?…,;:\s])[ \t]*\n+\s*/g, "$1. ").replace(/\s*\n+\s*/g, " ").replace(/\s{2,}/g," ").trim();
   if(!text) return [];
@@ -6063,7 +6157,17 @@ function gmailExtractBody(payload){
   }
   const found = walk(payload);
   if(!found) return "";
-  return found.type==="html" ? stripHtml(found.data) : found.data;
+  return found.type==="html" ? htmlToTextKeepLinks(found.data) : found.data;
+}
+// Version HTML du mail (s'il y en a une), pour récupérer les vrais liens <a href>.
+function gmailExtractHtml(payload){
+  function walk(part){
+    if(!part) return "";
+    if(part.mimeType==="text/html" && part.body && part.body.data) return b64urlDecode(part.body.data);
+    for(const p of (part.parts||[])){ const r = walk(p); if(r) return r; }
+    return "";
+  }
+  return walk(payload);
 }
 function gmailHeader(headers, name){
   const h = (headers||[]).find(x=> x.name.toLowerCase()===name.toLowerCase());
@@ -6109,6 +6213,7 @@ async function gmailFetchInbox(count){
       let cc = gmailHeader(headers,"Cc");
       let subject = gmailHeader(headers,"Subject") || "(sans objet)";
       let body = gmailExtractBody(m.payload);
+      const links = extractLinks(body, gmailExtractHtml(m.payload));
       const fwd = parseForwardedBody(body);
       if(fwd && (fwd.subject || fwd.from)){
         from = fwd.from || from;
@@ -6122,6 +6227,7 @@ async function gmailFetchInbox(count){
         from, to, cc, subject: cleanMailSubject(subject),
         date: Date.now(),
         unread: (m.labelIds||[]).includes("UNREAD"),
+        links,
         body: stripEmailSignature(body),
         threadMessages: splitMailThreadMessages(body, mailDisplayName(from))
       });
@@ -6167,6 +6273,11 @@ function buildMailRow(mail, opts){
     <details style="margin-top:8px;">
       <summary style="cursor:pointer;font-size:11.5px;color:var(--text-sub);">🧵 ${mail.threadMessages.length} messages dans cette conversation — touche-en un pour l'écouter</summary>
       <div data-threadList style="display:flex;flex-direction:column;gap:4px;margin-top:6px;"></div>
+    </details>` : ''}
+    ${mail.links && mail.links.length ? `
+    <details style="margin-top:8px;">
+      <summary style="cursor:pointer;font-size:11.5px;color:var(--text-sub);">🔗 ${mail.links.length} lien${mail.links.length>1?'s':''} dans ce mail</summary>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">${linksChipsHtml(mail.links)}</div>
     </details>` : ''}
     <div data-replyPane style="display:none;margin-top:8px;">
       <textarea data-replyText placeholder="Dicte ou tape ta réponse ici…" style="width:100%;min-height:80px;border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;background:var(--bg-app);color:var(--text-main);font-size:13px;resize:vertical;"></textarea>
@@ -6318,7 +6429,8 @@ function buildMailRow(mail, opts){
     if(!reply){ alert("Écris ou dicte d'abord une réponse."); return; }
     const t = {
       id: uid("task"), workspaceId: currentWsId, title: mail.subject||"(sans objet)",
-      description: reply, assignedTo:[DATA.currentUserId], today:false, urgent:false,
+      description: reply + (mail.links && mail.links.length ? "\n\nLiens du mail :\n" + mail.links.map(l=> "- " + (l.label && !/^https?:\/\//i.test(l.label) ? l.label+" : " : "") + l.url).join("\n") : ""),
+      assignedTo:[DATA.currentUserId], today:false, urgent:false,
       quick:true, knowledge:false, followUp:false, reminderDate:null, recurrence:null,
       done:false, doneAt:null, subtasks:[], attachments:[], process:null,
       createdAt:Date.now(), updatedAt:Date.now()
@@ -6607,6 +6719,7 @@ function showMailModal(){
       date: Date.now(),
       unread: false,
       body: stripEmailSignature(parsed.body || raw),
+      links: extractLinks(raw),
       threadMessages: splitMailThreadMessages(parsed.body || raw, mailDisplayName(parsed.from || ""))
     };
     const result = overlay.querySelector("#pasteMailResult");
