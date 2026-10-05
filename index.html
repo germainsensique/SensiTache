@@ -1824,9 +1824,9 @@ function wrapBullet(text, width){
   if(lines.length===0) return "";
   return lines.map((l,i)=> (i===0?prefixFirst:prefixRest) + l).join("\n");
 }
-function buildCollabEmailText(opts){
+// Modèle commun du compte rendu (texte brut et version mise en forme).
+function buildCollabEmailModel(opts){
   opts = opts || {};
-  // onlyCollab : ne garder que les tâches et sous-tâches du collaborateur choisi.
   const onlyCid = opts.onlyCollab && opts.collabId ? opts.collabId : null;
   const frDate = d=> String(d).split("-").reverse().join("/");
   const entries = Array.from(collabEmailSelected).map(id=>{
@@ -1835,65 +1835,87 @@ function buildCollabEmailText(opts){
     if(collabMeetingSnapshots[id]) return {t:collabMeetingSnapshots[id], status:"deleted"};
     return null;
   }).filter(Boolean).filter(e=> !onlyCid || (e.t.assignedTo||[]).includes(onlyCid) || (e.t.subtasks||[]).some(s=> s.assignedTo===onlyCid));
-  const groups = { p1: [], p2: [], p3: [] };
-  entries.forEach(e=>{
-    if(e.t.today) groups.p1.push(e);
-    else if(e.t.urgent) groups.p2.push(e);
-    else groups.p3.push(e);
-  });
-  // Mise en forme explicite : chaque information est étiquetée (Objet,
-  // Affecté à, Dernier délai, Description, Sous-tâches) pour qu'on sache
-  // toujours de quoi il s'agit et qui en est responsable.
-  const wrapWith = (text, first, rest, width)=>{
-    width = width || 78;
-    const words = String(text).split(/\s+/).filter(Boolean);
-    const out = []; let cur = "";
-    words.forEach(w=>{
-      const test = cur ? cur+" "+w : w;
-      const pre = out.length ? rest : first;
-      if(cur && (pre.length + test.length) > width){ out.push(cur); cur = w; }
-      else cur = test;
-    });
-    if(cur) out.push(cur);
-    return out.map((l,i)=> (i===0?first:rest)+l).join("\n");
-  };
-  const lineFor = ({t, status})=>{
+  // Ordre : points en cours (les plus pressants d'abord), puis terminés, puis abandonnés.
+  const rank = e=> (e.status==="active" ? 0 : e.status==="done" ? 10 : 20) + (e.t.today ? 0 : e.t.urgent ? 1 : 2);
+  entries.sort((a,b)=> rank(a)-rank(b) || String(a.t.dueDate||"9999").localeCompare(String(b.t.dueDate||"9999")));
+  const items = entries.map(({t, status})=>{
     const names = assigneeNamesForTask(t).join(", ");
-    const out = [];
-    out.push(wrapWith("Objet : " + t.title, "- ", "  "));
-    out.push("    Affecté à : " + (names || "non affecté"));
-    if(status==="done") out.push("    Statut : ✅ terminée");
-    else if(status==="deleted") out.push("    Statut : ❌ abandonnée");
-    else if(t.dueDate) out.push("    Dernier délai : " + frDate(t.dueDate));
-    if(t.description && t.description.trim()){
-      out.push("    Description :");
-      t.description.trim().split("\n").filter(l=>l.trim()!=="").forEach(l=> out.push(wrapWith(l.trim(), "      ", "      ")));
+    const subs = (t.subtasks||[])
+      .filter(s=> !s.done || (collabMeetingStartedAt && s.doneAt && s.doneAt >= collabMeetingStartedAt))
+      .filter(s=> !onlyCid || subtaskIsFor(s, t, onlyCid))
+      .map(s=>{
+        const sc = s.assignedTo ? collabById(s.assignedTo) : null;
+        return {text: s.text||"", done: !!s.done, who: sc ? sc.name : (names || ""), due: s.dueDate ? frDate(s.dueDate) : ""};
+      });
+    return {
+      title: t.title||"(sans titre)", status, names,
+      due: (status==="active" && t.dueDate) ? frDate(t.dueDate) : "",
+      desc: (t.description||"").split("\n").map(l=> l.trim()).filter(Boolean),
+      subs
+    };
+  });
+  const c = opts.collabId ? collabById(opts.collabId) : null;
+  const first = c ? String(c.name).trim().split(/\s+/)[0] : "";
+  const when = collabMeetingStartedAt ? new Date(collabMeetingStartedAt).toLocaleDateString("fr-FR") : "";
+  return {greeting: first ? "Bonjour "+first+"," : "Bonjour,", when, items};
+}
+function buildCollabEmailText(opts){
+  const m = buildCollabEmailModel(opts);
+  const out = [m.greeting, "", "Voici le compte rendu de notre échange"+(m.when ? " du "+m.when : "")+"."];
+  if(!m.items.length){ out.push("", "(Aucune tâche de cette sélection ne concerne ce collaborateur.)"); return out.join("\n"); }
+  const sep = "──────────────────────────────";
+  m.items.forEach((it, i)=>{
+    out.push("", sep, "");
+    const status = it.status==="done" ? "  ✅ TERMINÉ" : it.status==="deleted" ? "  ❌ ABANDONNÉ" : "";
+    out.push((i+1)+". "+it.title.toUpperCase()+status);
+    out.push("");
+    out.push("   Affecté à : "+(it.names || "non affecté"));
+    if(it.due) out.push("   Dernier délai : "+it.due);
+    if(it.desc.length){
+      out.push("", "   Description :");
+      it.desc.forEach(l=> out.push("   "+l));
     }
-    const subs = (t.subtasks||[]).filter(s=> !s.done || (collabMeetingStartedAt && s.doneAt && s.doneAt >= collabMeetingStartedAt))
-      .filter(s=> !onlyCid || subtaskIsFor(s, t, onlyCid));
-    if(subs.length){
-      out.push("    Sous-tâches :");
-      subs.forEach(s=>{
-        const sc = s.assignedTo ? DATA.collaborators.find(c=>c.id===s.assignedTo) : null;
-        out.push(wrapWith((s.done ? "✓ " : "") + s.text + (s.done ? " — fait" : ""), "      · ", "        "));
-        if(!s.done){
-          const meta = [];
-          meta.push("Affecté à : " + (sc ? sc.name : (names || "non affecté")));
-          if(s.dueDate) meta.push("Dernier délai : " + frDate(s.dueDate));
-          out.push("        " + meta.join(" — "));
-        }
+    if(it.subs.length){
+      out.push("", "   Sous-tâches :");
+      it.subs.forEach(s=>{
+        if(s.done){ out.push("   ✓ "+s.text+" (fait)"); return; }
+        out.push("   ☐ "+s.text);
+        const meta = ["affecté à "+(s.who || "non affecté")];
+        if(s.due) meta.push("dernier délai "+s.due);
+        out.push("      → "+meta.join(" · "));
       });
     }
-    return out.join("\n");
-  };
-  const sections = [];
-  if(groups.p1.length) sections.push("Priorité 1 :\n\n" + groups.p1.map(lineFor).join("\n\n"));
-  if(groups.p2.length) sections.push("Priorité 2 :\n\n" + groups.p2.map(lineFor).join("\n\n"));
-  if(groups.p3.length) sections.push("Priorité 3 :\n\n" + groups.p3.map(lineFor).join("\n\n"));
-  const when = collabMeetingStartedAt ? " du " + new Date(collabMeetingStartedAt).toLocaleDateString("fr-FR") : "";
-  const intro = "Bonjour,\n\nTu trouveras ci-dessous le compte rendu de notre échange"+when+" :\n\n";
-  if(!sections.length) return intro + "(Aucune tâche de cette sélection ne concerne ce collaborateur.)";
-  return intro + sections.join("\n\n");
+  });
+  out.push("", sep, "", "Bonne journée,");
+  return out.join("\n");
+}
+// Version mise en forme (gras, listes) : c'est elle qui est collée dans Outlook/Gmail.
+function buildCollabEmailHtml(opts){
+  const m = buildCollabEmailModel(opts);
+  const esc = s=> escapeHtml(String(s||""));
+  const linkify = s=> linkifyText(s).replace(/style="[^"]*"/g, 'style="color:#1a5fb4;"');
+  const font = "font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#222;";
+  let h = `<div style="${font}"><p style="margin:0 0 10px;">${esc(m.greeting)}</p>`;
+  h += `<p style="margin:0 0 16px;">Voici le compte rendu de notre échange${m.when ? " du <b>"+esc(m.when)+"</b>" : ""}.</p>`;
+  if(!m.items.length) h += `<p><i>Aucune tâche de cette sélection ne concerne ce collaborateur.</i></p>`;
+  m.items.forEach((it, i)=>{
+    const badge = it.status==="done" ? ` <span style="color:#1e7e34;font-weight:bold;">✅ Terminé</span>` : it.status==="deleted" ? ` <span style="color:#b02a37;font-weight:bold;">❌ Abandonné</span>` : "";
+    h += `<div style="margin:0 0 14px;padding:8px 12px;border-left:3px solid #5B6CFF;background:#f6f7fb;">`;
+    h += `<div style="font-size:12pt;font-weight:bold;margin-bottom:4px;">${i+1}. ${esc(it.title)}${badge}</div>`;
+    h += `<div><b>Affecté à :</b> ${esc(it.names || "non affecté")}${it.due ? ` &nbsp;·&nbsp; <b>Dernier délai :</b> ${esc(it.due)}` : ""}</div>`;
+    if(it.desc.length) h += `<div style="margin-top:6px;"><b>Description :</b><br>${it.desc.map(linkify).join("<br>")}</div>`;
+    if(it.subs.length){
+      h += `<div style="margin-top:6px;"><b>Sous-tâches :</b></div><ul style="margin:2px 0 0;padding-left:20px;">`;
+      it.subs.forEach(s=>{
+        if(s.done) h += `<li style="color:#666;"><s>${esc(s.text)}</s> — fait</li>`;
+        else h += `<li>${esc(s.text)}<br><span style="color:#555;font-size:10pt;">→ affecté à <b>${esc(s.who || "non affecté")}</b>${s.due ? ` · dernier délai <b>${esc(s.due)}</b>` : ""}</span></li>`;
+      });
+      h += `</ul>`;
+    }
+    h += `</div>`;
+  });
+  h += `<p style="margin:16px 0 0;">Bonne journée,</p></div>`;
+  return h;
 }
 // Collaborateurs concernés par la sélection de la réunion (hors « Moi »),
 // du plus représenté au moins représenté.
@@ -1934,7 +1956,7 @@ function showCollabEmailModal(){
   overlay.innerHTML = `
     <div class="modal" style="width:540px;max-height:82vh;overflow-y:auto;">
       <h2>Compte rendu de l'échange</h2>
-      <p style="font-size:12.5px;color:var(--text-sub);">Copie l'objet et le texte, et colle-les dans ton e-mail.</p>
+      <p style="font-size:12.5px;color:var(--text-sub);">Copie l'objet et le texte, et colle-les dans ton e-mail : « Copier le texte » garde la mise en forme (gras, listes) dans Outlook ou Gmail.</p>
       ${people.length ? `
       <div class="field-label" style="margin-top:8px;">Échange avec</div>
       <select id="ceCollab" class="fieldselect" style="margin-bottom:8px;">${people.map(p=>`<option value="${p.id}" ${p.id===selCollab?'selected':''}>${escapeHtml(p.name)}</option>`).join("")}</select>
@@ -1979,7 +2001,20 @@ function showCollabEmailModal(){
   overlay.querySelector("#ceCopy").addEventListener("click", async ()=>{
     const btn = overlay.querySelector("#ceCopy");
     try{
-      await navigator.clipboard.writeText(text);
+      // Copie la version mise en forme (gras, puces, encadrés) ET le texte
+      // brut : Outlook/Gmail collent la mise en forme, les autres le texte.
+      let done = false;
+      try{
+        if(window.ClipboardItem && navigator.clipboard.write){
+          const html = buildCollabEmailHtml({collabId:selCollab, onlyCollab});
+          await navigator.clipboard.write([new ClipboardItem({
+            "text/html": new Blob([html], {type:"text/html"}),
+            "text/plain": new Blob([text], {type:"text/plain"})
+          })]);
+          done = true;
+        }
+      }catch(e){}
+      if(!done) await navigator.clipboard.writeText(text);
       btn.textContent = "✅ Copié !";
       setTimeout(()=>{ btn.textContent = "Copier le texte"; }, 2000);
     }catch(e){
