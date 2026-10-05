@@ -1688,8 +1688,6 @@ function collabCloseFocus(){
   renderMain();
 }
 function renderCollabTab(el){
-  const prevFocus = document.getElementById("collabFocusOverlay");
-  if(prevFocus){ collabFocusScroll = prevFocus.scrollTop; prevFocus.remove(); }
   el.innerHTML = "";
   const tasks = activeTasks().filter(t=>!recurrenceNotDueYet(t));
   const byCollab = {};
@@ -1742,6 +1740,27 @@ function renderCollabTab(el){
     toolbar.querySelector("#emailThemeInput").addEventListener("input", e=>{ collabEmailTheme = e.target.value; collabMeetingPersist(); });
   }
 
+  // Vue d'un seul collaborateur, affichée DANS la page (le bandeau du haut
+  // et les onglets restent visibles comme sur les autres pages). Les autres
+  // collaborateurs ne sont pas affichés (confidentialité).
+  if(collabFocusId){
+    const c = DATA.collaborators.find(x=> x.id===collabFocusId);
+    if(c){
+      const list = (byCollab[c.id]||[]).slice();
+      const head = document.createElement("div");
+      head.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:12px;";
+      head.innerHTML = `<button class="btn small" id="collabFocusClose" title="Revenir aux collaborateurs">← Collaborateurs</button>
+        <span class="avatar" style="background:${c.color};flex-shrink:0;">${escapeHtml(c.name.slice(0,2).toUpperCase())}</span>
+        <span style="flex:1;min-width:0;font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(c.name)} <span style="color:var(--text-sub);font-weight:400;font-size:13px;">(${list.length})</span></span>`;
+      el.appendChild(head);
+      if(list.length) el.appendChild(buildCollabGroup(c, list, {focus:true}));
+      else { const h = document.createElement("div"); h.className="empty-hint"; h.textContent = "Aucune tâche active pour "+c.name+"."; el.appendChild(h); }
+      head.querySelector("#collabFocusClose").addEventListener("click", ()=>{ collabFocusId = null; renderMain(); el.scrollTop = 0; });
+      return;
+    }
+    collabFocusId = null;
+  }
+
   // Page d'accueil : une tuile par collaborateur, sans afficher ses tâches
   // (confidentialité). Les tâches ne s'affichent qu'en touchant une tuile.
   const others = DATA.collaborators.filter(c=> c.id!==DATA.currentUserId)
@@ -1775,41 +1794,12 @@ function renderCollabTab(el){
         <span style="font-size:11.5px;color:var(--text-sub);">${list.length} tâche${list.length>1?"s":""}</span>
         ${overdue ? `<span style="font-size:11px;font-weight:700;color:var(--danger);">${overdue} en retard</span>` : ""}
         ${selected ? `<span style="font-size:11px;font-weight:700;color:var(--accent);">☑ ${selected} cochée${selected>1?"s":""}</span>` : ""}`;
-      tile.addEventListener("click", ()=>{ collabFocusId = c.id; collabFocusScroll = 0; renderMain(); });
+      tile.addEventListener("click", ()=>{ collabFocusId = c.id; renderMain(); el.scrollTop = 0; });
       grid.appendChild(tile);
     });
     el.appendChild(grid);
   }
 
-  // Vue plein écran d'un seul collaborateur (confidentialité : rien d'autre
-  // n'est visible derrière). Redessinée à chaque rendu pour rester à jour.
-  if(collabFocusId){
-    const c = DATA.collaborators.find(x=> x.id===collabFocusId);
-    if(!c){ collabFocusId = null; return; }
-    const list = (byCollab[c.id]||[]).slice();
-    const ov = document.createElement("div");
-    ov.id = "collabFocusOverlay";
-    ov.style.cssText = "position:fixed;inset:0;z-index:58;background:var(--bg-app);overflow-y:auto;padding:14px 14px 90px;";
-    const head = document.createElement("div");
-    head.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:12px;position:sticky;top:-14px;background:var(--bg-app);padding:8px 0;z-index:2;";
-    head.innerHTML = `<button class="btn small" id="collabFocusClose" title="Revenir aux collaborateurs">← Retour</button>
-      <span style="flex:1;min-width:0;font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Tâches de ${escapeHtml(c.name)}</span>
-      ${collabEmailMode ? `<span id="emailSelCount" style="font-size:11.5px;font-weight:700;color:var(--accent);white-space:nowrap;">🔴 ${collabEmailSelected.size} sélectionnée(s)</span>` : ''}
-      <button class="btn small ghost" id="collabFocusFull" title="Plein écran (masque aussi la barre du navigateur)" style="padding:4px 8px;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button>`;
-    ov.appendChild(head);
-    if(list.length) ov.appendChild(buildCollabGroup(c, list, {focus:true}));
-    else { const h = document.createElement("div"); h.className="empty-hint"; h.textContent = "Aucune tâche active pour "+c.name+"."; ov.appendChild(h); }
-    document.body.appendChild(ov);
-    ov.scrollTop = collabFocusScroll || 0;
-    ov.addEventListener("scroll", ()=>{ collabFocusScroll = ov.scrollTop; });
-    head.querySelector("#collabFocusClose").addEventListener("click", collabCloseFocus);
-    head.querySelector("#collabFocusFull").addEventListener("click", ()=>{
-      try{
-        if(document.fullscreenElement){ document.exitFullscreen().catch(()=>{}); }
-        else if(document.documentElement.requestFullscreen){ document.documentElement.requestFullscreen().catch(()=>{}); }
-      }catch(err){}
-    });
-  }
 }
 function assigneeNamesForTask(t){
   return (t.assignedTo||[]).map(id=> DATA.collaborators.find(c=>c.id===id)).filter(Boolean).map(c=>c.name);
