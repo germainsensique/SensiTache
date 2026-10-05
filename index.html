@@ -1713,7 +1713,7 @@ function renderCollabTab(el){
         <button class="btn small ghost" id="btnCancelMeeting">Annuler</button>
         <button class="btn small primary" id="btnGenEmail">✅ Terminer la réunion</button>
       </div>
-      <input type="text" id="emailThemeInput" class="fieldinput" placeholder="Thème de la réunion (pour l'objet du mail)" value="${escapeHtml(collabEmailTheme)}" style="max-width:320px;">
+      <input type="text" id="emailThemeInput" class="fieldinput" placeholder="Sujet (facultatif, ajouté à l'objet « Échange … »)" value="${escapeHtml(collabEmailTheme)}" style="max-width:320px;">
       <div style="font-size:11.5px;color:var(--text-sub);">Coche les tâches abordées. Tu peux les modifier, les terminer ou les supprimer pendant la réunion : le mail reprendra leur état au moment où tu termines.</div>`;
   } else {
     toolbar.innerHTML = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><button class="btn small" id="btnStartMeeting">🗓️ Démarrer une réunion</button></div>`;
@@ -1824,14 +1824,17 @@ function wrapBullet(text, width){
   if(lines.length===0) return "";
   return lines.map((l,i)=> (i===0?prefixFirst:prefixRest) + l).join("\n");
 }
-function buildCollabEmailText(){
+function buildCollabEmailText(opts){
+  opts = opts || {};
+  // onlyCollab : ne garder que les tâches et sous-tâches du collaborateur choisi.
+  const onlyCid = opts.onlyCollab && opts.collabId ? opts.collabId : null;
   const frDate = d=> String(d).split("-").reverse().join("/");
   const entries = Array.from(collabEmailSelected).map(id=>{
     const cur = DATA.tasks.find(t=>t.id===id);
     if(cur) return {t:cur, status: cur.done ? "done" : "active"};
     if(collabMeetingSnapshots[id]) return {t:collabMeetingSnapshots[id], status:"deleted"};
     return null;
-  }).filter(Boolean);
+  }).filter(Boolean).filter(e=> !onlyCid || (e.t.assignedTo||[]).includes(onlyCid) || (e.t.subtasks||[]).some(s=> s.assignedTo===onlyCid));
   const groups = { p1: [], p2: [], p3: [] };
   entries.forEach(e=>{
     if(e.t.today) groups.p1.push(e);
@@ -1866,7 +1869,8 @@ function buildCollabEmailText(){
       out.push("    Description :");
       t.description.trim().split("\n").filter(l=>l.trim()!=="").forEach(l=> out.push(wrapWith(l.trim(), "      ", "      ")));
     }
-    const subs = (t.subtasks||[]).filter(s=> !s.done || (collabMeetingStartedAt && s.doneAt && s.doneAt >= collabMeetingStartedAt));
+    const subs = (t.subtasks||[]).filter(s=> !s.done || (collabMeetingStartedAt && s.doneAt && s.doneAt >= collabMeetingStartedAt))
+      .filter(s=> !onlyCid || subtaskIsFor(s, t, onlyCid));
     if(subs.length){
       out.push("    Sous-tâches :");
       subs.forEach(s=>{
@@ -1887,30 +1891,64 @@ function buildCollabEmailText(){
   if(groups.p2.length) sections.push("Priorité 2 :\n\n" + groups.p2.map(lineFor).join("\n\n"));
   if(groups.p3.length) sections.push("Priorité 3 :\n\n" + groups.p3.map(lineFor).join("\n\n"));
   const when = collabMeetingStartedAt ? " du " + new Date(collabMeetingStartedAt).toLocaleDateString("fr-FR") : "";
-  const intro = "Bonjour,\n\nTu trouveras ci-dessous le compte rendu de notre réunion"+when+" :\n\n";
+  const intro = "Bonjour,\n\nTu trouveras ci-dessous le compte rendu de notre échange"+when+" :\n\n";
+  if(!sections.length) return intro + "(Aucune tâche de cette sélection ne concerne ce collaborateur.)";
   return intro + sections.join("\n\n");
 }
-function buildCollabEmailSubject(){
-  const ds = dateToStr(new Date()).split("-").reverse().join("/");
-  const theme = (collabEmailTheme||"").trim().toUpperCase();
-  return (theme ? theme + " " : "") + ds;
+// Collaborateurs concernés par la sélection de la réunion (hors « Moi »),
+// du plus représenté au moins représenté.
+function collabMeetingPeople(){
+  const count = new Map();
+  Array.from(collabEmailSelected).forEach(id=>{
+    const t = DATA.tasks.find(x=>x.id===id) || collabMeetingSnapshots[id];
+    if(!t) return;
+    const ids = new Set(t.assignedTo||[]);
+    (t.subtasks||[]).forEach(s=>{ if(s.assignedTo) ids.add(s.assignedTo); });
+    ids.forEach(cid=>{ if(cid!==DATA.currentUserId) count.set(cid, (count.get(cid)||0)+1); });
+  });
+  return Array.from(count.entries()).sort((a,b)=> b[1]-a[1]).map(([cid])=> collabById(cid)).filter(Boolean);
 }
+// Une sous-tâche « appartient » au collaborateur si elle lui est affectée, ou
+// si elle n'est affectée à personne et que la tâche est à lui.
+function subtaskIsFor(s, t, cid){
+  return s.assignedTo ? s.assignedTo===cid : (t.assignedTo||[]).includes(cid);
+}
+function buildCollabEmailSubject(opts){
+  opts = opts || {};
+  const day = collabMeetingStartedAt ? new Date(collabMeetingStartedAt) : new Date();
+  const ds = dateToStr(day).split("-").reverse().join("/");
+  const c = opts.collabId ? collabById(opts.collabId) : null;
+  const theme = (collabEmailTheme||"").trim();
+  return "Échange " + (c ? c.name : "équipe") + (theme ? " – " + theme : "") + " – " + ds;
+}
+
 function showCollabEmailModal(){
-  const text = buildCollabEmailText();
-  const subject = buildCollabEmailSubject();
+  const people = collabMeetingPeople();
+  // Collaborateur par défaut : celui ouvert dans Collaboration, sinon le plus présent dans la sélection.
+  let selCollab = (collabFocusId && people.some(p=>p.id===collabFocusId)) ? collabFocusId : (people[0] ? people[0].id : null);
+  let onlyCollab = false;
+  let text = buildCollabEmailText({collabId:selCollab, onlyCollab});
+  let subject = buildCollabEmailSubject({collabId:selCollab});
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.innerHTML = `
     <div class="modal" style="width:540px;max-height:82vh;overflow-y:auto;">
-      <h2>Texte pour l'e-mail</h2>
+      <h2>Compte rendu de l'échange</h2>
       <p style="font-size:12.5px;color:var(--text-sub);">Copie l'objet et le texte, et colle-les dans ton e-mail.</p>
+      ${people.length ? `
+      <div class="field-label" style="margin-top:8px;">Échange avec</div>
+      <select id="ceCollab" class="fieldselect" style="margin-bottom:8px;">${people.map(p=>`<option value="${p.id}" ${p.id===selCollab?'selected':''}>${escapeHtml(p.name)}</option>`).join("")}</select>
+      <div style="display:flex;flex-direction:column;gap:5px;font-size:13px;margin-bottom:6px;">
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;"><input type="radio" name="ceScope" value="all" checked> Toute ma sélection</label>
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;"><input type="radio" name="ceScope" value="only"> Uniquement les tâches et sous-tâches de <b id="ceScopeName">${escapeHtml((collabById(selCollab)||{}).name||"")}</b></label>
+      </div>` : ''}
       <div class="field-label" style="margin-top:8px;">Objet</div>
       <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
         <input readonly id="ceSubjectField" value="${escapeHtml(subject)}" style="flex:1;font-size:13px;border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;background:var(--bg-app);color:var(--text-main);">
         <button class="btn small" id="ceCopySubject">Copier</button>
       </div>
       <div class="field-label">Corps du message</div>
-      <textarea readonly style="width:100%;min-height:260px;font-size:13px;line-height:1.5;border:1px solid var(--border-soft);border-radius:8px;padding:10px 12px;background:var(--bg-app);color:var(--text-main);margin:8px 0 12px;white-space:pre-wrap;">${escapeHtml(text)}</textarea>
+      <textarea readonly id="ceBodyField" style="width:100%;min-height:260px;font-size:13px;line-height:1.5;border:1px solid var(--border-soft);border-radius:8px;padding:10px 12px;background:var(--bg-app);color:var(--text-main);margin:8px 0 12px;white-space:pre-wrap;">${escapeHtml(text)}</textarea>
       <div class="modal-actions" style="flex-wrap:wrap;">
         <button class="btn ghost" id="ceResume">↩ Reprendre la réunion</button>
         <button class="btn" id="ceCopy">Copier le texte</button>
@@ -1918,6 +1956,16 @@ function showCollabEmailModal(){
       </div>
     </div>`;
   document.body.appendChild(overlay);
+  function refresh(){
+    text = buildCollabEmailText({collabId:selCollab, onlyCollab});
+    subject = buildCollabEmailSubject({collabId:selCollab});
+    overlay.querySelector("#ceSubjectField").value = subject;
+    overlay.querySelector("#ceBodyField").value = text;
+    const nm = overlay.querySelector("#ceScopeName"); if(nm) nm.textContent = (collabById(selCollab)||{}).name||"";
+  }
+  const collabSel = overlay.querySelector("#ceCollab");
+  if(collabSel) collabSel.addEventListener("change", ()=>{ selCollab = collabSel.value; refresh(); });
+  overlay.querySelectorAll('input[name="ceScope"]').forEach(r=> r.addEventListener("change", ()=>{ onlyCollab = r.value==="only" && r.checked; refresh(); }));
   overlay.querySelector("#ceCopySubject").addEventListener("click", async ()=>{
     const btn = overlay.querySelector("#ceCopySubject");
     try{
