@@ -3564,6 +3564,55 @@ function procUpdateArrowsForShape(shapeId){
   });
 }
 function procRemoveFloatToolbar(){ const ex=document.getElementById("procFloatToolbar"); if(ex) ex.remove(); }
+// Place la fenêtre d'options À CÔTÉ de l'élément (au-dessus, sinon en
+// dessous, sinon à droite/gauche) — jamais par-dessus — et toujours dans la
+// partie visible du canevas (en tenant compte du défilement et du zoom).
+function procPlaceFloatToolbar(bar, anchor){
+  if(!bar || !anchor) return;
+  // Sur téléphone, le panneau latéral (légende…) recouvre le canevas : on le
+  // replie pour que la fenêtre d'options et la forme restent visibles.
+  const side = document.getElementById("procSide");
+  if(side && !side.classList.contains("collapsed") && getComputedStyle(side).position==="fixed"){
+    side.classList.add("collapsed");
+    try{ procUpdateSideToggleIcon(); }catch(e){}
+  }
+  const sc = document.getElementById("procCanvasScroll");
+  const board = document.getElementById("procBoard");
+  if(!sc || !board) return;
+  const sr = sc.getBoundingClientRect(), br = board.getBoundingClientRect();
+  const z = procZoom || 1, m = 8, gap = 12;
+  const mr = (side && getComputedStyle(side).position==="fixed") ? 30 : m; // laisse la languette du panneau visible sur téléphone
+  const vx0 = (sr.left - br.left)/z, vy0 = (sr.top - br.top)/z;
+  const vx1 = vx0 + sc.clientWidth/z, vy1 = vy0 + sc.clientHeight/z;
+  const vh = vy1 - vy0, vw = vx1 - vx0;
+  bar.style.maxHeight = Math.max(120, vh - 2*m) + "px";
+  bar.style.overflowY = "auto";
+  bar.style.maxWidth = Math.min(300, Math.max(180, vw - 2*m)) + "px";
+  const w = bar.offsetWidth, h = bar.offsetHeight;
+  const clampX = x=> Math.min(Math.max(x, vx0+m), Math.max(vx0+m, vx1 - w - mr));
+  const clampY = y=> Math.min(Math.max(y, vy0+m), Math.max(vy0+m, vy1 - h - m));
+  let x, y;
+  const above = anchor.y - gap - h, below = anchor.y + anchor.h + gap;
+  if(above >= vy0 + m){ y = above; x = clampX(anchor.x); }
+  else if(below + h <= vy1 - m){ y = below; x = clampX(anchor.x); }
+  else {
+    // Pas la place au-dessus ni en dessous : sur le côté qui a le plus de place.
+    const right = anchor.x + anchor.w + gap, left = anchor.x - gap - w;
+    x = (vx1 - right >= anchor.x - vx0) ? right : left;
+    x = Math.min(Math.max(x, vx0+m), vx1 - w - mr);
+    y = clampY(anchor.y);
+  }
+  bar.style.left = Math.max(0, x) + "px";
+  bar.style.top = Math.max(0, y) + "px";
+}
+function procReplaceFloatToolbarForShape(shape){
+  procPlaceFloatToolbar(document.getElementById("procFloatToolbar"), {x:shape.x, y:shape.y, w:shape.w, h:shape.h});
+}
+function procContentToText(html){
+  const d = document.createElement("div");
+  d.innerHTML = String(html||"").replace(/<br\s*\/?>/gi, "\n").replace(/<\/(div|p)>/gi, "\n");
+  return (d.textContent||"").replace(/\n+$/,"");
+}
 function procSelectShape(id){
   procSelectedShapeId=id; procSelectedArrowId=null; procMultiSelectedIds.clear();
   document.querySelectorAll(".pshape").forEach(el=>{ el.classList.toggle("selected", el.dataset.id===id); el.classList.remove("multiselected"); });
@@ -3615,6 +3664,10 @@ function procShowMultiFloatToolbar(){
     <button class="btn small danger" id="pmtDelete">Suppr. la sélection</button>
   `;
   document.getElementById("procShapesLayer").appendChild(bar);
+  {
+    const maxX = Math.max(...shapesSel.map(s=>s.x+s.w)), maxY = Math.max(...shapesSel.map(s=>s.y+s.h));
+    procPlaceFloatToolbar(bar, {x:minX, y:minY, w:maxX-minX, h:maxY-minY});
+  }
   bar.querySelector("#pmtDelete").addEventListener("pointerdown", e=>{
     e.stopPropagation();
     procDeleteMultiSelected();
@@ -3846,7 +3899,7 @@ function procShowFloatToolbarForShape(id){
   const shape = PROC.shapes.find(s=>s.id===id); if(!shape) return;
   const bar = document.createElement("div");
   bar.className="pfloat-toolbar"; bar.id="procFloatToolbar";
-  bar.style.left=shape.x+"px"; bar.style.top=(shape.y-150)+"px";
+  bar.style.left=shape.x+"px"; bar.style.top=shape.y+"px";
   bar.style.flexWrap="wrap"; bar.style.maxWidth="290px";
   bar.style.flexDirection="column"; bar.style.alignItems="stretch";
   const collabOpts = `<option value="">Aucun collaborateur</option>` + DATA.collaborators.map(c=>`<option value="${c.id}" ${shape.collabTag===c.id?"selected":""}>${escapeHtml(c.name)}</option>`).join("");
@@ -3863,6 +3916,7 @@ function procShowFloatToolbarForShape(id){
       ${usedColors.map(item=>`<button type="button" class="pft-used-swatch${item.color===curColorNorm?' active':''}" data-color="${item.color}" title="${escapeHtml(item.label)}" style="width:20px;height:20px;border-radius:5px;padding:0;background:${item.color};border:2px solid ${item.color===curColorNorm?'var(--text)':'transparent'};cursor:pointer;"></button>`).join("")}
     </div>` : "";
   bar.innerHTML = `
+    <textarea id="pftText" rows="2" placeholder="Texte affiché sur la forme…" style="width:100%;min-height:42px;font-size:13px;font-weight:600;border-radius:6px;border:1px solid var(--border-light);background:var(--bg-panel-2);color:var(--text);padding:6px 8px;resize:vertical;margin-bottom:6px;">${escapeHtml(procContentToText(shape.content))}</textarea>
     <div style="display:flex;flex-wrap:wrap;gap:5px;">
       <input type="color" class="swatch-input" id="pftColor" value="${shape.color&&shape.color.startsWith('#')?shape.color:'#ffd966'}">
       <select id="pftTag" title="Affecter un collaborateur : crée automatiquement une tâche pour lui dans SensiTâche" style="font-size:12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg-panel-2);color:var(--text);">${collabOpts}</select>
@@ -3872,10 +3926,27 @@ function procShowFloatToolbarForShape(id){
       <button class="btn small danger" id="pftDelete">Suppr.</button>
     </div>
     ${swatchesHtml}
-    <input type="text" id="pftDuration" placeholder="⏱ Durée de l'étape (ex. 2 jours, 3h…)" value="${escapeHtml(shape.duration||"")}" style="margin-top:6px;width:270px;font-size:12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg-panel-2);color:var(--text);padding:6px 8px;">
-    <textarea id="pftDesc" placeholder="Description de cette étape (visible uniquement quand la forme est sélectionnée)…" style="margin-top:6px;width:270px;min-height:50px;font-size:12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg-panel-2);color:var(--text);padding:6px 8px;resize:vertical;">${escapeHtml(shape.description||"")}</textarea>
+    <input type="text" id="pftDuration" placeholder="⏱ Durée de l'étape (ex. 2 jours, 3h…)" value="${escapeHtml(shape.duration||"")}" style="margin-top:6px;width:100%;font-size:12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg-panel-2);color:var(--text);padding:6px 8px;">
+    <textarea id="pftDesc" placeholder="Description de cette étape (visible uniquement quand la forme est sélectionnée)…" style="margin-top:6px;width:100%;min-height:50px;font-size:12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg-panel-2);color:var(--text);padding:6px 8px;resize:vertical;">${escapeHtml(shape.description||"")}</textarea>
   `;
   document.getElementById("procShapesLayer").appendChild(bar);
+  bar.style.width = "290px";
+  procPlaceFloatToolbar(bar, {x:shape.x, y:shape.y, w:shape.w, h:shape.h});
+  // Texte affiché sur la forme, modifiable directement ici.
+  const textField = bar.querySelector("#pftText");
+  textField.addEventListener("pointerdown", e=> e.stopPropagation());
+  textField.addEventListener("keydown", e=> e.stopPropagation());
+  textField.addEventListener("input", ()=>{
+    const inner = escapeHtml(textField.value).replace(/\n/g, "<br>");
+    shape.content = shape.linkUrl ? '<a href="'+escapeHtml(shape.linkUrl)+'" target="_blank" rel="noopener">'+inner+'</a>' : inner;
+    const contentEl = document.querySelector('.pshape[data-id="'+id+'"] .pshapeContent');
+    if(contentEl) contentEl.innerHTML = shape.content;
+    if(shape.linkedTaskId){
+      const lt = DATA.tasks.find(t=>t.id===shape.linkedTaskId);
+      if(lt){ lt.title = stripHtml(shape.content) || lt.title; lt.updatedAt = Date.now(); }
+    }
+    saveData();
+  });
   bar.querySelector("#pftDesc").addEventListener("pointerdown", e=> e.stopPropagation());
   bar.querySelector("#pftDesc").addEventListener("input", e=>{
     shape.description = e.target.value;
@@ -3947,6 +4018,7 @@ function procShowFloatToolbarForShape(id){
       const result = await callClaudeText(plainText, "fix");
       shape.content = escapeHtml(result);
       contentEl.innerHTML = shape.content;
+      textField.value = procContentToText(shape.content);
       saveData();
       if(shape.linkedTaskId){
         const lt = DATA.tasks.find(t=>t.id===shape.linkedTaskId);
@@ -3981,6 +4053,7 @@ function procShowFloatToolbarForShape(id){
       shape.linkUrl = null;
       shape.content = escapeHtml(stripHtml(shape.content||""));
       content.innerHTML = shape.content;
+      textField.value = procContentToText(shape.content);
       saveData();
       return;
     }
@@ -3991,6 +4064,7 @@ function procShowFloatToolbarForShape(id){
     const label = stripHtml(shape.content||"") || shape.linkUrl;
     shape.content = '<a href="'+escapeHtml(shape.linkUrl)+'" target="_blank" rel="noopener">'+escapeHtml(label)+'</a>';
     content.innerHTML = shape.content;
+    textField.value = procContentToText(shape.content);
     if(shape.linkedTaskId){
       const lt = DATA.tasks.find(t=>t.id===shape.linkedTaskId);
       if(lt){ lt.title = label; lt.updatedAt = Date.now(); }
@@ -4016,6 +4090,7 @@ function procShowFloatToolbarForArrow(id){
     <input type="text" id="partDuration" placeholder="⏱ Délai entre les deux étapes (ex. 1 jour, 2h…)" value="${escapeHtml(arrow.duration||"")}" style="margin-top:6px;width:100%;font-size:12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg-panel-2);color:var(--text);padding:6px 8px;">
   `;
   document.getElementById("procShapesLayer").appendChild(bar);
+  procPlaceFloatToolbar(bar, {x:mid.x-10, y:mid.y-10, w:20, h:20});
   bar.querySelectorAll("[data-kind]").forEach(b=>{
     b.addEventListener("pointerdown", e=>{ e.stopPropagation(); arrow.kind=b.dataset.kind; saveData(); renderProcArrows(); });
   });
@@ -4141,13 +4216,14 @@ document.addEventListener("pointermove", e=>{
       const el=document.querySelector('.pshape[data-id="'+shape.id+'"]');
       if(el){ el.style.left=shape.x+"px"; el.style.top=shape.y+"px"; }
       const bar=document.getElementById("procFloatToolbar");
-      if(bar){ bar.style.left=shape.x+"px"; bar.style.top=(shape.y-150)+"px"; }
+      if(bar) procPlaceFloatToolbar(bar, {x:shape.x, y:shape.y, w:shape.w, h:shape.h});
       procUpdateArrowsForShape(shape.id);
     } else if(procDragState.mode==="resize"){
       shape.w=Math.max(70,procDragState.startW+dx); shape.h=Math.max(50,procDragState.startH+dy);
       const el=document.querySelector('.pshape[data-id="'+shape.id+'"]');
       if(el){ el.style.width=shape.w+"px"; el.style.height=shape.h+"px"; }
       procUpdateArrowsForShape(shape.id);
+      procReplaceFloatToolbarForShape(shape);
     }
     return;
   }
@@ -4164,7 +4240,8 @@ document.addEventListener("pointermove", e=>{
     if(bar){
       const shapesSel = procGroupDragState.items.map(it=>PROC.shapes.find(s=>s.id===it.id)).filter(Boolean);
       const minX = Math.min(...shapesSel.map(s=>s.x)), minY = Math.min(...shapesSel.map(s=>s.y));
-      bar.style.left=minX+"px"; bar.style.top=(minY-48)+"px";
+      const maxX = Math.max(...shapesSel.map(s=>s.x+s.w)), maxY = Math.max(...shapesSel.map(s=>s.y+s.h));
+      procPlaceFloatToolbar(bar, {x:minX, y:minY, w:maxX-minX, h:maxY-minY});
     }
     return;
   }
