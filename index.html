@@ -129,7 +129,16 @@
   .drawer-body{flex:1; overflow-y:auto; padding:16px 20px 60px;}
   #taskTitleInput{width:100%; border:none; background:transparent; font-size:20px; font-weight:700; padding:4px 0; margin-bottom:6px;}
   #taskTitleInput:focus{outline:none;}
-  #taskDescInput{width:100%; min-height:70px; border:1px solid var(--border-soft); border-radius:8px; padding:9px 11px; font-size:13.5px; resize:vertical; background:var(--bg-card); margin-bottom:16px;}
+  #taskDescInput{width:100%; min-height:70px; border:1px solid var(--border-soft); border-radius:8px; padding:9px 11px; font-size:13.5px; resize:vertical; background:var(--bg-card); margin-bottom:16px; color:var(--text-main); line-height:1.45; overflow:auto; max-height:60vh; word-break:break-word; outline:none; cursor:text;}
+  #taskDescInput:focus{border-color:var(--accent);}
+  #taskDescInput:empty:before{content:attr(data-placeholder); color:var(--text-sub); pointer-events:none;}
+  #taskDescInput a{color:var(--accent); text-decoration:underline;}
+  #taskDescInput ul, #taskDescInput ol{margin:4px 0; padding-left:22px;}
+  #taskDescInput p{margin:0 0 6px;}
+  #taskDescInput h1, #taskDescInput h2, #taskDescInput h3, #taskDescInput h4{margin:6px 0 4px; font-size:1.08em;}
+  #taskDescInput table{border-collapse:collapse; margin:6px 0; font-size:12.5px;}
+  #taskDescInput td, #taskDescInput th{border:1px solid var(--border-soft); padding:3px 6px; vertical-align:top;}
+  #taskDescInput blockquote{margin:4px 0; padding-left:10px; border-left:3px solid var(--border-soft); color:var(--text-sub);}
   .field-row{margin-bottom:16px;}
   .field-label{font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-sub); margin-bottom:7px; display:flex; align-items:center; gap:6px;}
   .chiprow{display:flex; gap:8px; flex-wrap:wrap;}
@@ -323,7 +332,7 @@
         <input id="taskTitleInput" placeholder="Titre de la tâche" style="flex:1; width:auto; min-width:0;">
         <button class="btn small" id="btnTitleFix" title="Corriger les fautes">✓</button>
       </div>
-      <textarea id="taskDescInput" placeholder="Description…"></textarea>
+      <div id="taskDescInput" contenteditable="true" data-placeholder="Description… (tu peux coller du texte mis en forme : gras, listes, liens, tableaux)"></div>
       <div style="display:flex;gap:6px;margin:-8px 0 16px;">
         <button class="btn small" id="btnDescFix">✓ Corriger les fautes</button>
         <button class="btn small" id="btnDescRephrase">🔄 Reformuler</button>
@@ -1851,6 +1860,7 @@ function buildCollabEmailModel(opts){
       title: t.title||"(sans titre)", status, names,
       due: (status==="active" && t.dueDate) ? frDate(t.dueDate) : "",
       desc: (t.description||"").split("\n").map(l=> l.trim()).filter(Boolean),
+      descHtml: descHtmlIsCurrent(t) ? sanitizeDescHtml(t.descriptionHtml) : "",
       subs
     };
   });
@@ -1903,7 +1913,8 @@ function buildCollabEmailHtml(opts){
     h += `<div style="margin:0 0 14px;padding:8px 12px;border-left:3px solid #5B6CFF;background:#f6f7fb;">`;
     h += `<div style="font-size:12pt;font-weight:bold;margin-bottom:4px;">${i+1}. ${esc(it.title)}${badge}</div>`;
     h += `<div><b>Affecté à :</b> ${esc(it.names || "non affecté")}${it.due ? ` &nbsp;·&nbsp; <b>Dernier délai :</b> ${esc(it.due)}` : ""}</div>`;
-    if(it.desc.length) h += `<div style="margin-top:6px;"><b>Description :</b><br>${it.desc.map(linkify).join("<br>")}</div>`;
+    if(it.descHtml) h += `<div style="margin-top:6px;"><b>Description :</b><div>${it.descHtml}</div></div>`;
+    else if(it.desc.length) h += `<div style="margin-top:6px;"><b>Description :</b><br>${it.desc.map(linkify).join("<br>")}</div>`;
     if(it.subs.length){
       h += `<div style="margin-top:6px;"><b>Sous-tâches :</b></div><ul style="margin:2px 0 0;padding-left:20px;">`;
       it.subs.forEach(s=>{
@@ -2237,7 +2248,7 @@ function openTaskDrawer(id){
   document.getElementById("overlayBg").classList.add("show");
   document.getElementById("drawer").classList.add("show");
   document.getElementById("taskTitleInput").value = t.title;
-  document.getElementById("taskDescInput").value = t.description||"";
+  setDescEditor(t);
   renderTaskDescLinks(t);
   document.getElementById("chipToday").classList.toggle("on", !!t.today);
   document.getElementById("chipUrgent").classList.toggle("on", !!t.urgent);
@@ -2375,8 +2386,27 @@ document.getElementById("taskTitleInput").addEventListener("input", e=>{
   const t = curTask(); if(!t) return; t.title = e.target.value; t.updatedAt = Date.now(); saveData();
 });
 document.getElementById("taskDescInput").addEventListener("input", e=>{
-  const t = curTask(); if(!t) return; t.description = e.target.value; t.updatedAt = Date.now(); saveData();
+  const t = curTask(); if(!t) return; saveDescFromEditor(t); t.updatedAt = Date.now(); saveData();
   renderTaskDescLinks(t);
+});
+// Collage : on garde la mise en forme (gras, italique, listes, liens, tableaux)
+// en la nettoyant (pas de styles Word/Outlook, pas d'images ni de scripts).
+document.getElementById("taskDescInput").addEventListener("paste", e=>{
+  const cd = e.clipboardData; if(!cd) return;
+  const html = cd.getData("text/html");
+  const text = cd.getData("text/plain");
+  e.preventDefault();
+  if(html && html.trim()){
+    const frag = html.replace(/^[\s\S]*<!--StartFragment-->/i, "").replace(/<!--EndFragment-->[\s\S]*$/i, "");
+    document.execCommand("insertHTML", false, sanitizeDescHtml(frag));
+  } else if(text){
+    document.execCommand("insertText", false, text);
+  }
+});
+// Liens dans le champ : Ctrl+clic (ou clic quand le champ n'est pas en cours d'édition) les ouvre.
+document.getElementById("taskDescInput").addEventListener("click", e=>{
+  const a = e.target.closest && e.target.closest("a[href]");
+  if(a && (e.ctrlKey || e.metaKey)){ e.preventDefault(); window.open(a.href, "_blank", "noopener"); }
 });
 document.getElementById("chipToday").addEventListener("click", e=>{
   const t = curTask(); if(!t) return; snapshot(); t.today = !t.today; t.updatedAt=Date.now(); saveData();
@@ -3673,6 +3703,101 @@ function renderTaskDescLinks(t){
   const links = t ? extractLinks(t.description||"") : [];
   box.style.display = links.length ? "flex" : "none";
   box.innerHTML = linksChipsHtml(links);
+}
+
+/* ---------- Description en texte riche (mise en forme conservée au collage) ----------
+   t.descriptionHtml = version mise en forme (nettoyée), t.description = même
+   contenu en texte simple, utilisé partout ailleurs (recherche, mails, voix…).
+   t.descriptionHtmlSrc mémorise le texte simple correspondant : si la
+   description est modifiée ailleurs (IA, détail du processus…), la version
+   mise en forme n'est plus à jour et on revient au texte simple. */
+const DESC_ALLOWED_TAGS = new Set(["B","STRONG","I","EM","U","S","STRIKE","DEL","A","UL","OL","LI","BR","P","DIV","H1","H2","H3","H4","H5","H6","BLOCKQUOTE","TABLE","THEAD","TBODY","TFOOT","TR","TD","TH","CODE","PRE","SUB","SUP","HR","SPAN","FONT"]);
+function sanitizeDescHtml(html){
+  const tpl = document.createElement("template");
+  tpl.innerHTML = String(html||"")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<(script|style|head|title|xml|svg|iframe|object|noscript)\b[\s\S]*?<\/\1\s*>/gi, "")
+    .replace(/<\/?(o|w|v|m):[^>]*>/gi, "");   // balises Office (Word/Outlook)
+  const clean = (node)=>{
+    Array.from(node.childNodes).forEach(ch=>{
+      if(ch.nodeType===3) return;
+      if(ch.nodeType!==1){ ch.remove(); return; }
+      clean(ch);
+      const tag = ch.tagName.toUpperCase();
+      if(!DESC_ALLOWED_TAGS.has(tag)){ ch.replaceWith(...Array.from(ch.childNodes)); return; }
+      // Gras / italique / souligné exprimés en style (Word, Outlook, Google Docs) → vraies balises.
+      const st = (ch.getAttribute("style")||"").toLowerCase();
+      const wraps = [];
+      if(/font-weight\s*:\s*(bold|[6-9]00)/.test(st) && !/^(B|STRONG|H\d|TH)$/.test(tag)) wraps.push("b");
+      if(/font-style\s*:\s*italic/.test(st) && !/^(I|EM)$/.test(tag)) wraps.push("i");
+      if(/text-decoration[^;]*underline/.test(st) && tag!=="U" && tag!=="A") wraps.push("u");
+      if(/text-decoration[^;]*line-through/.test(st) && !/^(S|STRIKE|DEL)$/.test(tag)) wraps.push("s");
+      const href = tag==="A" ? (ch.getAttribute("href")||"") : "";
+      Array.from(ch.attributes).forEach(a=> ch.removeAttribute(a.name));
+      if(tag==="A"){
+        if(/^(https?:|mailto:)/i.test(href)){ ch.setAttribute("href", unwrapSafeLink(href)); ch.setAttribute("target","_blank"); ch.setAttribute("rel","noopener"); }
+        else { ch.replaceWith(...Array.from(ch.childNodes)); return; }
+      }
+      let target = ch;
+      if(tag==="SPAN" || tag==="FONT"){
+        // Le span lui-même ne sert plus à rien : on garde son contenu, éventuellement mis en gras/italique.
+        if(!wraps.length){ ch.replaceWith(...Array.from(ch.childNodes)); return; }
+        const outer = document.createElement(wraps[0]);
+        let inner = outer;
+        wraps.slice(1).forEach(w=>{ const e = document.createElement(w); inner.appendChild(e); inner = e; });
+        Array.from(ch.childNodes).forEach(n=> inner.appendChild(n));
+        ch.replaceWith(outer);
+        return;
+      }
+      if(wraps.length){
+        const outer = document.createElement(wraps[0]);
+        let inner = outer;
+        wraps.slice(1).forEach(w=>{ const e = document.createElement(w); inner.appendChild(e); inner = e; });
+        Array.from(target.childNodes).forEach(n=> inner.appendChild(n));
+        target.appendChild(outer);
+      }
+    });
+  };
+  clean(tpl.content);
+  return tpl.innerHTML.replace(/(<br\s*\/?>\s*){3,}/gi, "<br><br>").trim();
+}
+// Texte riche → texte simple lisible (listes avec puces, tableaux avec « | », liens « libellé (adresse) »).
+function richDescToPlain(html){
+  const d = document.createElement("div");
+  d.innerHTML = html||"";
+  d.querySelectorAll("a[href]").forEach(a=>{
+    const href = a.getAttribute("href")||"", label = (a.textContent||"").trim();
+    const same = !label || label.replace(/^https?:\/\//i,"").replace(/\/$/,"") === href.replace(/^https?:\/\//i,"").replace(/\/$/,"");
+    if(!/^mailto:/i.test(href)) a.textContent = same ? href : label+" ("+href+")";
+  });
+  d.querySelectorAll("br").forEach(b=> b.replaceWith("\n"));
+  d.querySelectorAll("td,th").forEach(c=>{ if(c.nextElementSibling) c.append(" | "); });
+  d.querySelectorAll("ol").forEach(ol=> Array.from(ol.children).forEach((li,i)=> li.prepend((i+1)+". ")));
+  d.querySelectorAll("ul > li").forEach(li=> li.prepend("• "));
+  d.querySelectorAll("p,div,li,tr,h1,h2,h3,h4,h5,h6,blockquote,pre,hr").forEach(el=> el.append("\n"));
+  return (d.textContent||"").replace(/ /g," ").replace(/[ \t]+\n/g,"\n").replace(/\n{3,}/g,"\n\n").trim();
+}
+function plainToDescHtml(text){
+  return escapeHtml(String(text||"")).replace(/\n/g, "<br>");
+}
+function descHtmlIsCurrent(t){
+  return !!(t && t.descriptionHtml && t.descriptionHtmlSrc === (t.description||""));
+}
+function setDescEditor(t){
+  const ed = document.getElementById("taskDescInput");
+  if(!ed) return;
+  ed.innerHTML = descHtmlIsCurrent(t) ? sanitizeDescHtml(t.descriptionHtml) : plainToDescHtml(t ? t.description : "");
+}
+function saveDescFromEditor(t){
+  const ed = document.getElementById("taskDescInput");
+  if(!ed || !t) return;
+  const html = sanitizeDescHtml(ed.innerHTML);
+  const plain = richDescToPlain(html);
+  t.description = plain;
+  // Pas de mise en forme réelle (juste du texte et des retours à la ligne) : inutile de stocker du HTML.
+  const hasFormatting = /<(b|strong|i|em|u|s|strike|del|a|ul|ol|li|h\d|blockquote|table|code|pre|sub|sup|hr)\b/i.test(html);
+  if(hasFormatting){ t.descriptionHtml = html; t.descriptionHtmlSrc = plain; }
+  else { delete t.descriptionHtml; delete t.descriptionHtmlSrc; }
 }
 
 function stripHtml(html){ const d=document.createElement("div"); d.innerHTML=html||""; return (d.textContent||"").trim(); }
@@ -6871,16 +6996,16 @@ function showAIModal(){
 async function runDescriptionAI(mode){
   const t = curTask(); if(!t) return;
   const btn = document.getElementById(mode==="fix" ? "btnDescFix" : "btnDescRephrase");
-  const textarea = document.getElementById("taskDescInput");
-  const text = textarea.value.trim();
+  const editor = document.getElementById("taskDescInput");
+  const text = (t.description||"").trim();
   if(!text){ alert("Écris d'abord une description."); return; }
   const originalLabel = btn.textContent;
   btn.textContent = "…"; btn.disabled = true;
   try{
     const result = await callClaudeText(text, mode);
     snapshot();
-    textarea.value = result;
-    t.description = result;
+    editor.innerHTML = plainToDescHtml(result);
+    saveDescFromEditor(t);
     t.updatedAt = Date.now();
     saveData();
   }catch(e){
