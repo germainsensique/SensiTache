@@ -190,6 +190,7 @@
   .pshapeContent[contenteditable="true"]{cursor:text; background:rgba(255,255,255,.35); border-radius:4px;}
   .presizeHandle{position:absolute;width:14px;height:14px;right:-6px;bottom:-6px;background:var(--accent);border:2px solid var(--bg-app);border-radius:3px;z-index:4;cursor:nwse-resize;display:none;touch-action:none;}
   .pshape.selected .presizeHandle{display:block;}
+  .panchor.snapTarget{opacity:1 !important;background:var(--accent) !important;transform:scale(1.6);}
   .panchor{position:absolute;width:13px;height:13px;background:#fff;border:2px solid var(--bg-app);border-radius:50%;z-index:5;opacity:.45;transition:opacity .1s, transform .1s;cursor:crosshair;touch-action:none;}
   .panchor:hover{transform:scale(1.35); background:var(--bg-app);}
   .pshape:hover .panchor, .pshape.selected .panchor, .panchor.forceShow{opacity:1;}
@@ -4252,7 +4253,13 @@ document.addEventListener("pointermove", e=>{
     procDrawLassoBox();
     return;
   }
-  if(procArrowDraft){ const pos=procToBoardCoords(e.clientX,e.clientY); procDrawDraftLine(procArrowDraft.origin, pos); return; }
+  if(procArrowDraft){
+    const target = procFindArrowTarget(e.clientX, e.clientY);
+    procHighlightArrowTarget(target);
+    procDrawDraftLine(procArrowDraft.origin, target ? target.point : procToBoardCoords(e.clientX,e.clientY));
+    procArrowDraft.lastX = e.clientX; procArrowDraft.lastY = e.clientY;
+    return;
+  }
   if(procPanState){
     const dx=e.clientX-procPanState.startX, dy=e.clientY-procPanState.startY;
     if(!procPanState.moved && Math.hypot(dx,dy)>4){ procPanState.moved=true; procCanvasScroll.style.cursor="grabbing"; }
@@ -4291,19 +4298,73 @@ function procEndPointerInteractions(e){
     procLassoState=null;
   }
   if(procArrowDraft){
-    const el = document.elementFromPoint(e.clientX, e.clientY);
+    // Sur téléphone, un « pointercancel » peut arriver sans coordonnées : on
+    // garde alors la dernière position connue du doigt.
+    const cx = (e.type==="pointercancel" || (!e.clientX && !e.clientY)) ? procArrowDraft.lastX : e.clientX;
+    const cy = (e.type==="pointercancel" || (!e.clientX && !e.clientY)) ? procArrowDraft.lastY : e.clientY;
+    let target = null;
+    const el = (cx!=null && cy!=null) ? document.elementFromPoint(cx, cy) : null;
     const anchorEl = el && el.closest ? el.closest(".panchor") : null;
-    if(anchorEl){ const shapeEl = anchorEl.closest(".pshape"); if(shapeEl) procFinishArrowDraft(shapeEl.dataset.id, anchorEl.dataset.side); }
+    if(anchorEl){ const shapeEl = anchorEl.closest(".pshape"); if(shapeEl) target = {shapeId:shapeEl.dataset.id, side:anchorEl.dataset.side}; }
+    if(!target && cx!=null && cy!=null) target = procFindArrowTarget(cx, cy);
+    if(target) procFinishArrowDraft(target.shapeId, target.side);
+    procHighlightArrowTarget(null);
     procArrowDraft=null; document.querySelectorAll(".panchor").forEach(a=>a.classList.remove("forceShow")); procRemoveDraftLine();
   }
   if(procPanState){ if(!procPanState.moved) procClearSelection(); procCanvasScroll.style.cursor="default"; procPanState=null; }
 }
 document.addEventListener("pointerup", procEndPointerInteractions);
 document.addEventListener("pointercancel", procEndPointerInteractions);
+// Un appui en dehors de la fenêtre d'options (et en dehors d'une forme ou
+// d'une flèche, qui gèrent elles-mêmes leur sélection) la ferme — y compris
+// sur téléphone, où toucher le fond sert aussi à faire défiler.
+document.addEventListener("pointerdown", e=>{
+  if(!document.getElementById("procOverlay").classList.contains("show")) return;
+  const bar = document.getElementById("procFloatToolbar");
+  if(!bar || bar.contains(e.target)) return;
+  if(e.target.closest && (e.target.closest(".pshape") || e.target.closest("g[data-arrow]"))) return;
+  if(procArrowDraft) return;
+  procClearSelection();
+}, true);
 function procStartArrowDraft(shapeId, side){
   const shape = PROC.shapes.find(s=>s.id===shapeId);
   procArrowDraft = {shapeId, side, origin:procAnchorPoint(shape,side)};
   document.querySelectorAll(".panchor").forEach(a=>a.classList.add("forceShow"));
+}
+// Cible d'une flèche en cours de tracé : le point d'accroche le plus proche
+// du doigt / de la souris (dans un rayon généreux, le doigt étant imprécis
+// sur téléphone), ou à défaut, si on lâche sur une forme, son côté le plus proche.
+function procFindArrowTarget(clientX, clientY){
+  if(!procArrowDraft) return null;
+  const pos = procToBoardCoords(clientX, clientY);
+  const radius = 44 / (procZoom||1);
+  let best = null;
+  PROC.shapes.forEach(sh=>{
+    ["top","bottom","left","right"].forEach(side=>{
+      if(sh.id===procArrowDraft.shapeId && side===procArrowDraft.side) return;
+      const pt = procAnchorPoint(sh, side);
+      const d = Math.hypot(pt.x-pos.x, pt.y-pos.y);
+      if(d <= radius && (!best || d < best.d)) best = {shapeId:sh.id, side, point:pt, d};
+    });
+  });
+  if(best) return best;
+  const inside = PROC.shapes.find(sh=> sh.id!==procArrowDraft.shapeId && pos.x>=sh.x && pos.x<=sh.x+sh.w && pos.y>=sh.y && pos.y<=sh.y+sh.h);
+  if(inside){
+    let bestSide = null;
+    ["top","bottom","left","right"].forEach(side=>{
+      const pt = procAnchorPoint(inside, side);
+      const d = Math.hypot(pt.x-pos.x, pt.y-pos.y);
+      if(!bestSide || d < bestSide.d) bestSide = {shapeId:inside.id, side, point:pt, d};
+    });
+    return bestSide;
+  }
+  return null;
+}
+function procHighlightArrowTarget(target){
+  document.querySelectorAll(".panchor.snapTarget").forEach(a=> a.classList.remove("snapTarget"));
+  if(!target) return;
+  const a = document.querySelector('.pshape[data-id="'+target.shapeId+'"] .panchor.'+target.side);
+  if(a) a.classList.add("snapTarget");
 }
 function procFinishArrowDraft(shapeId, side){
   if(!procArrowDraft) return;
