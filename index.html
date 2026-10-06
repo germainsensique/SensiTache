@@ -190,6 +190,12 @@
   .pshapeContent[contenteditable="true"]{cursor:text; background:rgba(255,255,255,.35); border-radius:4px;}
   .presizeHandle{position:absolute;width:14px;height:14px;right:-6px;bottom:-6px;background:var(--accent);border:2px solid var(--bg-app);border-radius:3px;z-index:4;cursor:nwse-resize;display:none;touch-action:none;}
   .pshape.selected .presizeHandle{display:block;}
+  #procBoard.moveMode .panchor, #procBoard.moveMode .presizeHandle{display:none !important;}
+  #procBoard.moveMode .pshape{cursor:move;}
+  .pshape.dragging{filter:drop-shadow(0 8px 18px rgba(0,0,0,.45)); opacity:.92;}
+  /* Pas de « tirer pour actualiser » ni de rebond pendant l'édition d'un processus. */
+  html:has(#procOverlay.show), body:has(#procOverlay.show){overscroll-behavior:none;}
+  #procCanvasScroll{overscroll-behavior:contain;}
   .panchor.snapTarget{opacity:1 !important;background:var(--accent) !important;transform:scale(1.6);}
   .panchor{position:absolute;width:13px;height:13px;background:#fff;border:2px solid var(--bg-app);border-radius:50%;z-index:5;opacity:.45;transition:opacity .1s, transform .1s;cursor:crosshair;touch-action:none;}
   .panchor:hover{transform:scale(1.35); background:var(--bg-app);}
@@ -475,6 +481,9 @@
         </button>
         <button class="tbtn" data-ptool="diamond" title="Losange">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 9-9 9-9-9z"/></svg>Losange
+        </button>
+        <button class="tbtn" data-ptool="move" title="Mode déplacement : fais glisser les formes sans ouvrir leurs options">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20M12 2l-3 3M12 2l3 3M12 22l-3-3M12 22l3-3M2 12l3-3M2 12l3 3M22 12l-3-3M22 12l-3 3"/></svg>Déplacer
         </button>
         <div class="tsep"></div>
         <button class="tbtn" id="btnProcDeleteSel" title="Supprimer">
@@ -3295,6 +3304,9 @@ function setProcTool(tool){
   procActiveTool = tool;
   document.querySelectorAll(".proc-toolbar .tbtn[data-ptool]").forEach(b=> b.classList.toggle("active", b.dataset.ptool===tool));
   document.getElementById("procCanvasScroll").style.cursor = (tool==="rect"||tool==="diamond") ? "crosshair" : "default";
+  const board = document.getElementById("procBoard");
+  if(board) board.classList.toggle("moveMode", tool==="move");
+  if(tool==="move" && typeof procClearSelection==="function"){ try{ procClearSelection(); }catch(e){} }
 }
 function procUpdateSideToggleIcon(){
   const collapsed = document.getElementById("procSide").classList.contains("collapsed");
@@ -3494,10 +3506,18 @@ function renderProcShapes(){
     });
     el.appendChild(rh);
     el.addEventListener("pointerdown", e=>{
-      if(procActiveTool!=="select") return;
+      if(procActiveTool!=="select" && procActiveTool!=="move") return;
       if(e.pointerType==="mouse" && e.button!==0) return;
       if(content.getAttribute("contenteditable")==="true") return;
       e.stopPropagation();
+      if(procActiveTool==="move"){
+        // Mode déplacement : on fait juste glisser la forme, sans sélection ni fenêtre d'options.
+        e.preventDefault();
+        procClearSelection();
+        procDragState = {mode:"move", shapeId:shape.id, startX:e.clientX, startY:e.clientY, startLeft:shape.x, startTop:shape.y, noToolbar:true, pointerType:e.pointerType};
+        el.classList.add("dragging");
+        return;
+      }
       if(procMultiSelectedIds.has(shape.id) && procMultiSelectedIds.size>1){
         procGroupDragState = {
           startX:e.clientX, startY:e.clientY,
@@ -3508,8 +3528,10 @@ function renderProcShapes(){
         };
       } else {
         procMultiSelectedIds.clear();
-        procSelectShape(shape.id);
-        procDragState = {mode:"move", shapeId:shape.id, startX:e.clientX, startY:e.clientY, startLeft:shape.x, startTop:shape.y};
+        // La fenêtre d'options s'ouvre au relâchement (appui simple), pas
+        // pendant qu'on fait glisser la forme.
+        procSelectShape(shape.id, {noToolbar:true});
+        procDragState = {mode:"move", shapeId:shape.id, startX:e.clientX, startY:e.clientY, startLeft:shape.x, startTop:shape.y, popupOnUp:true, pointerType:e.pointerType};
       }
     });
     layer.appendChild(el);
@@ -3614,10 +3636,12 @@ function procContentToText(html){
   d.innerHTML = String(html||"").replace(/<br\s*\/?>/gi, "\n").replace(/<\/(div|p)>/gi, "\n");
   return (d.textContent||"").replace(/\n+$/,"");
 }
-function procSelectShape(id){
+function procSelectShape(id, opts){
   procSelectedShapeId=id; procSelectedArrowId=null; procMultiSelectedIds.clear();
   document.querySelectorAll(".pshape").forEach(el=>{ el.classList.toggle("selected", el.dataset.id===id); el.classList.remove("multiselected"); });
-  procRemoveFloatToolbar(); procShowFloatToolbarForShape(id); renderProcArrows();
+  procRemoveFloatToolbar();
+  if(!(opts && opts.noToolbar)) procShowFloatToolbarForShape(id);
+  renderProcArrows();
 }
 function procSelectArrow(id){
   procSelectedArrowId=id; procSelectedShapeId=null; procMultiSelectedIds.clear();
@@ -4209,6 +4233,11 @@ document.addEventListener("pointermove", e=>{
   if(procDragState){
     const dx=(e.clientX-procDragState.startX)/procZoom, dy=(e.clientY-procDragState.startY)/procZoom;
     const shape = PROC.shapes.find(s=>s.id===procDragState.shapeId); if(!shape) return;
+    if(procDragState.mode==="move" && !procDragState.moved){
+      // Petit seuil pour qu'un simple appui du doigt ne décale pas la forme.
+      if(Math.hypot(e.clientX-procDragState.startX, e.clientY-procDragState.startY) < (procDragState.pointerType==="touch" ? 8 : 3)) return;
+      procDragState.moved = true;
+    }
     if(procDragState.mode==="move"){
       let nx = Math.max(0,procDragState.startLeft+dx), ny = Math.max(0,procDragState.startTop+dy);
       if(e.shiftKey){ procRemoveSnapGuides(); }
@@ -4279,7 +4308,16 @@ function procDrawLassoBox(){
 }
 function procRemoveLassoBox(){ const b=document.getElementById("procLassoBox"); if(b) b.remove(); }
 function procEndPointerInteractions(e){
-  if(procDragState){ procApplyBoardSize(); saveData(); procDragState=null; procRemoveSnapGuides(); }
+  if(procDragState){
+    const ds = procDragState;
+    procApplyBoardSize(); saveData(); procDragState=null; procRemoveSnapGuides();
+    document.querySelectorAll(".pshape.dragging").forEach(x=> x.classList.remove("dragging"));
+    // Appui simple → ouvre les options ; après un glissement au doigt → non
+    // (à la souris, on les rouvre comme avant).
+    if(ds.mode==="move" && ds.popupOnUp && procSelectedShapeId===ds.shapeId && (!ds.moved || ds.pointerType==="mouse")){
+      procRemoveFloatToolbar(); procShowFloatToolbarForShape(ds.shapeId);
+    }
+  }
   if(procGroupDragState){ procApplyBoardSize(); saveData(); procGroupDragState=null; }
   if(procLassoState){
     if(procLassoState.moved){
