@@ -3249,6 +3249,10 @@ let procArrowDraft = null, procDragState = null, procPanState = null;
 
 function openProcessEditor(t){
   PROC = t.process;
+  // Sur téléphone, le panneau latéral recouvre le canevas : il démarre replié.
+  if(window.matchMedia && window.matchMedia("(max-width: 860px)").matches){
+    document.getElementById("procSide").classList.add("collapsed");
+  }
   localStorage.setItem("sensitache.procEditorOpen", "1");
   history.pushState({sensitacheModal:"proc"}, "", location.href);
   document.getElementById("procNameInput").value = PROC.name || "Processus";
@@ -3321,9 +3325,11 @@ function setProcTool(tool){
 }
 function procUpdateSideToggleIcon(){
   const collapsed = document.getElementById("procSide").classList.contains("collapsed");
+  // Le panneau est à droite : replié → flèche vers la gauche (« l'ouvrir »),
+  // ouvert → flèche vers la droite (« le refermer »).
   document.getElementById("procSideToggleIcon").innerHTML = collapsed
-    ? '<path d="M9 18l6-6-6-6"/>'
-    : '<path d="M15 18l-6-6 6-6"/>';
+    ? '<path d="M15 18l-6-6 6-6"/>'
+    : '<path d="M9 18l6-6-6-6"/>';
 }
 document.getElementById("procSideToggleBtn").addEventListener("click", ()=>{
   document.getElementById("procSide").classList.toggle("collapsed");
