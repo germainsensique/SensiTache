@@ -192,6 +192,11 @@
   .pshape.selected .presizeHandle{display:block;}
   #procBoard.moveMode .panchor, #procBoard.moveMode .presizeHandle{display:none !important;}
   #procBoard.moveMode .pshape{cursor:move;}
+  /* Le texte d'une forme est un petit cadre défilant : sans ceci, le
+     téléphone y voit un défilement, interrompt le glissement au bout de
+     quelques pixels (la forme ne bougeait que de 1-2 mm) et fait défiler. */
+  .pshape, .pshape *{touch-action:none;}
+  #procBoard.moveMode .pshapeContent{overflow:hidden; pointer-events:none;}
   .pshape.dragging{filter:drop-shadow(0 8px 18px rgba(0,0,0,.45)); opacity:.92;}
   /* Pas de « tirer pour actualiser » ni de rebond pendant l'édition d'un processus. */
   html:has(#procOverlay.show), body:has(#procOverlay.show){overscroll-behavior:none;}
@@ -3306,6 +3311,12 @@ function setProcTool(tool){
   document.getElementById("procCanvasScroll").style.cursor = (tool==="rect"||tool==="diamond") ? "crosshair" : "default";
   const board = document.getElementById("procBoard");
   if(board) board.classList.toggle("moveMode", tool==="move");
+  // Sur téléphone, le panneau latéral recouvre le canevas : on le replie dès qu'on choisit un outil de dessin.
+  const side = document.getElementById("procSide");
+  if(tool!=="select" && side && !side.classList.contains("collapsed") && getComputedStyle(side).position==="fixed"){
+    side.classList.add("collapsed");
+    try{ procUpdateSideToggleIcon(); }catch(e){}
+  }
   if(tool==="move" && typeof procClearSelection==="function"){ try{ procClearSelection(); }catch(e){} }
 }
 function procUpdateSideToggleIcon(){
@@ -3514,6 +3525,8 @@ function renderProcShapes(){
         // Mode déplacement : on fait juste glisser la forme, sans sélection ni fenêtre d'options.
         e.preventDefault();
         procClearSelection();
+        // Garde le doigt « attaché » à la forme pendant tout le glissement.
+        try{ el.setPointerCapture(e.pointerId); }catch(err){}
         procDragState = {mode:"move", shapeId:shape.id, startX:e.clientX, startY:e.clientY, startLeft:shape.x, startTop:shape.y, noToolbar:true, pointerType:e.pointerType};
         el.classList.add("dragging");
         return;
@@ -3531,6 +3544,7 @@ function renderProcShapes(){
         // La fenêtre d'options s'ouvre au relâchement (appui simple), pas
         // pendant qu'on fait glisser la forme.
         procSelectShape(shape.id, {noToolbar:true});
+        if(e.pointerType==="touch"){ try{ el.setPointerCapture(e.pointerId); }catch(err){} }
         procDragState = {mode:"move", shapeId:shape.id, startX:e.clientX, startY:e.clientY, startLeft:shape.x, startTop:shape.y, popupOnUp:true, pointerType:e.pointerType};
       }
     });
