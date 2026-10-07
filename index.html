@@ -4249,6 +4249,75 @@ procBoardEl.addEventListener("pointerdown", e=>{
     procPanState = {startX:e.clientX, startY:e.clientY, startScrollLeft:procCanvasScroll.scrollLeft, startScrollTop:procCanvasScroll.scrollTop, moved:false};
   }
 });
+/* ---- Déplacement d'une forme sans être bloqué par les bords ----
+   Vers la droite/le bas : la zone grandit au fur et à mesure.
+   Vers le haut/la gauche : on décale tout le contenu pour créer de la place
+   (sans que la vue ne saute). Près du bord de l'écran, le canevas défile
+   tout seul pour pouvoir continuer à déplacer la forme au-delà. */
+function procShiftContent(sx, sy){
+  if(!sx && !sy) return;
+  PROC.shapes.forEach(s=>{ s.x += sx; s.y += sy; });
+  if(PROC.refImage){ PROC.refImage.x = (PROC.refImage.x||0)+sx; PROC.refImage.y = (PROC.refImage.y||0)+sy; }
+  document.querySelectorAll("#procShapesLayer .pshape").forEach(el=>{
+    const sh = PROC.shapes.find(x=> x.id===el.dataset.id);
+    if(sh){ el.style.left = sh.x+"px"; el.style.top = sh.y+"px"; }
+  });
+  const img = document.getElementById("procRefImageEl");
+  if(img && PROC.refImage){ img.style.left = PROC.refImage.x+"px"; img.style.top = PROC.refImage.y+"px"; }
+  if(procDragState){ procDragState.startLeft += sx; procDragState.startTop += sy; }
+  if(procGroupDragState){ procGroupDragState.items.forEach(it=>{ it.startLeft += sx; it.startTop += sy; }); }
+  procApplyBoardSize();
+  procCanvasScroll.scrollLeft += sx*procZoom;
+  procCanvasScroll.scrollTop += sy*procZoom;
+  renderProcArrows();
+}
+function procDragMoveTo(clientX, clientY, shiftKey){
+  const ds = procDragState; if(!ds || ds.mode!=="move") return;
+  const shape = PROC.shapes.find(s=> s.id===ds.shapeId); if(!shape) return;
+  const dx = (clientX-ds.startX)/procZoom, dy = (clientY-ds.startY)/procZoom;
+  let nx = ds.startLeft+dx, ny = ds.startTop+dy;
+  if(shiftKey){ procRemoveSnapGuides(); }
+  else { const snapped = procComputeSnap(shape, nx, ny); nx = snapped.x; ny = snapped.y; procDrawSnapGuides(snapped.guides); }
+  const GROW = 240;
+  const sx = nx < 10 ? GROW : 0, sy = ny < 10 ? GROW : 0;
+  if(sx || sy){ procShiftContent(sx, sy); nx += sx; ny += sy; }
+  shape.x = nx; shape.y = ny;
+  const el = document.querySelector('.pshape[data-id="'+shape.id+'"]');
+  if(el){ el.style.left = shape.x+"px"; el.style.top = shape.y+"px"; }
+  procApplyBoardSize();
+  const bar = document.getElementById("procFloatToolbar");
+  if(bar) procPlaceFloatToolbar(bar, {x:shape.x, y:shape.y, w:shape.w, h:shape.h});
+  procUpdateArrowsForShape(shape.id);
+}
+let procAutoScrollRaf = null;
+function procEnsureAutoScroll(){
+  if(procAutoScrollRaf) return;
+  const tick = ()=>{
+    const ds = procDragState;
+    if(!ds || ds.mode!=="move"){ procAutoScrollRaf = null; return; }
+    if(ds.moved && ds.lastX!=null){
+      const sc = procCanvasScroll, r = sc.getBoundingClientRect();
+      const edge = 56, max = 16;
+      const speed = (d)=> max * Math.min(1, Math.max(0, 1 - d/edge));
+      let vx = 0, vy = 0;
+      if(ds.lastX < r.left+edge) vx = -speed(ds.lastX - r.left);
+      else if(ds.lastX > r.right-edge) vx = speed(r.right - ds.lastX);
+      if(ds.lastY < r.top+edge) vy = -speed(ds.lastY - r.top);
+      else if(ds.lastY > r.bottom-edge) vy = speed(r.bottom - ds.lastY);
+      if(vx || vy){
+        const l0 = sc.scrollLeft, t0 = sc.scrollTop;
+        sc.scrollLeft += vx; sc.scrollTop += vy;
+        // Ce que la vue n'a pas pu défiler (déjà au bord) est appliqué
+        // directement à la forme : elle continue d'avancer, et la zone s'agrandit.
+        const movedX = (sc.scrollLeft - l0) || vx, movedY = (sc.scrollTop - t0) || vy;
+        ds.startX -= movedX; ds.startY -= movedY;
+        procDragMoveTo(ds.lastX, ds.lastY, ds.shiftKey);
+      }
+    }
+    procAutoScrollRaf = requestAnimationFrame(tick);
+  };
+  procAutoScrollRaf = requestAnimationFrame(tick);
+}
 document.addEventListener("pointermove", e=>{
   if(procDragState){
     const dx=(e.clientX-procDragState.startX)/procZoom, dy=(e.clientY-procDragState.startY)/procZoom;
@@ -4259,15 +4328,9 @@ document.addEventListener("pointermove", e=>{
       procDragState.moved = true;
     }
     if(procDragState.mode==="move"){
-      let nx = Math.max(0,procDragState.startLeft+dx), ny = Math.max(0,procDragState.startTop+dy);
-      if(e.shiftKey){ procRemoveSnapGuides(); }
-      else { const snapped = procComputeSnap(shape, nx, ny); nx=snapped.x; ny=snapped.y; procDrawSnapGuides(snapped.guides); }
-      shape.x = nx; shape.y = ny;
-      const el=document.querySelector('.pshape[data-id="'+shape.id+'"]');
-      if(el){ el.style.left=shape.x+"px"; el.style.top=shape.y+"px"; }
-      const bar=document.getElementById("procFloatToolbar");
-      if(bar) procPlaceFloatToolbar(bar, {x:shape.x, y:shape.y, w:shape.w, h:shape.h});
-      procUpdateArrowsForShape(shape.id);
+      procDragState.lastX = e.clientX; procDragState.lastY = e.clientY; procDragState.shiftKey = e.shiftKey;
+      procDragMoveTo(e.clientX, e.clientY, e.shiftKey);
+      procEnsureAutoScroll();
     } else if(procDragState.mode==="resize"){
       shape.w=Math.max(70,procDragState.startW+dx); shape.h=Math.max(50,procDragState.startH+dy);
       const el=document.querySelector('.pshape[data-id="'+shape.id+'"]');
@@ -4281,11 +4344,17 @@ document.addEventListener("pointermove", e=>{
     const dx=(e.clientX-procGroupDragState.startX)/procZoom, dy=(e.clientY-procGroupDragState.startY)/procZoom;
     procGroupDragState.items.forEach(item=>{
       const s = PROC.shapes.find(x=>x.id===item.id); if(!s) return;
-      s.x = Math.max(0, item.startLeft+dx); s.y = Math.max(0, item.startTop+dy);
+      s.x = item.startLeft+dx; s.y = item.startTop+dy;
       const el=document.querySelector('.pshape[data-id="'+s.id+'"]');
       if(el){ el.style.left=s.x+"px"; el.style.top=s.y+"px"; }
       procUpdateArrowsForShape(s.id);
     });
+    {
+      const grp = procGroupDragState.items.map(it=>PROC.shapes.find(s=>s.id===it.id)).filter(Boolean);
+      const gx = Math.min(...grp.map(s=>s.x)), gy = Math.min(...grp.map(s=>s.y));
+      if(gx < 10 || gy < 10) procShiftContent(gx < 10 ? 240 : 0, gy < 10 ? 240 : 0);
+      procApplyBoardSize();
+    }
     const bar=document.getElementById("procFloatToolbar");
     if(bar){
       const shapesSel = procGroupDragState.items.map(it=>PROC.shapes.find(s=>s.id===it.id)).filter(Boolean);
@@ -4486,7 +4555,7 @@ async function renderProcRefImage(){
   const dataUrl = ri.dataUrl || await attachGetLocal(ri.id); // ri.dataUrl kept for backward-compat with refs saved before this change
   if(!dataUrl) return;
   const img = document.createElement("img"); img.id="procRefImageEl"; img.src=dataUrl;
-  img.style.position="absolute"; img.style.left="0"; img.style.top="0"; img.style.width=ri.w+"px"; img.style.height=ri.h+"px";
+  img.style.position="absolute"; img.style.left=(ri.x||0)+"px"; img.style.top=(ri.y||0)+"px"; img.style.width=ri.w+"px"; img.style.height=ri.h+"px";
   img.style.opacity=ri.opacity; img.style.zIndex="1"; img.style.pointerEvents="none";
   document.getElementById("procBoard").insertBefore(img, document.getElementById("procShapesLayer"));
   const ctrl = document.createElement("div");
