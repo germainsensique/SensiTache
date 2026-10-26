@@ -127,7 +127,10 @@
   .drawer.show{transform:translateX(0);}
   .drawer-head{display:flex; align-items:center; gap:8px; padding:14px 16px; border-bottom:1px solid var(--border-soft);}
   .drawer-body{flex:1; overflow-y:auto; padding:16px 20px 60px;}
-  #taskTitleInput{width:100%; border:none; background:transparent; font-size:20px; font-weight:700; padding:4px 0; margin-bottom:6px;}
+  #taskTitleInput{width:100%; border:none; background:transparent; font-size:20px; font-weight:700; padding:4px 0; margin-bottom:6px; resize:none; overflow:hidden; line-height:1.3; font-family:inherit; color:inherit; white-space:pre-wrap; word-break:break-word; display:block;}
+  .subtask-text{flex:1;min-width:0;background:transparent;border:none;color:var(--text-main);font-size:13px;font-family:inherit;line-height:1.35;resize:none;overflow:hidden;padding:2px 0;white-space:pre-wrap;word-break:break-word;display:block;}
+  .subtask-text:focus{outline:none;}
+  @media (max-width:640px){ .subtask-row{flex-wrap:wrap; row-gap:4px;} .subtask-row .subtask-text{flex:1 1 calc(100% - 64px);} .subtask-row .subtask-due{margin-left:auto;} }
   #taskTitleInput:focus{outline:none;}
   #taskDescInput{width:100%; min-height:70px; border:1px solid var(--border-soft); border-radius:8px; padding:9px 11px; font-size:13.5px; resize:vertical; background:var(--bg-card); margin-bottom:16px; color:var(--text-main); line-height:1.45; overflow:auto; max-height:60vh; word-break:break-word; outline:none; cursor:text;}
   #taskDescInput:focus{border-color:var(--accent);}
@@ -341,7 +344,7 @@
     </div>
     <div class="drawer-body">
       <div style="display:flex; gap:6px; align-items:center; margin-bottom:4px;">
-        <input id="taskTitleInput" placeholder="Titre de la tâche" style="flex:1; width:auto; min-width:0;">
+        <textarea id="taskTitleInput" rows="1" placeholder="Titre de la tâche" style="flex:1; width:auto; min-width:0;"></textarea>
         <button class="btn small" id="btnTitleFix" title="Corriger les fautes">✓</button>
       </div>
       <div id="taskDescInput" contenteditable="true" data-placeholder="Description… (tu peux coller du texte mis en forme : gras, listes, liens, tableaux)"></div>
@@ -1237,11 +1240,13 @@ function myVisibleTasks(){
   // hors récurrences dont la prochaine échéance n'est pas encore arrivée,
   // et hors rappels dont la date n'est pas encore arrivée (le rappel agit comme un filtre, pas juste un tri)
   const today = todayStr();
-  return activeTasks().filter(t=> !t.knowledge && (t.assignedTo||[]).includes(DATA.currentUserId) && !recurrenceNotDueYet(t) && !(t.reminderDate && t.reminderDate>today));
+  return activeTasks().filter(t=> !t.knowledge && (t.assignedTo||[]).includes(DATA.currentUserId) && !recurrenceNotDueYet(t) && !(t.reminderDate && t.reminderDate>today && !t.today));
 }
 function recurringTasks(){ return activeTasks().filter(t=> t.recurrence && t.recurrence.freq); }
 function sortCategory(t){
   const today = todayStr();
+  // Une tâche cochée « Aujourd'hui » quitte sa section d'origine (rappel, récurrence…)
+  if(t.today) return 3;
   if(t.reminderDate && t.reminderDate<=today) return 1;
   if(recurrenceIsDue(t)) return 2;
   if(t.followUp) return 7;
@@ -1250,7 +1255,7 @@ function sortCategory(t){
   if(t.quick) return 5;
   return 6;
 }
-const CATEGORY_LABEL = {1:"Rappel", 2:"Récurrence", 3:"Aujourd'hui", 4:"Urgent", 5:"Rapide", 6:"Non prioritaire", 7:"À suivre (sans action)"};
+const CATEGORY_LABEL = {1:"Rappels", 2:"Récurrence", 3:"Aujourd'hui", 4:"Urgent", 5:"Rapide", 6:"Non prioritaire", 7:"À suivre (sans action)"};
 function addDays(dateStr, n){ const d=new Date(dateStr+"T00:00:00"); d.setDate(d.getDate()+n); return dateToStr(d); }
 function addYears(dateStr, n){ const d=new Date(dateStr+"T00:00:00"); d.setFullYear(d.getFullYear()+n); return dateToStr(d); }
 function nthWeekdayOfMonth(year, month, weekday, nth){
@@ -1310,6 +1315,18 @@ function advanceMonthlyFixedDay(currentDateStr, mode){
   let year=d.getFullYear(), month=d.getMonth()+1;
   if(month>11){ month=0; year++; }
   return dateToStr(fixedDayOfMonth(year, month, mode));
+}
+// Prochaine occurrence strictement après aujourd'hui : si une occurrence n'a pas été cochée
+// à temps, on ne « rattrape » pas les périodes manquées (la tâche existante a fait l'affaire).
+function advanceRecurrenceAfterToday(r){
+  const today = todayStr();
+  let next = advanceRecurrence(r), guard = 0;
+  while(next && next<=today && guard<1000){
+    const n2 = advanceRecurrence(Object.assign({}, r, {nextDue: next}));
+    if(!n2 || n2===next) break;
+    next = n2; guard++;
+  }
+  return next;
 }
 function computeInitialNextDue(r){
   const start = r.startDate || todayStr();
@@ -1438,7 +1455,7 @@ function renderTasksGroupedList(){
   if(isPhoneSize()){
     groupsEl.className = "";
     groupsEl.innerHTML = "";
-    [3,7,4,1,2,5,6].forEach(cat=>{
+    [1,3,7,4,2,5,6].forEach(cat=>{
       const list = buckets[cat];
       if(list.length===0) return;
       const label = document.createElement("div");
@@ -1461,8 +1478,8 @@ function renderTasksGroupedList(){
       }
       list.forEach(t=> container.appendChild(renderTaskRow(t, noDrag ? undefined : list)));
     }
+    fillCol(left, 1, "Rappels");
     fillCol(left, 3, "Aujourd'hui");
-    fillCol(left, 1, "Planifié");
     fillCol(left, 5, "Rapide");
     fillCol(right, 7, "À suivre (sans action)", true);
     fillCol(right, 4, "Urgences");
@@ -1636,7 +1653,7 @@ function toggleTaskDone(t){
   snapshot();
   if(!t.done && t.recurrence && t.recurrence.freq){
     // recurring task: log completion, reschedule instead of archiving
-    t.recurrence.nextDue = advanceRecurrence(t.recurrence);
+    t.recurrence.nextDue = advanceRecurrenceAfterToday(t.recurrence);
     t.recurrence.lastCompletedAt = Date.now();
     t.updatedAt = Date.now();
   } else {
@@ -2255,6 +2272,11 @@ function renderTrajectoireTab(el){
 /* =========================================================
    TASK DRAWER
 ========================================================= */
+function autoGrowTextarea(el){
+  if(!el || el.tagName!=="TEXTAREA") return;
+  el.style.height = "auto";
+  el.style.height = (el.scrollHeight+2)+"px";
+}
 function openTaskDrawer(id){
   openTaskId = id;
   localStorage.setItem("sensitache.openTaskId", id);
@@ -2263,6 +2285,7 @@ function openTaskDrawer(id){
   document.getElementById("overlayBg").classList.add("show");
   document.getElementById("drawer").classList.add("show");
   document.getElementById("taskTitleInput").value = t.title;
+  requestAnimationFrame(()=> autoGrowTextarea(document.getElementById("taskTitleInput")));
   setDescEditor(t);
   renderTaskDescLinks(t);
   document.getElementById("chipToday").classList.toggle("on", !!t.today);
@@ -2398,7 +2421,18 @@ document.getElementById("overlayBg").addEventListener("click", closeDrawer);
 function curTask(){ return DATA.tasks.find(t=>t.id===openTaskId); }
 
 document.getElementById("taskTitleInput").addEventListener("input", e=>{
+  // le titre reste sur une seule « ligne » logique : pas de retour à la ligne saisi
+  if(/[\r\n]/.test(e.target.value)) e.target.value = e.target.value.replace(/[\r\n]+/g," ");
+  autoGrowTextarea(e.target);
   const t = curTask(); if(!t) return; t.title = e.target.value; t.updatedAt = Date.now(); saveData();
+});
+document.getElementById("taskTitleInput").addEventListener("keydown", e=>{
+  if(e.key==="Enter"){ e.preventDefault(); e.target.blur(); }
+});
+document.getElementById("taskTitleInput").addEventListener("focus", e=> autoGrowTextarea(e.target));
+window.addEventListener("resize", ()=>{
+  autoGrowTextarea(document.getElementById("taskTitleInput"));
+  document.querySelectorAll("#subtaskList .subtask-text").forEach(autoGrowTextarea);
 });
 document.getElementById("taskDescInput").addEventListener("input", e=>{
   const t = curTask(); if(!t) return; saveDescFromEditor(t); t.updatedAt = Date.now(); saveData();
@@ -2424,9 +2458,39 @@ document.getElementById("taskDescInput").addEventListener("click", e=>{
   if(a && (e.ctrlKey || e.metaKey)){ e.preventDefault(); window.open(a.href, "_blank", "noopener"); }
 });
 document.getElementById("chipToday").addEventListener("click", e=>{
-  const t = curTask(); if(!t) return; snapshot(); t.today = !t.today; t.updatedAt=Date.now(); saveData();
+  const t = curTask(); if(!t) return; snapshot();
+  if(!t.today && t.recurrence && t.recurrence.freq){
+    // L'occurrence passe en « Aujourd'hui » et sort de la récurrence ;
+    // la récurrence continue sur une nouvelle tâche modèle qui recréera les prochaines occurrences.
+    detachRecurringOccurrenceToToday(t);
+    saveData(); renderMain(); openTaskDrawer(t.id);
+    return;
+  }
+  t.today = !t.today; t.updatedAt=Date.now(); saveData();
   e.target.classList.toggle("on", t.today);
+  renderMain();
 });
+function detachRecurringOccurrenceToToday(t){
+  const now = Date.now();
+  const r = JSON.parse(JSON.stringify(t.recurrence));
+  if(recurrenceIsDue(t) || !r.nextDue || r.nextDue<=todayStr()) r.nextDue = advanceRecurrenceAfterToday(r);
+  const tpl = JSON.parse(JSON.stringify(t));
+  Object.keys(tpl).forEach(k=>{ if(k.charAt(0)==="_") delete tpl[k]; }); // pas de métadonnées de synchro
+  tpl.id = uid("task");
+  tpl.recurrence = r;
+  tpl.today = false; tpl.done = false; tpl.doneAt = null; tpl.isDraft = false;
+  tpl.sortOrder = undefined; delete tpl.sortOrder;
+  tpl.subtasks = (tpl.subtasks||[]).map(s=> Object.assign({}, s, {id:uid("sub"), done:false, doneAt:null}));
+  (tpl.subtasks).forEach(s=>{ Object.keys(s).forEach(k=>{ if(k.charAt(0)==="_") delete s[k]; }); });
+  // le processus (copie) reste aussi sur la récurrence pour les prochaines fois
+  tpl.createdAt = now; tpl.updatedAt = now;
+  DATA.tasks.push(tpl);
+  t.recurrence = null;
+  t.today = true;
+  t.detachedFromRecurrence = tpl.id;
+  t.updatedAt = now;
+  return tpl;
+}
 document.getElementById("chipUrgent").addEventListener("click", e=>{
   const t = curTask(); if(!t) return; snapshot(); t.urgent = !t.urgent; t.updatedAt=Date.now(); saveData();
   e.target.classList.toggle("on", t.urgent);
@@ -2815,7 +2879,7 @@ function renderSubtaskList(t){
     row.innerHTML = `
       <span class="subtask-handle" style="cursor:grab;color:var(--text-sub);touch-action:none;padding:2px 4px;">⠿</span>
       <input type="checkbox" ${s.done?"checked":""} style="flex-shrink:0;">
-      <input type="text" value="${escapeHtml(s.text)}" style="flex:1;min-width:0;background:transparent;border:none;color:var(--text-main);font-size:13px;${s.done?'text-decoration:line-through;color:var(--text-sub);':''}">
+      <textarea class="subtask-text" rows="1" style="${s.done?'text-decoration:line-through;color:var(--text-sub);':''}">${escapeHtml(s.text)}</textarea>
       <span class="subtask-due" title="Date limite de la sous-tâche" style="position:relative;flex-shrink:0;display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:600;padding:2px 6px;border-radius:12px;cursor:pointer;white-space:nowrap;border:1px solid ${subDueOverdue?'var(--danger)':(s.dueDate?'var(--border-light)':'var(--border-soft)')};color:${subDueOverdue?'var(--danger)':(s.dueDate?'var(--text-main)':'var(--text-sub)')};">📅${s.dueDate?' '+formatSubDue(s.dueDate):''}<input type="date" data-subDue value="${s.dueDate||''}" style="position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:none;padding:0;"></span>
       <span class="subtask-avatar" title="${c?escapeHtml(c.name):'Non affecté'}" style="flex-shrink:0;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:700;cursor:pointer;background:${c?c.color:'var(--bg-app)'};border:1px solid ${c?c.color:'var(--border-soft)'};color:${c?'#15171C':'var(--text-sub)'};">${c?escapeHtml(c.name.slice(0,2).toUpperCase()):'—'}</span>
       ${s.done && s.doneAt ? '<span style="font-size:10.5px;color:var(--text-sub);white-space:nowrap;flex-shrink:0;">'+new Date(s.doneAt).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"2-digit"})+'</span>' : ''}
@@ -2846,9 +2910,14 @@ function renderSubtaskList(t){
       s.done = e.target.checked; s.doneAt = s.done ? Date.now() : null;
       t.updatedAt = Date.now(); saveData(); renderSubtaskList(t); renderMain();
     });
-    row.querySelector('input[type="text"]').addEventListener("input", e=>{
+    const subTextEl = row.querySelector('.subtask-text');
+    subTextEl.addEventListener("input", e=>{
+      if(/[\r\n]/.test(e.target.value)) e.target.value = e.target.value.replace(/[\r\n]+/g," ");
+      autoGrowTextarea(e.target);
       s.text = e.target.value; t.updatedAt = Date.now(); saveData();
     });
+    subTextEl.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); e.target.blur(); } });
+    requestAnimationFrame(()=> autoGrowTextarea(subTextEl));
     const dueInput = row.querySelector("[data-subDue]");
     dueInput.addEventListener("pointerdown", e=> e.stopPropagation());
     dueInput.addEventListener("click", e=>{ e.stopPropagation(); try{ if(dueInput.showPicker) dueInput.showPicker(); }catch(err){} });
@@ -2909,7 +2978,7 @@ document.getElementById("btnAddSubtask").addEventListener("click", ()=>{
   t.updatedAt = Date.now(); saveData(); renderSubtaskList(t); renderMain();
   requestAnimationFrame(()=>{
     const wrap = document.getElementById("subtaskList");
-    const last = wrap.querySelector('.subtask-row:last-child input[type="text"]');
+    const last = wrap.querySelector('.subtask-row:last-child .subtask-text');
     if(last) last.focus();
   });
 });
@@ -7297,6 +7366,7 @@ async function runTitleFix(){
     const result = await callClaudeText(text, "fix");
     snapshot();
     input.value = result;
+    autoGrowTextarea(input);
     t.title = result;
     t.updatedAt = Date.now();
     saveData(); renderSidebar();
