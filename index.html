@@ -4781,7 +4781,44 @@ function procBoundingBox(){
   PROC.shapes.forEach(s=>{ minX=Math.min(minX,s.x); minY=Math.min(minY,s.y); maxX=Math.max(maxX,s.x+s.w); maxY=Math.max(maxY,s.y+s.h); });
   const pad=60; return {x:Math.max(0,minX-pad), y:Math.max(0,minY-pad), w:(maxX-minX)+pad*2, h:(maxY-minY)+pad*2};
 }
-async function buildProcSidePanelCanvas(sections){
+// ---- Liens cliquables dans l'export PDF ----
+// Le PDF contient une image du processus : on mesure où se trouvent les liens
+// (balises <a> et adresses http(s)/www écrites en clair) dans le rendu HTML,
+// puis on pose par-dessus l'image des zones cliquables aux mêmes endroits.
+function linkifyForExport(text){
+  return linkifyText(text).replace(/<a ([^>]*?)style="[^"]*"/g, '<a $1style="color:#1F5FD1;text-decoration:underline;word-break:break-all;"');
+}
+function procCollectLinkRects(root, originLeft, originTop){
+  const out = [];
+  if(!root) return out;
+  const push = (url, rects)=>{
+    Array.from(rects||[]).forEach(r=>{
+      if(r.width<1 || r.height<1) return;
+      out.push({url, x:r.left-originLeft, y:r.top-originTop, w:r.width, h:r.height});
+    });
+  };
+  root.querySelectorAll("a[href]").forEach(a=>{
+    const href = a.getAttribute("href")||"";
+    if(!/^(https?:|mailto:)/i.test(href)) return;
+    push(href, a.getClientRects());
+  });
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+  const re = new RegExp(LINK_URL_RE.source, "gi");
+  let node;
+  while((node = walker.nextNode())){
+    if(node.parentElement && node.parentElement.closest("a[href]")) continue;
+    if(node.parentElement && getComputedStyle(node.parentElement).visibility==="hidden") continue;
+    const txt = node.nodeValue||""; re.lastIndex = 0; let m;
+    while((m = re.exec(txt))){
+      let url = unwrapSafeLink(m[0]); if(url.startsWith("www.")) url = "https://"+url;
+      const range = document.createRange();
+      range.setStart(node, m.index); range.setEnd(node, m.index+m[0].length);
+      push(url, range.getClientRects());
+    }
+  }
+  return out;
+}
+async function buildProcSidePanelCanvas(sections, linksOut){
   sections = Object.assign({legend:true, tasks:true, summary:true, descriptions:true}, sections||{});
   const holder = document.createElement("div");
   holder.style.cssText = "position:fixed;left:-99999px;top:0;width:520px;background:#EFEEE8;padding:32px;font-family:'Segoe UI',Arial,sans-serif;color:#1B1D23;box-sizing:border-box;";
@@ -4797,7 +4834,7 @@ async function buildProcSidePanelCanvas(sections){
       order.forEach((s,i)=>{
         html += `<div style="margin-bottom:16px;">
           <div style="font-size:14.5px;font-weight:700;margin-bottom:3px;">${i+1}. ${escapeHtml(stripHtml(s.content||"(sans titre)"))}</div>
-          ${(sections.descriptions && s.description) ? '<div style="font-size:12.5px;color:#444;white-space:pre-wrap;line-height:1.45;">'+escapeHtml(s.description)+'</div>' : ''}
+          ${(sections.descriptions && s.description) ? '<div style="font-size:12.5px;color:#444;white-space:pre-wrap;line-height:1.45;">'+linkifyForExport(s.description)+'</div>' : ''}
         </div>`;
       });
     }
@@ -4813,7 +4850,7 @@ async function buildProcSidePanelCanvas(sections){
         const c = taskCollaborators(task)[0];
         html += `<div style="margin-bottom:14px;">
           <div style="font-size:13.5px;font-weight:700;margin-bottom:2px;">${task.done?'✓ ':''}${escapeHtml(task.title)}${c?' — '+escapeHtml(c.name):''}</div>
-          ${(sections.descriptions && task.description) ? '<div style="font-size:12px;color:#444;white-space:pre-wrap;line-height:1.4;">'+escapeHtml(task.description)+'</div>' : ''}
+          ${(sections.descriptions && task.description) ? '<div style="font-size:12px;color:#444;white-space:pre-wrap;line-height:1.4;">'+linkifyForExport(task.description)+'</div>' : ''}
         </div>`;
       });
     }
@@ -4824,7 +4861,7 @@ async function buildProcSidePanelCanvas(sections){
     PROC.legend.forEach(item=>{
       html += `<div style="display:flex;gap:9px;align-items:flex-start;margin-bottom:12px;">
         <span style="width:16px;height:16px;border-radius:4px;background:${item.color};flex-shrink:0;margin-top:2px;"></span>
-        <div><div style="font-size:13.5px;font-weight:600;">${escapeHtml(item.label||"")}</div>${item.detail?'<div style="font-size:12px;color:#666;">'+escapeHtml(item.detail)+'</div>':''}</div>
+        <div><div style="font-size:13.5px;font-weight:600;">${escapeHtml(item.label||"")}</div>${item.detail?'<div style="font-size:12px;color:#666;">'+linkifyForExport(item.detail)+'</div>':''}</div>
       </div>`;
     });
   }
@@ -4834,6 +4871,10 @@ async function buildProcSidePanelCanvas(sections){
   holder.innerHTML = html;
   document.body.appendChild(holder);
   try{
+    if(linksOut){
+      const hr = holder.getBoundingClientRect();
+      procCollectLinkRects(holder, hr.left, hr.top).forEach(l=> linksOut.push(l));
+    }
     return await html2canvas(holder, {backgroundColor:"#EFEEE8", scale:2});
   } finally {
     document.body.removeChild(holder);
@@ -4914,7 +4955,7 @@ async function procExport(kind, sections){
         lbl.innerHTML = '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">'
           + '<span style="flex-shrink:0;width:16px;height:16px;border-radius:50%;background:#6B6F7A;color:#fff;font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;">'+n+'</span>'
           + '<span style="font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#9A8035;">Commentaire</span>'
-          + '</div><div style="white-space:pre-wrap;">'+escapeHtml(shape.description)+'</div>';
+          + '</div><div style="white-space:pre-wrap;">'+linkifyForExport(shape.description)+'</div>';
         shapesLayer.appendChild(lbl);
         return {shape, el:lbl};
       });
@@ -4934,8 +4975,16 @@ async function procExport(kind, sections){
   }
 
   try{
+    let boardLinks = [], panelLinks = [];
+    if(kind!=="png"){
+      try{
+        const br = procBoardEl.getBoundingClientRect();
+        boardLinks = procCollectLinkRects(procBoardEl, br.left + procBoardEl.clientLeft + box.x, br.top + procBoardEl.clientTop + box.y)
+          .filter(l=> l.x+l.w>0 && l.y+l.h>0 && l.x<box.w && l.y<box.h);
+      }catch(e){ boardLinks = []; }
+    }
     const boardCanvas = await html2canvas(procBoardEl, {backgroundColor:"#EFEEE8", x:box.x, y:box.y, width:box.w, height:box.h, scale:2, useCORS:true});
-    const panelCanvas = await buildProcSidePanelCanvas(sections);
+    const panelCanvas = await buildProcSidePanelCanvas(sections, kind!=="png" ? panelLinks : null);
     const totalW = boardCanvas.width + panelCanvas.width;
     const totalH = Math.max(boardCanvas.height, panelCanvas.height);
     const canvas = document.createElement("canvas");
@@ -4953,6 +5002,11 @@ async function procExport(kind, sections){
       const orientation = canvas.width>canvas.height ? "l":"p";
       const pdf = new jsPDF({orientation, unit:"pt", format:[canvas.width/2, canvas.height/2]});
       pdf.addImage(imgData,"PNG",0,0,canvas.width/2, canvas.height/2);
+      // Zones cliquables (1 px CSS = 1 pt, l'image étant rendue en échelle 2)
+      const panelOffsetX = boardCanvas.width/2;
+      const addLink = (l, dx)=>{ try{ pdf.link(l.x+dx, l.y, l.w, l.h, {url:l.url}); }catch(e){} };
+      boardLinks.forEach(l=> addLink(l, 0));
+      panelLinks.forEach(l=> addLink(l, panelOffsetX));
       pdf.save(name+".pdf");
     }
   }catch(err){ alert("Export impossible : "+err.message); }
