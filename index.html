@@ -2385,13 +2385,13 @@ function renderInlineProcessPreview(t){
     if(s.type==="rect"){
       const rect = document.createElementNS(svgNS,"rect");
       rect.setAttribute("x",s.x); rect.setAttribute("y",s.y); rect.setAttribute("width",s.w); rect.setAttribute("height",s.h);
-      rect.setAttribute("rx","8"); rect.setAttribute("fill", s.color||"#FFD966"); rect.setAttribute("stroke","rgba(0,0,0,.25)"); rect.setAttribute("stroke-width","1.5");
+      rect.setAttribute("rx","8"); rect.setAttribute("fill", procSvgFill(svg, s)); rect.setAttribute("stroke","rgba(0,0,0,.25)"); rect.setAttribute("stroke-width","1.5");
       g.appendChild(rect);
     } else {
       const cx=s.x+s.w/2, cy=s.y+s.h/2;
       const poly = document.createElementNS(svgNS,"polygon");
       poly.setAttribute("points", cx+","+s.y+" "+(s.x+s.w)+","+cy+" "+cx+","+(s.y+s.h)+" "+s.x+","+cy);
-      poly.setAttribute("fill", s.color||"#FFD966"); poly.setAttribute("stroke","rgba(0,0,0,.25)"); poly.setAttribute("stroke-width","1.5");
+      poly.setAttribute("fill", procSvgFill(svg, s)); poly.setAttribute("stroke","rgba(0,0,0,.25)"); poly.setAttribute("stroke-width","1.5");
       g.appendChild(poly);
     }
     const fo = document.createElementNS(svgNS,"foreignObject");
@@ -3516,6 +3516,52 @@ function procRouteOrthogonal(p0,dir0,p1,dir1){
   return out;
 }
 function procPointsToPath(pts){ return "M "+pts.map(p=>p.x.toFixed(1)+" "+p.y.toFixed(1)).join(" L "); }
+/* ---- Plusieurs couleurs sur une forme (bandes verticales) ---- */
+function procShapeColors(shape){
+  if(shape && Array.isArray(shape.colors) && shape.colors.length>1) return shape.colors.slice();
+  return [(shape && shape.color) || "#FFD966"];
+}
+function procShapeBackground(shape){
+  const cols = procShapeColors(shape);
+  if(cols.length===1) return cols[0];
+  const n = cols.length, stops = [];
+  cols.forEach((c,i)=>{ stops.push(c+" "+(i*100/n).toFixed(3)+"%", c+" "+((i+1)*100/n).toFixed(3)+"%"); });
+  return "linear-gradient(90deg, "+stops.join(", ")+")";
+}
+function procShapeTextColor(shape){
+  const cols = procShapeColors(shape);
+  if(cols.length===1) return procContrastText(cols[0]);
+  const dark = cols.filter(c=> procContrastText(c)==="#FFFFFF").length;
+  return dark > cols.length/2 ? "#FFFFFF" : "#1B1D23";
+}
+function procApplyShapeLook(shape, el){
+  el = el || document.querySelector('.pshape[data-id="'+shape.id+'"]');
+  if(!el) return;
+  const bg = el.querySelector(".pshapeBg"); if(bg) bg.style.background = procShapeBackground(shape);
+  const ct = el.querySelector(".pshapeContent");
+  if(ct){
+    const tc = procShapeTextColor(shape);
+    ct.style.color = tc;
+    ct.style.textShadow = procShapeColors(shape).length>1 ? (tc==="#FFFFFF" ? "0 0 3px rgba(0,0,0,.7)" : "0 0 3px rgba(255,255,255,.85)") : "";
+  }
+}
+// Remplissage SVG (aperçu, export) : un dégradé à bandes nettes si plusieurs couleurs.
+function procSvgFill(svg, shape){
+  const cols = procShapeColors(shape);
+  if(cols.length===1) return cols[0];
+  const ns = "http://www.w3.org/2000/svg";
+  let defs = svg.querySelector("defs");
+  if(!defs){ defs = document.createElementNS(ns,"defs"); svg.insertBefore(defs, svg.firstChild); }
+  const gid = "pgrad_"+Math.random().toString(36).slice(2,9);
+  const g = document.createElementNS(ns,"linearGradient");
+  g.setAttribute("id",gid); g.setAttribute("x1","0"); g.setAttribute("y1","0"); g.setAttribute("x2","1"); g.setAttribute("y2","0");
+  const n = cols.length;
+  cols.forEach((c,i)=>{
+    [i/n,(i+1)/n].forEach(off=>{ const st=document.createElementNS(ns,"stop"); st.setAttribute("offset",off); st.setAttribute("stop-color",c); g.appendChild(st); });
+  });
+  defs.appendChild(g);
+  return "url(#"+gid+")";
+}
 function procContrastText(hex){
   if(!hex || hex[0]!=="#" || hex.length<7) return "#1B1D23";
   const r = parseInt(hex.substr(1,2),16), g = parseInt(hex.substr(3,2),16), b = parseInt(hex.substr(5,2),16);
@@ -3540,7 +3586,7 @@ function renderProcShapes(){
     el.className = "pshape "+shape.type+(shape.id===procSelectedShapeId?" selected":"")+(isMulti?" multiselected":"");
     el.dataset.id = shape.id;
     el.style.left=shape.x+"px"; el.style.top=shape.y+"px"; el.style.width=shape.w+"px"; el.style.height=shape.h+"px";
-    const bg = document.createElement("div"); bg.className="pshapeBg"; bg.style.background = shape.color||"#FFD966";
+    const bg = document.createElement("div"); bg.className="pshapeBg"; bg.style.background = procShapeBackground(shape);
     el.appendChild(bg);
     if(shape.collabTag){
       const c = collabById(shape.collabTag);
@@ -3558,7 +3604,6 @@ function renderProcShapes(){
     }
     const content = document.createElement("div");
     content.className = "pshapeContent";
-    content.style.color = procContrastText(shape.color);
     content.innerHTML = shape.content||"";
     content.addEventListener("dblclick", e=>{ e.stopPropagation(); content.setAttribute("contenteditable","true"); content.focus(); });
     content.addEventListener("keydown", e=>{
@@ -3578,6 +3623,7 @@ function renderProcShapes(){
     });
     content.addEventListener("pointerdown", e=>{ if(content.getAttribute("contenteditable")==="true") e.stopPropagation(); });
     el.appendChild(content);
+    procApplyShapeLook(shape, el);
     ["top","bottom","left","right"].forEach(side=>{
       const a = document.createElement("div"); a.className="panchor "+side; a.dataset.side=side;
       a.addEventListener("pointerdown", e=>{ e.stopPropagation(); e.preventDefault(); procStartArrowDraft(shape.id, side); });
@@ -4032,12 +4078,16 @@ function procShowFloatToolbarForShape(id){
   bar.innerHTML = `
     <textarea id="pftText" rows="2" placeholder="Texte affiché sur la forme…" style="width:100%;min-height:42px;font-size:13px;font-weight:600;border-radius:6px;border:1px solid var(--border-light);background:var(--bg-panel-2);color:var(--text);padding:6px 8px;resize:vertical;margin-bottom:6px;">${escapeHtml(procContentToText(shape.content))}</textarea>
     <div style="display:flex;flex-wrap:wrap;gap:5px;">
-      <input type="color" class="swatch-input" id="pftColor" value="${shape.color&&shape.color.startsWith('#')?shape.color:'#ffd966'}">
       <select id="pftTag" title="Affecter un collaborateur : crée automatiquement une tâche pour lui dans SensiTâche" style="font-size:12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg-panel-2);color:var(--text);">${collabOpts}</select>
       ${shape.linkedTaskId ? '<button class="btn small" id="pftDetail">📝 Détail</button><button class="btn small" id="pftOpenTask">Ouvrir la tâche →</button>' : ''}
       <button class="btn small" id="pftFix" title="Corriger les fautes">✓</button>
       <button class="btn small" id="pftLink">Lien</button>
       <button class="btn small danger" id="pftDelete">Suppr.</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:6px;">
+      <span style="font-size:11px;color:var(--text-dim);">Couleurs :</span>
+      <div id="pftColors" style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;"></div>
+      <button type="button" class="btn small" id="pftAddColor" title="Ajouter une couleur à cette forme">+ Couleur</button>
     </div>
     ${swatchesHtml}
     <input type="text" id="pftDuration" placeholder="⏱ Durée de l'étape (ex. 2 jours, 3h…)" value="${escapeHtml(shape.duration||"")}" style="margin-top:6px;width:100%;font-size:12px;border-radius:6px;border:1px solid var(--border-light);background:var(--bg-panel-2);color:var(--text);padding:6px 8px;">
@@ -4090,32 +4140,82 @@ function procShowFloatToolbarForShape(id){
       } else if(durtag){ durtag.remove(); }
     }
   });
-  function applyShapeColor(hex){
-    shape.color=hex;
-    document.querySelector('.pshape[data-id="'+id+'"] .pshapeBg').style.background=shape.color;
-    const contentEl = document.querySelector('.pshape[data-id="'+id+'"] .pshapeContent');
-    if(contentEl) contentEl.style.color = procContrastText(shape.color);
-    bar.querySelector("#pftColor").value = hex;
-    procSyncLegendWithColors(); saveData(); renderProcLegend();
+  // Plusieurs couleurs : chaque case est une bande de la forme ; la case
+  // encadrée est celle que modifient les couleurs déjà utilisées ci-dessous.
+  let activeSlot = 0;
+  function setShapeColors(arr, final){
+    arr = arr.filter(Boolean);
+    if(!arr.length) arr = ["#FFD966"];
+    shape.color = arr[0];
+    if(arr.length>1) shape.colors = arr; else delete shape.colors;
+    procApplyShapeLook(shape);
+    if(final){ procSyncLegendWithColors(); renderProcLegend(); }
+    saveData();
+    refreshSwatchActive();
+  }
+  function refreshSwatchActive(){
+    const cur = procNormColor(procShapeColors(shape)[activeSlot]||"");
     bar.querySelectorAll(".pft-used-swatch").forEach(btn=>{
-      const isCur = procNormColor(btn.dataset.color)===procNormColor(hex);
+      const isCur = procNormColor(btn.dataset.color)===cur;
       btn.classList.toggle("active", isCur);
       btn.style.borderColor = isCur ? "var(--text)" : "transparent";
     });
+    bar.querySelectorAll("[data-slot]").forEach(sl=>{
+      sl.style.outline = (Number(sl.dataset.slot)===activeSlot && procShapeColors(shape).length>1) ? "2px solid var(--accent)" : "none";
+    });
   }
+  function renderColorSlots(){
+    const wrap = bar.querySelector("#pftColors");
+    wrap.innerHTML = "";
+    const cols = procShapeColors(shape);
+    if(activeSlot >= cols.length) activeSlot = 0;
+    cols.forEach((c,i)=>{
+      const slot = document.createElement("span");
+      slot.dataset.slot = i;
+      slot.style.cssText = "position:relative;display:inline-flex;border-radius:7px;outline-offset:1px;";
+      const inp = document.createElement("input");
+      inp.type = "color"; inp.className = "swatch-input";
+      inp.value = (c && c[0]==="#" && c.length===7) ? c.toLowerCase() : "#ffd966";
+      inp.title = cols.length>1 ? "Couleur "+(i+1) : "Couleur de la forme";
+      inp.addEventListener("pointerdown", e=>{ e.stopPropagation(); activeSlot = i; refreshSwatchActive(); });
+      inp.addEventListener("input", e=>{ const arr = procShapeColors(shape); arr[i] = e.target.value; setShapeColors(arr, false); });
+      inp.addEventListener("change", e=>{ const arr = procShapeColors(shape); arr[i] = e.target.value; setShapeColors(arr, true); });
+      slot.appendChild(inp);
+      if(cols.length>1){
+        const rm = document.createElement("span");
+        rm.textContent = "✕"; rm.title = "Retirer cette couleur";
+        rm.style.cssText = "position:absolute;top:-7px;right:-7px;width:15px;height:15px;border-radius:50%;background:var(--danger);color:#fff;font-size:9px;display:flex;align-items:center;justify-content:center;cursor:pointer;";
+        rm.addEventListener("pointerdown", e=>{
+          e.stopPropagation(); e.preventDefault();
+          const arr = procShapeColors(shape); arr.splice(i,1);
+          activeSlot = 0;
+          setShapeColors(arr, true); renderColorSlots();
+        });
+        slot.appendChild(rm);
+      }
+      wrap.appendChild(slot);
+    });
+    refreshSwatchActive();
+  }
+  renderColorSlots();
+  const PFT_EXTRA_COLORS = ["#9FC5E8","#B6D7A8","#F4CCCC","#D9D2E9","#F9CB9C","#A2C4C9"];
+  bar.querySelector("#pftAddColor").addEventListener("pointerdown", e=> e.stopPropagation());
+  bar.querySelector("#pftAddColor").addEventListener("click", e=>{
+    e.stopPropagation();
+    const arr = procShapeColors(shape);
+    if(arr.length>=6){ alert("6 couleurs maximum par forme."); return; }
+    const used = new Set(arr.map(procNormColor));
+    arr.push(PFT_EXTRA_COLORS.find(c=> !used.has(c)) || "#9FC5E8");
+    activeSlot = arr.length-1;
+    setShapeColors(arr, true); renderColorSlots();
+  });
   bar.querySelectorAll(".pft-used-swatch").forEach(btn=>{
     btn.addEventListener("pointerdown", e=> e.stopPropagation());
-    btn.addEventListener("click", e=>{ e.stopPropagation(); applyShapeColor(btn.dataset.color); });
-  });
-  bar.querySelector("#pftColor").addEventListener("input", e=>{
-    shape.color=e.target.value;
-    document.querySelector('.pshape[data-id="'+id+'"] .pshapeBg').style.background=shape.color;
-    const contentEl = document.querySelector('.pshape[data-id="'+id+'"] .pshapeContent');
-    if(contentEl) contentEl.style.color = procContrastText(shape.color);
-    saveData();
-  });
-  bar.querySelector("#pftColor").addEventListener("change", e=>{
-    procSyncLegendWithColors(); saveData(); renderProcLegend();
+    btn.addEventListener("click", e=>{
+      e.stopPropagation();
+      const arr = procShapeColors(shape); arr[activeSlot] = btn.dataset.color;
+      setShapeColors(arr, true); renderColorSlots();
+    });
   });
   bar.querySelector("#pftTag").addEventListener("change", e=>{
     procAssignShapeToCollaborator(shape, e.target.value || null);
@@ -4639,7 +4739,8 @@ async function renderProcRefImage(){
 function procNormColor(c){ return (c||"").toUpperCase(); }
 function procSyncLegendWithColors(){
   if(!PROC.legend) PROC.legend = [];
-  const used = new Set(PROC.shapes.map(s=> procNormColor(s.color||"#FFD966")));
+  const used = new Set();
+  PROC.shapes.forEach(s=> procShapeColors(s).forEach(c=> used.add(procNormColor(c))));
   PROC.legend = PROC.legend.filter(item=> used.has(procNormColor(item.color)));
   const existing = new Set(PROC.legend.map(item=> procNormColor(item.color)));
   used.forEach(c=>{
@@ -4908,7 +5009,7 @@ async function procExport(kind, sections){
     svg.style.cssText = "position:absolute;inset:0;width:100%;height:100%;";
     const poly = document.createElementNS(svgNS,"polygon");
     poly.setAttribute("points","50,1 99,50 50,99 1,50");
-    poly.setAttribute("fill", shape.color||"#FFD966");
+    poly.setAttribute("fill", procSvgFill(svg, shape));
     poly.setAttribute("stroke","rgba(0,0,0,.35)");
     poly.setAttribute("stroke-width","1.2");
     svg.appendChild(poly);
