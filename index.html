@@ -201,6 +201,15 @@
   .pshapeContent{position:relative; z-index:1; width:100%; height:100%; display:flex; align-items:center; justify-content:center; text-align:center; padding:10px 16px; font-size:13.5px; font-weight:500; line-height:1.3; color:#1B1D23; overflow:auto; outline:none; word-break:break-word;}
   .pshape.diamond .pshapeContent{padding:10px 34px;}
   .pshapeContent[contenteditable="true"]{cursor:text; background:rgba(255,255,255,.35); border-radius:4px;}
+  /* Photo dans une forme : au-dessus du texte, toujours entière (contain). */
+  .pshape.hasPhoto{flex-direction:column;}
+  .pshapePhoto{position:relative; z-index:1; flex:1 1 auto; min-height:24px; margin:8px 10px 0; background-position:center; background-size:contain; background-repeat:no-repeat; pointer-events:none;}
+  .pshape.hasPhoto .pshapeContent{height:auto; flex:0 1 auto; min-height:0; padding-top:4px; padding-bottom:8px;}
+  .pshape.hasPhoto.noText .pshapePhoto{margin-bottom:8px;}
+  .pshape.diamond .pshapePhoto{margin:16% 27% 0;}
+  .pshape.diamond.hasPhoto .pshapeContent{padding:2px 30% 19%;}
+  .pshape.diamond.hasPhoto.noText .pshapePhoto{margin-bottom:16%;}
+  .pft-fmt-btn.active{background:var(--accent); color:var(--bg-app); border-color:var(--accent);}
   .presizeHandle{position:absolute;width:14px;height:14px;right:-6px;bottom:-6px;background:var(--accent);border:2px solid var(--bg-app);border-radius:3px;z-index:4;cursor:nwse-resize;display:none;touch-action:none;}
   .pshape.selected .presizeHandle{display:block;}
   #procBoard.moveMode .panchor, #procBoard.moveMode .presizeHandle{display:none !important;}
@@ -504,6 +513,9 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20M12 2l-3 3M12 2l3 3M12 22l-3-3M12 22l3-3M2 12l3-3M2 12l3 3M22 12l-3-3M22 12l-3 3"/></svg>Déplacer
         </button>
         <div class="tsep"></div>
+        <button class="tbtn" id="btnProcPaste" title="Coller la ou les formes copiées (Ctrl+V)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6"/></svg>Coller
+        </button>
         <button class="tbtn" id="btnProcDeleteSel" title="Supprimer">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>Suppr.
         </button>
@@ -2400,8 +2412,17 @@ function renderInlineProcessPreview(t){
     fo.setAttribute("x", s.x+8); fo.setAttribute("y", s.y+6); fo.setAttribute("width", Math.max(0,s.w-16)); fo.setAttribute("height", Math.max(0,s.h-12));
     const div = document.createElement("div");
     div.setAttribute("xmlns","http://www.w3.org/1999/xhtml");
-    div.style.cssText = "font-size:11px;color:#1B1D23;text-align:center;display:flex;align-items:center;justify-content:center;height:100%;overflow:hidden;";
-    div.innerHTML = s.content||"";
+    const pvFont = (11*procShapeFontSize(s)/PROC_DEFAULT_FONT_SIZE).toFixed(1);
+    div.style.cssText = "font-size:"+pvFont+"px;"+(s.bold?"font-weight:700;":"")+"color:#1B1D23;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;overflow:hidden;";
+    if(s.photo){
+      const pimg = document.createElement("div");
+      pimg.style.cssText = "flex:1 1 auto;min-height:12px;width:100%;background:center/contain no-repeat;";
+      pimg.style.backgroundImage = 'url("'+s.photo+'")';
+      div.appendChild(pimg);
+    }
+    const ptxt = document.createElement("div");
+    ptxt.innerHTML = s.content||"";
+    div.appendChild(ptxt);
     fo.appendChild(div);
     g.appendChild(fo);
     svg.appendChild(g);
@@ -3547,6 +3568,152 @@ function procApplyShapeLook(shape, el){
     ct.style.textShadow = procShapeColors(shape).length>1 ? (tc==="#FFFFFF" ? "0 0 3px rgba(0,0,0,.7)" : "0 0 3px rgba(255,255,255,.85)") : "";
   }
 }
+/* ---- Taille de police, gras et photo propres à chaque forme ---- */
+const PROC_DEFAULT_FONT_SIZE = 13.5;
+const PROC_FONT_SIZES = [9,10,11,12,13.5,15,16,18,20,24,28,32,40];
+function procShapeFontSize(shape){
+  const n = Number(shape && shape.fontSize);
+  return (n && n>0) ? n : PROC_DEFAULT_FONT_SIZE;
+}
+function procApplyTextStyle(shape, ct, el){
+  el = el || document.querySelector('.pshape[data-id="'+shape.id+'"]');
+  ct = ct || (el && el.querySelector(".pshapeContent"));
+  if(ct){
+    ct.style.fontSize = procShapeFontSize(shape)+"px";
+    ct.style.fontWeight = shape.bold ? "700" : "";
+  }
+  if(el){
+    el.classList.toggle("hasPhoto", !!shape.photo);
+    el.classList.toggle("noText", !stripHtml(shape.content||""));
+  }
+}
+function procStepFontSize(shape, dir){
+  const cur = procShapeFontSize(shape);
+  let next;
+  if(dir>0) next = PROC_FONT_SIZES.find(s=> s>cur+0.01) || PROC_FONT_SIZES[PROC_FONT_SIZES.length-1];
+  else next = PROC_FONT_SIZES.slice().reverse().find(s=> s<cur-0.01) || PROC_FONT_SIZES[0];
+  if(next===PROC_DEFAULT_FONT_SIZE) delete shape.fontSize; else shape.fontSize = next;
+  return next;
+}
+// Ouvre le sélecteur d'images (appareil photo ou galerie sur téléphone) et
+// renvoie la photo réduite/compressée : elle reste légère, car elle est
+// enregistrée avec le processus (et donc synchronisée avec lui).
+function procPickPhoto(){
+  return new Promise(resolve=>{
+    const inp = document.createElement("input");
+    inp.type = "file"; inp.accept = "image/*"; inp.style.display = "none";
+    inp.addEventListener("change", async ()=>{
+      const file = inp.files && inp.files[0];
+      inp.remove();
+      if(!file){ resolve(null); return; }
+      if(!file.type.startsWith("image/")){ alert("Ce fichier n'est pas une image."); resolve(null); return; }
+      const dataUrl = await compressImageFile(file, 520, 0.78);
+      if(!dataUrl) alert("Impossible de lire cette image.");
+      resolve(dataUrl);
+    });
+    document.body.appendChild(inp);
+    inp.click();
+  });
+}
+function procRerenderShapeKeepSelection(id){
+  renderProcShapes(); renderProcArrows();
+  procSelectShape(id);
+}
+
+/* ---- Copier / coller / dupliquer des formes ----
+   Le presse-papiers est interne à l'application : il marche d'un processus
+   à l'autre (copier dans la tâche A, coller dans la tâche B). Les flèches
+   reliant deux formes copiées ensemble sont copiées aussi. */
+let procClipboard = null; // {shapes:[...], arrows:[...], sourceProc, pasteCount}
+const PROC_CLIPBOARD_KEY = "sensitache.procClipboard";
+function procBuildClip(ids){
+  const set = new Set(ids);
+  const shapes = PROC.shapes.filter(s=> set.has(s.id)).map(s=> JSON.parse(JSON.stringify(s)));
+  if(!shapes.length) return null;
+  const arrows = PROC.arrows.filter(a=> set.has(a.from.shapeId) && set.has(a.to.shapeId)).map(a=> JSON.parse(JSON.stringify(a)));
+  return {shapes, arrows, sourceProc:PROC, pasteCount:0};
+}
+function procCopyShapes(ids){
+  const clip = procBuildClip(ids);
+  if(!clip) return false;
+  procClipboard = clip;
+  const {shapes, arrows} = clip;
+  try{ localStorage.setItem(PROC_CLIPBOARD_KEY, JSON.stringify({shapes, arrows})); }catch(e){ /* trop gros : on garde la copie en mémoire */ }
+  return true;
+}
+function procGetClipboard(){
+  if(procClipboard) return procClipboard;
+  try{
+    const raw = localStorage.getItem(PROC_CLIPBOARD_KEY);
+    if(raw){ const c = JSON.parse(raw); if(c && Array.isArray(c.shapes) && c.shapes.length){ procClipboard = {shapes:c.shapes, arrows:c.arrows||[], sourceProc:null, pasteCount:0}; } }
+  }catch(e){}
+  return procClipboard;
+}
+function procPasteShapes(clipArg){
+  const clip = clipArg || procGetClipboard();
+  if(!clip || !clip.shapes.length){ procToast("Rien à coller : sélectionne d'abord une forme et clique sur « Copier »."); return; }
+  snapshot();
+  let minX=1e9, minY=1e9, maxX=-1e9, maxY=-1e9;
+  clip.shapes.forEach(s=>{ minX=Math.min(minX,s.x); minY=Math.min(minY,s.y); maxX=Math.max(maxX,s.x+s.w); maxY=Math.max(maxY,s.y+s.h); });
+  let dx, dy;
+  if(clip.sourceProc===PROC){
+    clip.pasteCount++;
+    dx = dy = 30*clip.pasteCount;
+  } else {
+    // Autre processus : on colle au milieu de la partie visible du canevas.
+    const sr = procCanvasScroll.getBoundingClientRect();
+    const c = procToBoardCoords(sr.left + sr.width/2, sr.top + sr.height/2);
+    dx = Math.round(c.x - (maxX-minX)/2 - minX);
+    dy = Math.round(c.y - (maxY-minY)/2 - minY);
+    if(minX+dx < 10) dx = 10-minX;
+    if(minY+dy < 10) dy = 10-minY;
+  }
+  const idMap = {}, newIds = [];
+  clip.shapes.forEach(src=>{
+    const s = JSON.parse(JSON.stringify(src));
+    const nid = uid("shape");
+    idMap[src.id] = nid; newIds.push(nid);
+    s.id = nid; s.x = Math.max(0, s.x+dx); s.y = Math.max(0, s.y+dy);
+    // La copie n'est pas rattachée à la tâche de l'original.
+    delete s.linkedTaskId; s.collabTag = null;
+    PROC.shapes.push(s);
+  });
+  clip.arrows.forEach(src=>{
+    const a = JSON.parse(JSON.stringify(src));
+    a.id = uid("arrow");
+    a.from.shapeId = idMap[src.from.shapeId]; a.to.shapeId = idMap[src.to.shapeId];
+    if(a.from.shapeId && a.to.shapeId) PROC.arrows.push(a);
+  });
+  procSyncLegendWithColors();
+  saveData(); renderProcBoard(); renderProcLegend();
+  if(newIds.length===1){ procSelectShape(newIds[0]); }
+  else {
+    procSelectedShapeId = null; procSelectedArrowId = null;
+    procMultiSelectedIds = new Set(newIds);
+    renderProcShapes(); renderProcArrows(); procShowMultiFloatToolbar();
+  }
+}
+function procDuplicateShapes(ids){
+  // Ne touche pas au presse-papiers : « Dupliquer » est indépendant de « Copier ».
+  const clip = procBuildClip(ids);
+  if(clip) procPasteShapes(clip);
+}
+function procCurrentSelectionIds(){
+  if(procMultiSelectedIds.size>1) return Array.from(procMultiSelectedIds);
+  if(procSelectedShapeId) return [procSelectedShapeId];
+  return [];
+}
+function procToast(msg){
+  let t = document.getElementById("procToast");
+  if(!t){
+    t = document.createElement("div"); t.id = "procToast";
+    t.style.cssText = "position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:200;background:var(--bg-panel);color:var(--text);border:1px solid var(--border-light);border-radius:9px;padding:8px 14px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.4);pointer-events:none;transition:opacity .2s;";
+    document.body.appendChild(t);
+  }
+  t.textContent = msg; t.style.opacity = "1";
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=>{ t.style.opacity = "0"; }, 1800);
+}
 // Remplissage SVG (aperçu, export) : un dégradé à bandes nettes si plusieurs couleurs.
 function procSvgFill(svg, shape){
   const cols = procShapeColors(shape);
@@ -3604,9 +3771,16 @@ function renderProcShapes(){
       durtag.title = "Durée estimée de cette étape";
       el.appendChild(durtag);
     }
+    if(shape.photo){
+      const ph = document.createElement("div");
+      ph.className = "pshapePhoto";
+      ph.style.backgroundImage = 'url("'+shape.photo+'")';
+      el.appendChild(ph);
+    }
     const content = document.createElement("div");
     content.className = "pshapeContent";
     content.innerHTML = shape.content||"";
+    procApplyTextStyle(shape, content, el);
     content.addEventListener("dblclick", e=>{ e.stopPropagation(); content.setAttribute("contenteditable","true"); content.focus(); });
     content.addEventListener("keydown", e=>{
       if(e.key==="Enter"){
@@ -3823,6 +3997,8 @@ function procShowMultiFloatToolbar(){
   bar.style.left=minX+"px"; bar.style.top=(minY-48)+"px";
   bar.innerHTML = `
     <span style="font-size:12px;color:var(--text-dim);padding:0 4px;">${shapesSel.length} formes sélectionnées</span>
+    <button class="btn small" id="pmtCopy" title="Copier ces formes (Ctrl+C)">⧉ Copier</button>
+    <button class="btn small" id="pmtDuplicate" title="Dupliquer ces formes (Ctrl+D)">Dupliquer</button>
     <button class="btn small danger" id="pmtDelete">Suppr. la sélection</button>
   `;
   document.getElementById("procShapesLayer").appendChild(bar);
@@ -3833,6 +4009,14 @@ function procShowMultiFloatToolbar(){
   bar.querySelector("#pmtDelete").addEventListener("pointerdown", e=>{
     e.stopPropagation();
     procDeleteMultiSelected();
+  });
+  bar.querySelector("#pmtCopy").addEventListener("pointerdown", e=>{
+    e.stopPropagation();
+    if(procCopyShapes(ids)) procToast(ids.length+" formes copiées — clique sur « Coller » (ou Ctrl+V).");
+  });
+  bar.querySelector("#pmtDuplicate").addEventListener("pointerdown", e=>{
+    e.stopPropagation();
+    procDuplicateShapes(ids);
   });
 }
 /* ---------- Liens (URL) dans les descriptions et les mails ---------- */
@@ -4087,6 +4271,21 @@ function procShowFloatToolbarForShape(id){
       <button class="btn small danger" id="pftDelete">Suppr.</button>
     </div>
     <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:6px;">
+      <span style="font-size:11px;color:var(--text-dim);">Texte :</span>
+      <button type="button" class="btn small" id="pftFontDown" title="Réduire la taille du texte">A−</button>
+      <span id="pftFontSize" style="font-size:12px;min-width:30px;text-align:center;color:var(--text);">${procShapeFontSize(shape)}</span>
+      <button type="button" class="btn small" id="pftFontUp" title="Agrandir la taille du texte">A+</button>
+      <button type="button" class="btn small pft-fmt-btn${shape.bold?' active':''}" id="pftBold" title="Mettre le texte en gras" style="font-weight:800;min-width:30px;justify-content:center;">G</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:6px;">
+      <button type="button" class="btn small" id="pftPhoto">📷 ${shape.photo ? "Changer la photo" : "Ajouter une photo"}</button>
+      ${shape.photo ? '<button type="button" class="btn small" id="pftPhotoRemove">Retirer la photo</button>' : ''}
+    </div>
+    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:6px;">
+      <button type="button" class="btn small" id="pftCopy" title="Copier cette forme (Ctrl+C), puis « Coller » dans la barre d'outils (Ctrl+V) — y compris dans un autre processus">⧉ Copier</button>
+      <button type="button" class="btn small" id="pftDuplicate" title="Dupliquer cette forme (Ctrl+D)">Dupliquer</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:6px;">
       <span style="font-size:11px;color:var(--text-dim);">Couleurs :</span>
       <div id="pftColors" style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;"></div>
       <button type="button" class="btn small" id="pftAddColor" title="Ajouter une couleur à cette forme">+ Couleur</button>
@@ -4107,12 +4306,70 @@ function procShowFloatToolbarForShape(id){
     shape.content = shape.linkUrl ? '<a href="'+escapeHtml(shape.linkUrl)+'" target="_blank" rel="noopener">'+inner+'</a>' : inner;
     const contentEl = document.querySelector('.pshape[data-id="'+id+'"] .pshapeContent');
     if(contentEl) contentEl.innerHTML = shape.content;
+    procApplyTextStyle(shape);
     if(shape.linkedTaskId){
       const lt = DATA.tasks.find(t=>t.id===shape.linkedTaskId);
       if(lt){ lt.title = stripHtml(shape.content) || lt.title; lt.updatedAt = Date.now(); }
     }
     saveData();
   });
+  // Taille du texte et gras (propres à cette forme).
+  const fontLabel = bar.querySelector("#pftFontSize");
+  [["#pftFontDown",-1],["#pftFontUp",1]].forEach(([sel,dir])=>{
+    const b = bar.querySelector(sel);
+    b.addEventListener("pointerdown", e=> e.stopPropagation());
+    b.addEventListener("click", e=>{
+      e.stopPropagation();
+      fontLabel.textContent = procStepFontSize(shape, dir);
+      procApplyTextStyle(shape);
+      saveData();
+    });
+  });
+  const boldBtn = bar.querySelector("#pftBold");
+  boldBtn.addEventListener("pointerdown", e=> e.stopPropagation());
+  boldBtn.addEventListener("click", e=>{
+    e.stopPropagation();
+    if(shape.bold) delete shape.bold; else shape.bold = true;
+    boldBtn.classList.toggle("active", !!shape.bold);
+    procApplyTextStyle(shape);
+    saveData();
+  });
+  // Photo
+  const photoBtn = bar.querySelector("#pftPhoto");
+  photoBtn.addEventListener("pointerdown", e=> e.stopPropagation());
+  photoBtn.addEventListener("click", async e=>{
+    e.stopPropagation();
+    const dataUrl = await procPickPhoto();
+    if(!dataUrl) return;
+    snapshot();
+    shape.photo = dataUrl;
+    // Agrandit un peu la forme si elle est trop petite pour montrer la photo et le texte.
+    if(shape.h < 140){ shape.h = shape.type==="diamond" ? 200 : 150; }
+    if(shape.w < 160){ shape.w = shape.type==="diamond" ? 200 : 160; }
+    saveData(); procApplyBoardSize();
+    procRerenderShapeKeepSelection(id);
+  });
+  const photoRm = bar.querySelector("#pftPhotoRemove");
+  if(photoRm){
+    photoRm.addEventListener("pointerdown", e=> e.stopPropagation());
+    photoRm.addEventListener("click", e=>{
+      e.stopPropagation();
+      snapshot();
+      delete shape.photo;
+      saveData();
+      procRerenderShapeKeepSelection(id);
+    });
+  }
+  // Copier / dupliquer
+  const copyBtn = bar.querySelector("#pftCopy");
+  copyBtn.addEventListener("pointerdown", e=> e.stopPropagation());
+  copyBtn.addEventListener("click", e=>{
+    e.stopPropagation();
+    if(procCopyShapes([id])) procToast("Forme copiée — clique sur « Coller » (ou Ctrl+V), ici ou dans un autre processus.");
+  });
+  const dupBtn = bar.querySelector("#pftDuplicate");
+  dupBtn.addEventListener("pointerdown", e=> e.stopPropagation());
+  dupBtn.addEventListener("click", e=>{ e.stopPropagation(); procDuplicateShapes([id]); });
   bar.querySelector("#pftDesc").addEventListener("pointerdown", e=> e.stopPropagation());
   bar.querySelector("#pftDesc").addEventListener("input", e=>{
     shape.description = e.target.value;
@@ -4355,6 +4612,7 @@ function procDeleteShape(id){
   procSyncLegendWithColors();
   saveData(); renderProcBoard(); renderProcLegend(); procRemoveFloatToolbar(); renderProcTasksList();
 }
+document.getElementById("btnProcPaste").addEventListener("click", ()=> procPasteShapes());
 document.getElementById("btnProcDeleteSel").addEventListener("click", ()=>{
   if(procMultiSelectedIds.size>1) procDeleteMultiSelected();
   else if(procSelectedShapeId) procDeleteShape(procSelectedShapeId);
@@ -4372,6 +4630,23 @@ document.addEventListener("keydown", e=>{
     e.preventDefault();
     procSelectAllShapes();
     return;
+  }
+  if((e.ctrlKey||e.metaKey) && !e.shiftKey && !e.altKey){
+    const k = e.key.toLowerCase();
+    if(k==="c"){
+      const ids = procCurrentSelectionIds();
+      if(ids.length && !(window.getSelection && String(window.getSelection()).trim())){
+        e.preventDefault();
+        if(procCopyShapes(ids)) procToast(ids.length>1 ? ids.length+" formes copiées" : "Forme copiée");
+      }
+      return;
+    }
+    if(k==="v"){ e.preventDefault(); procPasteShapes(); return; }
+    if(k==="d"){
+      const ids = procCurrentSelectionIds();
+      if(ids.length){ e.preventDefault(); procDuplicateShapes(ids); }
+      return;
+    }
   }
   if(e.key==="Delete"||e.key==="Backspace"){
     if(procMultiSelectedIds.size>1){ e.preventDefault(); procDeleteMultiSelected(); }
