@@ -319,6 +319,84 @@
   .proc-task-row .ptr-head{display:flex;align-items:center;gap:8px;margin-bottom:4px;}
   .proc-task-row .ptr-title{flex:1;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .proc-task-row .ptr-detail{font-size:11.5px;color:var(--text-dim);margin:0 0 6px;white-space:pre-wrap;}
+  /* ---------- Échanges & méthodes ---------- */
+  .ex-banner{border-left:3px solid var(--urgent);background:rgba(232,129,58,.12);border-radius:8px;padding:8px 11px;font-size:13px;margin:0 0 10px;line-height:1.4;}
+  .ex-item{display:flex;gap:10px;align-items:center;padding:9px 11px;border:1px solid var(--border-soft);border-radius:9px;background:var(--bg-card);margin-bottom:6px;cursor:pointer;}
+  .ex-item:hover{border-color:#454956;}
+  .ex-item-ico{font-size:18px;flex-shrink:0;}
+  .ex-status{font-size:11px;padding:2px 8px;border-radius:20px;background:rgba(232,129,58,.15);color:#F0A46B;white-space:nowrap;flex-shrink:0;}
+  .ex-status.done{background:rgba(31,169,113,.18);color:#5FD9A4;}
+  .ex-pick{justify-content:flex-start;gap:10px;padding:9px 12px;text-align:left;width:100%;}
+  .ex-ov{position:fixed;inset:0;z-index:160;background:rgba(10,11,14,.6);overflow-y:auto;padding:24px 12px 40px;}
+  .ex-sheet{background:var(--bg-main);border:1px solid var(--border-soft);border-radius:14px;width:680px;max-width:100%;margin:0 auto;padding:16px 18px 20px;box-shadow:0 20px 50px rgba(0,0,0,.4);}
+  .ex-head{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+  .ex-sec{border:1px solid var(--border-soft);background:var(--bg-card);border-radius:10px;padding:12px 14px;margin:0 0 12px;}
+  .ex-sec h3{margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-sub);display:flex;align-items:center;gap:8px;}
+  .ex-intent{border-color:rgba(232,129,58,.55);}
+  .ex-letter{width:26px;height:26px;border-radius:50%;background:var(--knowledge);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;letter-spacing:0;flex-shrink:0;}
+  .ex-f label{display:block;font-size:12px;color:var(--text-sub);margin:8px 0 4px;}
+  .ex-f textarea,.ex-f input[type=text],.ex-f input[type=date],.ex-eng input,.ex-outtext{width:100%;border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;background:var(--bg-app);color:var(--text-main);font-size:13.5px;font-family:inherit;line-height:1.45;}
+  .ex-f textarea,.ex-outtext{resize:vertical;}
+  .ex-f textarea:focus,.ex-f input:focus,.ex-eng input:focus,.ex-outtext:focus{outline:none;border-color:var(--accent);}
+  .ex-hint{font-size:11.5px;color:var(--text-sub);margin-top:5px;line-height:1.4;}
+  .ex-warn{font-size:12px;color:#F0A46B;margin-top:5px;line-height:1.4;}
+  .ex-warn:empty{display:none;}
+  .ex-seg{display:flex;flex-wrap:wrap;gap:6px;}
+  .ex-seg .btn.chip.on{background:rgba(31,169,113,.2);border-color:var(--knowledge);color:#5FD9A4;}
+  .ex-check{display:flex;align-items:flex-start;gap:8px;font-size:13px;margin:6px 0 0;cursor:pointer;line-height:1.35;}
+  .ex-check input{margin-top:2px;accent-color:var(--knowledge);}
+  .ex-checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:12px;margin-top:6px;}
+  .ex-crit-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--border-soft);font-size:13px;}
+  .ex-crit-row:last-child{border-bottom:none;}
+  .ex-sugg{margin-top:10px;padding:8px 11px;border-radius:8px;background:rgba(31,169,113,.12);color:#9FE3C5;font-size:13px;line-height:1.4;}
+  .ex-delay{margin-top:8px;padding:8px 11px;border-radius:8px;background:rgba(224,85,95,.12);color:#F0A2A8;font-size:12.5px;line-height:1.4;}
+  .ex-eng{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) 140px 34px;gap:6px;margin-bottom:6px;align-items:center;}
+  .ex-memo{margin-bottom:6px;font-size:13px;}
+  .ex-memo summary{cursor:pointer;color:var(--text-sub);padding:4px 0;}
+  .ex-memo div{padding:6px 2px 8px 18px;line-height:1.5;color:var(--text-main);}
+  .ex-outtext{min-height:220px;}
+  .ex-status.late{background:rgba(224,85,95,.18);color:#F0838C;}
+  .ex-seg .btn.chip.on.warn{background:rgba(232,129,58,.2);border-color:var(--urgent);color:#F0A46B;}
+  .ex-ctrl{border:1px solid var(--border-soft);border-radius:9px;padding:8px 10px;margin-bottom:8px;background:var(--bg-app);}
+  .ex-ctrl.ok{border-color:rgba(31,169,113,.6);}
+  .ex-ctrl.recadrer{border-color:rgba(232,129,58,.7);}
+  .ex-ctrl-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;}
+  .ex-ctrl input{border:1px solid var(--border-soft);border-radius:8px;padding:7px 9px;background:var(--bg-card);color:var(--text-main);font-size:13px;font-family:inherit;}
+  .ex-ctrl input[type=text]{width:100%;}
+  .cap-wrap{max-width:820px;}
+  .cap-area,.cap-input{width:100%;border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;background:var(--bg-app);color:var(--text-main);font-size:13.5px;font-family:inherit;line-height:1.45;}
+  .cap-area{resize:vertical;}
+  .cap-obj{border:1px solid var(--border-soft);border-radius:9px;padding:8px 10px;margin-bottom:8px;background:var(--bg-app);}
+  .cap-obj.done{opacity:.7;}
+  .cap-obj-row{display:flex;gap:6px;align-items:center;}
+  .cap-obj-row .cap-input{flex:1;min-width:0;}
+  .cap-scope{width:auto;max-width:150px;}
+  .cap-obj-foot{display:flex;align-items:center;gap:4px;margin-top:4px;flex-wrap:wrap;}
+  .cap-tasks{margin-top:6px;}
+  .cap-task{display:flex;justify-content:space-between;gap:10px;padding:7px 10px;border-radius:7px;background:var(--bg-card);border:1px solid var(--border-soft);margin-bottom:5px;cursor:pointer;font-size:13px;}
+  .cap-task:hover{border-color:#454956;}
+  .cap-ws{font-size:11.5px;color:var(--text-sub);white-space:nowrap;}
+  .cap-tag{font-size:11px;color:var(--text-sub);}
+  .mt-sujet-row{display:flex;gap:6px;align-items:center;margin-bottom:6px;}
+  .mt-sujet-row input{flex:1;min-width:0;border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;background:var(--bg-app);color:var(--text-main);font-size:13.5px;font-family:inherit;}
+  .mt-num{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 6px;border-radius:12px;background:var(--bg-panel-2);font-size:12px;font-weight:700;color:var(--text-sub);flex-shrink:0;}
+  .mt-progress{display:flex;gap:4px;margin:4px 0 14px;}
+  .mt-progress span{flex:1;height:6px;border-radius:3px;background:var(--bg-panel-2);cursor:pointer;}
+  .mt-progress span.ok{background:var(--knowledge);}
+  .mt-progress span.reprendre{background:var(--urgent);}
+  .mt-progress span.cur{outline:2px solid var(--accent);outline-offset:1px;}
+  .mt-live-sujet{font-size:21px;font-weight:700;line-height:1.3;margin:0 0 12px;display:flex;gap:10px;align-items:flex-start;}
+  .mt-reform{border:2px solid var(--clock);background:rgba(58,160,214,.1);border-radius:12px;padding:12px 14px;margin:12px 0;}
+  .mt-reform-q{font-size:15px;line-height:1.45;}
+  .mt-live-end{text-align:center;padding:22px 16px;}
+  @media (max-width:640px){
+    .ex-ov{padding:0;}
+    .ex-sheet{border-radius:0;border:none;min-height:100%;padding:14px 14px 30px;}
+    .ex-checks{grid-template-columns:1fr;}
+    .ex-eng{grid-template-columns:minmax(0,1fr) minmax(0,1fr);}
+    .ex-eng input:first-child{grid-column:1 / -1;}
+    .ex-crit-row{flex-wrap:wrap;}
+  }
 </style>
 </head>
 <body>
@@ -387,6 +465,17 @@
           <button class="btn chip small followup" id="chipFollowUp">👁️ À suivre (sans action)</button>
           <button class="btn chip small knowledge" id="chipKnowledge">📚 Base de connaissances</button>
         </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field-label">🧭 Contribue à</div>
+        <select id="taskObjectiveSelect" class="fieldselect"></select>
+      </div>
+
+      <div class="field-row">
+        <div class="field-label">🤝 Échanges &amp; méthodes</div>
+        <div id="exList"></div>
+        <button class="btn small" id="btnAddExchange" style="width:100%;justify-content:center;">+ Utiliser une méthode (DESC, oui/non, intention…)</button>
       </div>
 
       <div class="field-row">
@@ -1135,7 +1224,9 @@ const TAB_DEFS = {
   recurrence: {label:"Récurrences"},
   reminders: {label:"Rappels"},
   mail: {label:"Mail"},
-  trajectoire: {label:"Trajectoire"}
+  trajectoire: {label:"Trajectoire"},
+  cap: {label:"Cap"},
+  reunions: {label:"Réunions"}
 };
 let tabOrder = (function(){
   try{
@@ -1256,7 +1347,7 @@ function myVisibleTasks(){
   // hors récurrences dont la prochaine échéance n'est pas encore arrivée,
   // et hors rappels dont la date n'est pas encore arrivée (le rappel agit comme un filtre, pas juste un tri)
   const today = todayStr();
-  return activeTasks().filter(t=> !t.knowledge && (t.assignedTo||[]).includes(DATA.currentUserId) && !recurrenceNotDueYet(t) && !(t.reminderDate && t.reminderDate>today && !t.today));
+  return activeTasks().filter(t=> !t.knowledge && !t.meetingDef && (t.assignedTo||[]).includes(DATA.currentUserId) && !recurrenceNotDueYet(t) && !(t.reminderDate && t.reminderDate>today && !t.today));
 }
 function recurringTasks(){ return activeTasks().filter(t=> t.recurrence && t.recurrence.freq); }
 function sortCategory(t){
@@ -1429,6 +1520,13 @@ function renderMain(){
     if(!(paste && paste.value.trim()) && !(mrReading && el.querySelector("[data-mrmsg]"))) renderMailTab(el);
   }
   else if(currentTab==="trajectoire") renderTrajectoireTab(el);
+  else if(currentTab==="cap" || currentTab==="reunions"){
+    // La synchro relance renderMain() toutes les ~15 s : on ne reconstruit pas l'écran pendant une saisie.
+    const ae = document.activeElement;
+    const typing = ae && el.contains(ae) && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) && el.dataset.tab===currentTab;
+    if(!typing){ el.dataset.tab = currentTab; if(currentTab==="cap") renderCapTab(el); else renderMeetingsTab(el); }
+  }
+  if(currentTab!=="cap" && currentTab!=="reunions") delete el.dataset.tab;
   if(prevScrollTop>0) el.scrollTop = prevScrollTop;
 }
 
@@ -1577,9 +1675,10 @@ function isDraftTaskEmpty(t){
   const hasSub = t.subtasks && t.subtasks.length>0;
   const hasAttach = t.attachments && t.attachments.length>0;
   const hasProcess = !!t.process;
+  const hasEx = !!(t.exchanges && t.exchanges.length);
   const assign = (t.assignedTo||[]).slice().sort();
   const defaultAssign = JSON.stringify(assign) === JSON.stringify([DATA.currentUserId]) || assign.length===0;
-  return !hasTitle && !hasDesc && !hasFlags && !hasDates && !hasRecur && !hasSub && !hasAttach && !hasProcess && defaultAssign;
+  return !hasTitle && !hasDesc && !hasFlags && !hasDates && !hasRecur && !hasSub && !hasAttach && !hasProcess && !hasEx && defaultAssign;
 }
 const PRIORITY_COLOR = {1:"var(--clock)", 2:"var(--recur)", 3:"var(--flame)", 4:"var(--urgent)", 5:"var(--clock)", 6:"rgba(255,255,255,.18)", 7:"var(--followup)"};
 function renderTaskRow(t, bucketList, forCollabId){
@@ -1595,6 +1694,7 @@ function renderTaskRow(t, bucketList, forCollabId){
   if(t.quick) badges += `<span class="badge quick" title="Rapide">${iconSvg("bolt")}</span>`;
   if(t.followUp) badges += `<span class="badge followup" title="À suivre (sans action)">${iconSvg("eye")}</span>`;
   if(t.knowledge) badges += `<span class="badge knowledge" title="Base de connaissances">${iconSvg("book")}</span>`;
+  if(t.exchanges && t.exchanges.length) badges += `<span class="badge" style="background:rgba(232,129,58,.15);color:#F0A46B;width:auto;padding:0 5px;font-size:11px;" title="Échanges et méthodes : ${t.exchanges.length}">🤝${t.exchanges.length>1?" "+t.exchanges.length:""}</span>`;
   if(t.process) badges += `<span class="badge proc" title="Processus associé">${iconSvg("link")}</span>`;
   if(t.description && t.description.trim()) badges += `<span class="badge" style="background:rgba(255,255,255,.08);color:var(--text-sub);" title="Cette tâche a une description">${iconSvg("note")}</span>`;
   if(t.attachments && t.attachments.length) badges += `<span class="badge attach" title="Documents joints">${t.attachments.length}📎</span>`;
@@ -1769,6 +1869,8 @@ function renderCollabTab(el){
         <button class="btn small primary" id="btnGenEmail">✅ Terminer la réunion</button>
       </div>
       <input type="text" id="emailThemeInput" class="fieldinput" placeholder="Sujet (facultatif, ajouté à l'objet « Échange … »)" value="${escapeHtml(collabEmailTheme)}" style="max-width:320px;">
+      ${(()=>{ const fils = Array.from(collabEmailSelected).map(id=> DATA.tasks.find(x=>x.id===id)).filter(Boolean).map(x=>({t:x, f:exTaskIntention(x)})).filter(x=>x.f); return fils.length ? fils.map(x=>`<div class="ex-banner" style="margin:0;">🎯 <b>Fil rouge</b> · ${escapeHtml(x.t.title||"")} : ${escapeHtml(x.f)}</div>`).join("") : ""; })()}
+      <div class="ex-banner" style="margin:0;border-left-color:var(--clock);background:rgba(58,160,214,.1);">💬 Pas « C'est ok pour vous ? » → « Qui peut reformuler ce qu'on vient de décider ? »</div>
       <div style="font-size:11.5px;color:var(--text-sub);">Coche les tâches abordées. Tu peux les modifier, les terminer ou les supprimer pendant la réunion : le mail reprendra leur état au moment où tu termines.</div>`;
   } else {
     toolbar.innerHTML = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><button class="btn small" id="btnStartMeeting">🗓️ Démarrer une réunion</button></div>`;
@@ -1854,7 +1956,7 @@ function renderCollabTab(el){
     });
     el.appendChild(grid);
   }
-
+  renderDelegationsSection(el);
 }
 function assigneeNamesForTask(t){
   return (t.assignedTo||[]).map(id=> DATA.collaborators.find(c=>c.id===id)).filter(Boolean).map(c=>c.name);
@@ -2326,6 +2428,8 @@ function openTaskDrawer(id){
   renderAttachList(t);
   renderSubtaskList(t);
   renderProcessLinkRow(t);
+  renderExchangeList(t);
+  renderTaskObjectiveField(t);
   document.getElementById("drawer").classList.remove("fullscreen");
   setFullscreenIcon(false);
   removeInlineProcessPreview();
@@ -5856,6 +5960,8 @@ function mergeAppData(local, remote){
   });
   merged.tasks = Array.from(taskMap.values()).filter(t=> !deletedAfter("tasks", t.id, t.updatedAt));
   merged.tasks.forEach(t=>{ if(!Array.isArray(t.assignedTo)) t.assignedTo = t.assignedTo ? [t.assignedTo] : [merged.currentUserId]; });
+  // Cap (objectifs communs) : la version modifiée le plus récemment l'emporte.
+  if(remote.cap && (!merged.cap || (remote.cap.updatedAt||0) > (merged.cap.updatedAt||0))) merged.cap = remote.cap;
   return merged;
 }
 /* =========================================================================
@@ -7526,6 +7632,14 @@ updateDriveIndicator();
 // button — instead of navigating away from the app entirely.
 window.addEventListener("popstate", ()=>{
   if(suppressNextPopstate){ suppressNextPopstate = false; return; }
+  if(document.getElementById("exOverlay")){
+    closeExchangeEditor(true);
+    return;
+  }
+  if(document.getElementById("mtOverlay")){
+    closeMeeting(true);
+    return;
+  }
   if(document.getElementById("procOverlay").classList.contains("show")){
     closeProcessEditor();
     return;
@@ -7648,6 +7762,1543 @@ document.addEventListener("visibilitychange", ()=>{
     if(driveClientId && driveAccessToken && Date.now() < driveTokenExpiry) writeDriveBackup();
   }
 });
+
+/* =========================================================
+   ÉCHANGES & MÉTHODES (assertivité)
+   DESC · compte rendu · vrai oui / vrai non · préparer avec
+   intention · garder le cap · écoute active · fiches mémo
+   Données : t.exchanges = [{id, type, createdAt, updatedAt, done, data:{…}}]
+========================================================= */
+const EX_TYPES = {
+  intention:{icon:"🎯", label:"Préparer avec intention", sub:"Avant l'échange : mon fil rouge, 1 ou 2 questions"},
+  desc:{icon:"🗣️", label:"DESC", sub:"Exprimer une critique constructive"},
+  ouinon:{icon:"⚖️", label:"Vrai oui / vrai non", sub:"Répondre à une demande, sans répondre à chaud"},
+  pression:{icon:"🛡️", label:"Garder le cap", sub:"Face à une pression ou une manipulation"},
+  ecoute:{icon:"👂", label:"Écoute active", sub:"Mes notes pendant l'échange"}
+};
+const EX_ORDER = ["intention","desc","ouinon","pression","ecoute"];
+const EX_PREP_QUESTIONS = [
+  {k:"besoin", q:"De quoi j'ai besoin ?"},
+  {k:"repartir", q:"Avec quoi je veux repartir de cette réunion ?"},
+  {k:"marge", q:"Quelle est la marge de négo ?"},
+  {k:"sentir", q:"Comment je veux me sentir ?"},
+  {k:"objectif", q:"Quel est l'objectif ?"}
+];
+const EX_CRITERIA = [
+  {k:"objectif", q:"Ça sert un de nos objectifs (Cap) ?"},
+  {k:"attributions", q:"C'est dans mes attributions ?"},
+  {k:"temps", q:"J'ai le temps ?"},
+  {k:"competences", q:"J'ai les compétences ?"},
+  {k:"role", q:"C'est mon rôle ?"},
+  {k:"interet", q:"Envie : j'y vois un intérêt ?"},
+  {k:"opportunite", q:"Envie : c'est une opportunité ?"},
+  {k:"appetence", q:"Envie : j'ai de l'appétence pour ça ?"}
+];
+const EX_DESC_CHECKS = [
+  {k:"faceAFace", t:"Face à face"},
+  {k:"aFroid", t:"À froid : j'ai pris un délai pour préparer"},
+  {k:"agenda", t:"J'ai défini mon propre agenda"},
+  {k:"prevenu", t:"J'ai prévenu la personne (ordre du jour)"},
+  {k:"unSujet", t:"1 DESC = 1 sujet"},
+  {k:"ecrit", t:"Je ferai un point écrit en synthèse"},
+  {k:"remercier", t:"Je remercierai"}
+];
+
+/* ---------- Fiches mémo (reprises de la formation) ---------- */
+const EX_MEMOS = {
+  assertivite:{title:"Assertivité · la posture de base", text:
+"Gagnant-gagnant, d'égal à égal. Ouverture, neutralité, CALME. Confiance en soi.\n"+
+"Clarté et alignement : ma posture = ce que je dis = ce que je fais. Authenticité, curiosité.\n"+
+"Je parle en « JE » : j'assume mon point de vue.\n"+
+"ÉCOUTER, QUESTIONNER (questions ouvertes), FAIRE REFORMULER (explicite).\n"+
+"Réponse argumentée sur des FAITS observables, non discutables.\n"+
+"Face à face : regarder dans les yeux. Humour bienveillant (prise de recul).\n"+
+"Le point de vue de l'autre est aussi important que le mien… et mes besoins aussi.\n"+
+"« Pour être convaincu, il faut être convaincant. »\n"+
+"Savoir dire non, dire stop, poser des limites."},
+  refuges:{title:"Comportements refuges · passivité et agressivité", text:
+"Stress → émotion → besoin non satisfait. Peur → passivité (subir la situation). Colère → agressivité (confronter la situation). C'est automatique : l'instinct de survie.\n\n"+
+"PASSIVITÉ (peur) : dire oui sans oser dire non, faire plaisir, rester en retrait, éviter, se retrancher derrière l'avis de l'autre. « J'ai pas le temps », « Le chef a dit… », « On verra ».\n"+
+"Pour en sortir : parler parmi les trois premiers, regarder dans les yeux, ne pas me justifier, dire « je », exprimer mon ressenti et mes besoins, oser dire non.\n\n"+
+"AGRESSIVITÉ (colère) : se mettre en avant au risque d'ignorer l'autre, « tu » accusateur, « tu as tort » (certitude), imposer, ironie, rigidité. « C'est comme ça », « Ça passe ou ça casse ».\n"+
+"Causes à surveiller : conflit de valeurs, incompréhension, injustice, non-dits (effet cocotte-minute).\n"+
+"Pour en sortir : « oui, et… » plutôt que « oui, mais… », judoka plutôt que boxeur, laisser l'autre proposer sa solution, écouter jusqu'au bout, humour sans ironie, « stop » + respirer 3 secondes, reconnaître mes erreurs, « je » plutôt que « vous » accusateur."},
+  emotions:{title:"Stress et émotions", text:
+"Les émotions sont de l'énergie en mouvement, instantanée : ressentis (corps, cœur, ventre) et mental.\n"+
+"Stresseurs = déclencheurs. Stress d'anticipation → l'avenir, le futur.\n"+
+"Joie → sourire. Peur, colère, tristesse → réagir = passer à l'action.\n"+
+"Stress ⇒ émotions primaires et secondaires ⇒ besoins non satisfaits ⇒ comportements refuges.\n"+
+"Danger → instinct de survie → cortisol, l'hormone du stress : effet de 1 minute à 1 heure.\n"+
+"⇒ JAMAIS DE RÉPONSE À CHAUD : je prends un délai."},
+  faits:{title:"Faits, opinions, sentiments", text:
+"FAITS : objectivables, observables, non discutables, règles EXPLICITES, vérifiables, neutralité. → ma base : réponse argumentée, D du DESC.\n"+
+"OPINIONS (subjectivité) : perceptions, « souvent », « toujours », « jamais », généralisations, interprétation, projection, jugement. → je les repère et je les évite.\n"+
+"SENTIMENTS, ÉMOTIONS (subjectivité) : ressentis. → je les exprime en « je » : E du DESC."},
+  desc:{title:"Méthode DESC · critique constructive", text:
+"Objectif : développement, amélioration continue.\n"+
+"D — Décrire les FAITS, le contexte.\n"+
+"E — Exprimer mes émotions, sentiments, ressenti : quel IMPACT ?\n"+
+"S — Solutionner : imposer une solution / suggérer une solution / l'autre propose une solution.\n"+
+"C — Conséquences : valoriser les conséquences positives du changement.\n\n"+
+"Conditions de réussite : face à face · à froid (délai) pour préparer · définir mon propre agenda · prévenir la personne (ordre du jour) · DESC = ouverture au dialogue · 1 DESC = 1 sujet · un point écrit en synthèse · remercier."},
+  ouinon:{title:"Dire oui, dire non", text:
+"Nos « oui » ont de la valeur à condition qu'il y ait des « non » de temps en temps.\n"+
+"Réponse argumentée (FAITS). Prendre le temps : questions, reformulation.\n"+
+"Vrai oui / vrai non : attributions, temps, compétences, rôle… Envie ? → intérêt, opportunité, appétence.\n"+
+"« Oui, et… » / « Non, et… » + revoir les priorités.\n"+
+"Réponse immédiate ou différée · totale ou partielle.\n"+
+"Jamais de réponse à chaud → DÉLAI. Pas de promesse non tenable."},
+  intention:{title:"Stratégie d'objectif · poser une intention", text:
+"État présent → état désiré. Qui sont les acteurs ? Quel est mon périmètre ?\n"+
+"Poser une intention = fil rouge = garder son cap.\n"+
+"PRÉPARATION : 1 ou 2 questions maximum, parmi : De quoi j'ai besoin ? Avec quoi je veux repartir de cette réunion ? Quelle est la marge de NÉGO ? Comment je veux me sentir ? Quel est l'objectif ?"},
+  pression:{title:"Contre-manipulation · garder le cap", text:
+"Mon intention = fil rouge.\n"+
+"J'impose : sur quelle base ? → vérification, préparation → des FAITS.\n"+
+"DISCOURS BREF : phrases courtes pour créer l'impact. FERME. Silence.\n"+
+"Écrit de confirmation. Rappel à la règle (faits). Poser des limites : stop, non.\n\n"+
+"Repérer un manipulateur : joue sur les émotions, culpabilise, crée le doute, rumeurs, promesses non tenues, victimisation, OBJECTIF CACHÉ, flatterie, mauvaise foi, ne se remet pas en question. « Je dis ça, je dis rien », « Untel m'a dit que… », « Je fais tout ça pour toi »."},
+  ecoute:{title:"Écoute active", text:
+"Capacité à se mettre en retrait : présence physique, émotionnelle et mentale ⇒ connexion avec l'autre, retour au moment présent, temps de qualité.\n"+
+"3 niveaux d'écoute : non verbal → attitude · paraverbal → voix · verbal → mots.\n"+
+"Silence → 1 respiration.\n"+
+"Écouter, questionner pour comprendre et clarifier : « Comment je peux t'aider ? », « De quoi tu as besoin ? », « Quelle est ta demande ? ».\n"+
+"Reformuler (moi ou l'autre) : les faits et les ÉMOTIONS."}
+};
+const EX_MEMOS_FOR = {
+  intention:["intention","emotions"], desc:["desc","faits"], ouinon:["ouinon","emotions"],
+  pression:["pression","faits"], ecoute:["ecoute","assertivite"]
+};
+
+/* ---------- Détecteur d'opinions ---------- */
+const EX_OPINION_RULES = [
+  {re:/(?<![\p{L}])(toujours|jamais|souvent|sans arr[eê]t|tout le temps|à chaque fois|a chaque fois|syst[ée]matiquement|comme d'habitude|comme d’habitude|tout le monde|personne ne|encore une fois)(?![\p{L}])/giu, kind:"généralisation", tip:"remplace par un fait daté et précis"},
+  {re:/(?<![\p{L}])(nul|nulle|incomp[ée]tent\w*|pas s[ée]rieux|pas s[ée]rieuse|n'importe comment|n’importe comment|inadmissible|inacceptable|catastrophique|l[aâ]che|feignant\w*|fain[ée]ant\w*|irresponsable|m[ée]diocre)(?![\p{L}])/giu, kind:"jugement", tip:"décris le comportement observé, pas la personne"},
+  {re:/(?<![\p{L}])(j'ai l'impression|j’ai l’impression|je pense que|visiblement|apparemment|s[uû]rement|forc[ée]ment|expr[eè]s|tu t'en fiches|tu t’en fiches|tu t'en fous|tu t’en fous)(?![\p{L}])/giu, kind:"interprétation", tip:"garde ce qui est observable et vérifiable"},
+  {re:/(?<![\p{L}])(tu es|t'es|t’es|vous [eê]tes)(?![\p{L}])/giu, kind:"étiquette", tip:"« tu es… » juge la personne : décris plutôt ce qui s'est passé"}
+];
+function exOpinionHits(text){
+  const hits = [], seen = new Set();
+  EX_OPINION_RULES.forEach(r=>{
+    const m = String(text||"").match(r.re);
+    (m||[]).forEach(w=>{ const key = w.toLowerCase(); if(seen.has(key)) return; seen.add(key); hits.push({w, kind:r.kind, tip:r.tip}); });
+  });
+  return hits;
+}
+function exAccusHits(text){
+  const m = String(text||"").match(/(?<![\p{L}])(?:tu|vous)\s+(?:m['’][\p{L}]+|me\s+[\p{L}]+|ne\s+[\p{L}]+|n['’][\p{L}]+|as\s+encore|avez\s+encore)/giu);
+  return m ? Array.from(new Set(m.map(x=>x.toLowerCase()))) : [];
+}
+
+/* ---------- Petits utilitaires ---------- */
+function exAttr(s){ return escapeHtml(String(s==null?"":s)).replace(/"/g,"&quot;"); }
+function exFrDate(d){ if(!d) return ""; const p = String(d).split("-"); return p.length===3 ? p[2]+"/"+p[1]+"/"+p[0] : d; }
+function exFrDateLong(d){
+  if(!d) return ""; const p = String(d).split("-").map(Number);
+  if(p.length!==3 || p.some(isNaN)) return d;
+  return new Date(p[0], p[1]-1, p[2]).toLocaleDateString("fr-FR",{weekday:"long", day:"numeric", month:"long"});
+}
+function exFirstName(name){ return String(name||"").trim().split(/\s+/)[0] || ""; }
+function exSentence(s){ s = String(s||"").trim(); if(!s) return ""; s = s.charAt(0).toUpperCase()+s.slice(1); return /[.!?…:]$/.test(s) ? s : s+"."; }
+function exLowerFirst(s){ s = String(s||"").trim(); return s ? s.charAt(0).toLowerCase()+s.slice(1) : s; }
+function exNoDot(s){ return String(s||"").trim().replace(/[.!?…]+$/,""); }
+function exGetPath(o, path){ return path.split(".").reduce((a,k)=> (a==null?undefined:a[k]), o); }
+function exSetPath(o, path, v){
+  const ks = path.split("."); let cur = o;
+  ks.slice(0,-1).forEach(k=>{ if(!cur[k] || typeof cur[k]!=="object") cur[k] = {}; cur = cur[k]; });
+  cur[ks[ks.length-1]] = v;
+}
+function exCollabByName(name){
+  const n = String(name||"").trim().toLowerCase(); if(!n) return null;
+  return DATA.collaborators.find(c=> c.name.trim().toLowerCase()===n) || null;
+}
+function exDefaultWho(t){
+  const id = (t.assignedTo||[]).find(x=> x!==DATA.currentUserId);
+  const c = id ? collabById(id) : null;
+  return c ? c.name : "";
+}
+function exToast(msg){
+  document.querySelectorAll(".ex-toast").forEach(x=> x.remove());
+  const d = document.createElement("div"); d.className = "mr-toast ex-toast"; d.textContent = msg;
+  document.body.appendChild(d); setTimeout(()=> d.remove(), 2200);
+}
+async function exCopy(text){
+  try{ await navigator.clipboard.writeText(text); exToast("Texte copié"); }
+  catch(e){
+    const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); exToast("Texte copié"); }catch(e2){ alert("Copie impossible : sélectionne le texte à la main."); }
+    ta.remove();
+  }
+}
+function exSummary(ex){
+  const d = ex.data||{};
+  const who = d.who ? " · "+d.who : "";
+  if(ex.type==="desc") return (d.subject || "Sujet à préciser") + who;
+  if(ex.type==="ouinon") return (d.request || "Demande à préciser") + who + (d.decision ? " · "+(d.decision==="oui"?"oui":"non")+(d.decisionEt?" et…":"") : "");
+  if(ex.type==="intention") return (d.intention ? "Fil rouge : "+d.intention : "Intention à poser") + who;
+  if(ex.type==="pression") return (d.situation || "Situation à décrire") + who;
+  if(ex.type==="ecoute") return (d.demande ? "Demande : "+d.demande : "Notes d'écoute") + who;
+  if(ex.type==="deleguer"){ const nx = (d.controles||[]).filter(k=> k.date && k.etat!=="ok").sort((a,b)=> a.date.localeCompare(b.date))[0]; return (d.resultat || "Résultat à préciser") + who + (nx ? " · 🔎 "+exFrDate(nx.date) : ""); }
+  return "";
+}
+function exTaskIntention(t){
+  const it = (t.exchanges||[]).find(e=> e.type==="intention" && e.data && String(e.data.intention||"").trim());
+  if(it) return it.data.intention.trim();
+  const pr = (t.exchanges||[]).find(e=> e.type==="pression" && e.data && String(e.data.intention||"").trim());
+  return pr ? pr.data.intention.trim() : "";
+}
+
+/* ---------- Liste dans la fiche tâche ---------- */
+function renderExchangeList(t){
+  const wrap = document.getElementById("exList"); if(!wrap) return;
+  wrap.innerHTML = "";
+  const list = (t && t.exchanges) || [];
+  const fil = t ? exTaskIntention(t) : "";
+  if(fil){
+    const b = document.createElement("div");
+    b.className = "ex-banner";
+    b.innerHTML = `🎯 <b>Fil rouge</b> : ${escapeHtml(fil)}`;
+    wrap.appendChild(b);
+  }
+  list.forEach(ex=>{
+    const def = EX_TYPES[ex.type]; if(!def) return;
+    const row = document.createElement("div");
+    row.className = "ex-item";
+    row.innerHTML = `<span class="ex-item-ico">${def.icon}</span>
+      <span style="flex:1;min-width:0;"><span style="display:block;font-size:13px;font-weight:600;">${escapeHtml(def.label)}</span>
+      <span style="display:block;font-size:12px;color:var(--text-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(exSummary(ex))}</span></span>
+      <span class="ex-status ${ex.done?'done':''}">${ex.done?'Échange fait':'En préparation'}</span>`;
+    row.addEventListener("click", ()=> openExchangeEditor(t.id, ex.id));
+    wrap.appendChild(row);
+  });
+}
+document.getElementById("btnAddExchange").addEventListener("click", ()=>{
+  const t = curTask(); if(!t) return;
+  showExchangePicker(t);
+});
+function showExchangePicker(t){
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.style.background = "rgba(10,11,14,.5)";
+  overlay.innerHTML = `<div class="modal" style="width:440px;">
+    <h2>Utiliser une méthode</h2>
+    <div style="display:flex;flex-direction:column;gap:6px;">
+      ${EX_ORDER.map(k=>`<button class="btn ex-pick" data-type="${k}"><span style="font-size:18px;">${EX_TYPES[k].icon}</span><span style="text-align:left;"><b style="display:block;">${EX_TYPES[k].label}</b><span style="font-size:12px;color:var(--text-sub);">${EX_TYPES[k].sub}</span></span></button>`).join("")}
+    </div>
+    <div style="border-top:1px solid var(--border-soft);margin:14px 0 10px;"></div>
+    <button class="btn small" id="exInstallMemos" style="width:100%;justify-content:center;">📚 Ajouter les fiches mémo à la Base de connaissances</button>
+    <div class="modal-actions" style="margin-top:12px;"><button class="btn ghost" id="exPickClose">Fermer</button></div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelectorAll("[data-type]").forEach(b=> b.addEventListener("click", ()=>{
+    overlay.remove();
+    const ex = createExchange(t, b.dataset.type);
+    openExchangeEditor(t.id, ex.id);
+  }));
+  overlay.querySelector("#exInstallMemos").addEventListener("click", ()=>{ overlay.remove(); installMemoCards(); });
+  overlay.querySelector("#exPickClose").addEventListener("click", ()=> overlay.remove());
+  overlay.addEventListener("click", e=>{ if(e.target===overlay) overlay.remove(); });
+}
+function createExchange(t, type){
+  snapshot();
+  if(!Array.isArray(t.exchanges)) t.exchanges = [];
+  const who = exDefaultWho(t);
+  const data = {who, subject:"", after:{engagements:[]}};
+  if(type==="ouinon"){ data.request = t.title||""; data.crit = {}; }
+  if(type==="intention"){ data.questions = []; data.q = {}; }
+  if(type==="desc"){ data.checks = {}; data.sLevel = ""; }
+  if(type==="pression"){ data.phrases = ["","",""]; }
+  if(type==="deleguer"){ data.controles = []; data.objectiveId = t.objectiveId || ""; }
+  const ex = {id:uid("ex"), type, createdAt:Date.now(), updatedAt:Date.now(), done:false, data};
+  t.exchanges.push(ex);
+  t.updatedAt = Date.now(); saveData(); renderExchangeList(t); renderMain();
+  return ex;
+}
+function installMemoCards(){
+  const ws = currentWsId; if(!ws){ alert("Choisis d'abord un espace de travail."); return; }
+  snapshot();
+  let added = 0, updated = 0;
+  Object.keys(EX_MEMOS).forEach(key=>{
+    const m = EX_MEMOS[key];
+    const ex = DATA.tasks.find(x=> x.workspaceId===ws && x.memoKey===key && !x.done);
+    if(ex){ ex.title = "📚 "+m.title; ex.description = m.text; delete ex.descriptionHtml; delete ex.descriptionHtmlSrc; ex.knowledge = true; ex.updatedAt = Date.now(); updated++; return; }
+    DATA.tasks.push({
+      id: uid("task"), workspaceId: ws, title: "📚 "+m.title, description: m.text, memoKey: key,
+      assignedTo: [DATA.currentUserId], today:false, urgent:false, quick:false, knowledge:true, followUp:false,
+      reminderDate:null, dueDate:null, recurrence:null, done:false, doneAt:null,
+      attachments:[], subtasks:[], process:null, createdAt:Date.now(), updatedAt:Date.now()
+    });
+    added++;
+  });
+  saveData(); renderMain();
+  exToast(added ? added+" fiches mémo ajoutées à la Base de connaissances" : "Fiches mémo mises à jour");
+}
+
+/* ---------- Éditeur ---------- */
+let EX_OPEN = null; // {taskId, exId}
+function exCur(){
+  if(!EX_OPEN) return {};
+  const t = DATA.tasks.find(x=> x.id===EX_OPEN.taskId);
+  const ex = t && (t.exchanges||[]).find(e=> e.id===EX_OPEN.exId);
+  return {t, ex};
+}
+function exTouch(){
+  const {t, ex} = exCur(); if(!t || !ex) return;
+  ex.updatedAt = Date.now(); t.updatedAt = Date.now(); saveData();
+}
+function openExchangeEditor(taskId, exId){
+  closeExchangeEditor(true);
+  EX_OPEN = {taskId, exId};
+  const ov = document.createElement("div");
+  ov.className = "ex-ov"; ov.id = "exOverlay";
+  ov.innerHTML = `<div class="ex-sheet" id="exSheet"></div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener("click", e=>{ if(e.target===ov) closeExchangeEditor(); });
+  history.pushState({sensitacheModal:"exchange"}, "", location.href);
+  renderExchangeEditor();
+}
+function closeExchangeEditor(silent){
+  const ov = document.getElementById("exOverlay");
+  if(!ov) return;
+  ov.remove();
+  const {t} = exCur();
+  EX_OPEN = null;
+  if(t && openTaskId===t.id) renderExchangeList(t);
+  renderMain();
+  if(!silent && history.state && history.state.sensitacheModal==="exchange"){ suppressNextPopstate = true; history.back(); }
+}
+function exField(key, label, opts){
+  opts = opts || {};
+  const {ex} = exCur(); const v = exGetPath(ex.data, key);
+  const ph = opts.ph ? ` placeholder="${exAttr(opts.ph)}"` : "";
+  const warn = opts.check ? `<div class="ex-warn" data-warn="${key}" data-check="${opts.check}"></div>` : "";
+  const hint = opts.hint ? `<div class="ex-hint">${opts.hint}</div>` : "";
+  let input;
+  if(opts.type==="date") input = `<input type="date" data-k="${key}" value="${exAttr(v||"")}">`;
+  else if(opts.type==="line") input = `<input type="text" data-k="${key}" value="${exAttr(v||"")}"${ph}${opts.list?` list="${opts.list}"`:""}>`;
+  else input = `<textarea data-k="${key}" rows="${opts.rows||2}"${ph}>${escapeHtml(v||"")}</textarea>`;
+  return `<div class="ex-f">${label?`<label>${label}</label>`:""}${input}${hint}${warn}</div>`;
+}
+function exSeg(key, options, opts){
+  opts = opts || {};
+  const {ex} = exCur(); const v = exGetPath(ex.data, key);
+  return `<div class="ex-seg">${options.map(o=>`<button type="button" class="btn small chip ${v===o.v?'on':''}" data-seg="${key}" data-v="${exAttr(o.v)}">${o.t}</button>`).join("")}</div>`;
+}
+function exMemoBlock(type){
+  return (EX_MEMOS_FOR[type]||[]).map(k=>{
+    const m = EX_MEMOS[k];
+    return `<details class="ex-memo"><summary>📚 Mémo · ${escapeHtml(m.title)}</summary><div>${escapeHtml(m.text).replace(/\n/g,"<br>")}</div></details>`;
+  }).join("");
+}
+function exOutputBlock(title, outKey, btnLabel){
+  const {ex} = exCur(); const v = exGetPath(ex.data, outKey) || "";
+  return `<div class="ex-sec ex-out">
+    <h3>${title}</h3>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+      <button type="button" class="btn small primary" data-gen="${outKey}">${btnLabel}</button>
+      <button type="button" class="btn small" data-copy="${outKey}">Copier</button>
+      <button type="button" class="btn small" data-ai="${outKey}">✨ Améliorer avec l'IA</button>
+    </div>
+    <textarea data-k="${outKey}" rows="12" class="ex-outtext" placeholder="Clique sur « ${exAttr(btnLabel)} » : le texte apparaît ici, tu peux le retoucher avant de le copier.">${escapeHtml(v)}</textarea>
+    <div class="ex-hint">Le texte reste modifiable. « Générer » le recrée à partir des champs (tes retouches sont alors remplacées).</div>
+  </div>`;
+}
+function exAfterBlock(kind){
+  // kind: "desc" | "generic" | "pression" | "ecoute"
+  const {ex} = exCur(); const a = ex.data.after || (ex.data.after = {engagements:[]});
+  const engs = a.engagements || (a.engagements = []);
+  const originSeg = kind==="desc" ? `<div class="ex-f"><label>Qui a proposé la solution ?</label>${exSeg("after.origine",[{v:"autre",t:"L'autre"},{v:"ensemble",t:"Ensemble"},{v:"moi",t:"Moi (suggérée)"},{v:"impose",t:"Moi (imposée)"}])}</div>` : "";
+  return `<div class="ex-sec">
+    <h3>✅ Après l'échange</h3>
+    ${exField("after.date","Date de l'échange",{type:"date"})}
+    ${kind!=="ecoute" ? exField("after.autreDit", kind==="pression" ? "Ce que l'autre a dit ou demandé" : "Ce que j'ai retenu de son point de vue",{rows:2}) : ""}
+    ${exField("after.solution", kind==="pression" ? "Ce qui a été décidé" : "La solution retenue",{rows:2})}
+    ${originSeg}
+    <div class="ex-f"><label>Engagements : qui fait quoi, pour quand</label>
+      <div id="exEngList">${engs.map((e,i)=>`<div class="ex-eng">
+        <input type="text" data-k="after.engagements.${i}.text" value="${exAttr(e.text||"")}" placeholder="Action">
+        <input type="text" data-k="after.engagements.${i}.who" value="${exAttr(e.who||"")}" placeholder="Qui" list="exCollabList">
+        <input type="date" data-k="after.engagements.${i}.due" value="${exAttr(e.due||"")}">
+        <button type="button" class="btn small ghost" data-engdel="${i}" title="Retirer">✕</button>
+      </div>`).join("")}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button type="button" class="btn small" id="exEngAdd">+ Ajouter un engagement</button>
+        ${engs.length ? `<button type="button" class="btn small" id="exEngToSubs">↳ Créer les sous-tâches</button>` : ""}
+      </div>
+    </div>
+    ${exField("after.nextPoint","Prochain point (facultatif)",{type:"date"})}
+    ${kind==="desc" ? `<label class="ex-check"><input type="checkbox" data-k="after.ressenti" ${a.ressenti?"checked":""}> Rappeler mon ressenti (E) dans le texte</label>` : ""}
+    <label class="ex-check"><input type="checkbox" data-k="vous" ${ex.data.vous?"checked":""}> Vouvoyer</label>
+  </div>
+  ${exOutputBlock(kind==="pression" ? "📝 Écrit de confirmation" : "📝 Compte rendu à envoyer", "after.out", kind==="pression" ? "Générer l'écrit de confirmation" : "Générer le compte rendu")}`;
+}
+function exWhoField(label){
+  return exField("who", label || "Avec qui ?", {type:"line", list:"exCollabList", ph:"Nom du collaborateur"});
+}
+function exCollabDatalist(){
+  return `<datalist id="exCollabList">${DATA.collaborators.filter(c=> c.id!==DATA.currentUserId).map(c=>`<option value="${exAttr(c.name)}"></option>`).join("")}</datalist>`;
+}
+
+function renderExchangeEditor(){
+  const sheet = document.getElementById("exSheet"); if(!sheet) return;
+  const {t, ex} = exCur(); if(!t || !ex){ closeExchangeEditor(); return; }
+  const def = EX_TYPES[ex.type];
+  const ov = document.getElementById("exOverlay");
+  const keepScroll = ov ? ov.scrollTop : 0;
+  const fil = ex.type!=="intention" ? exTaskIntention(t) : "";
+  let body = "";
+  if(ex.type==="desc") body = exBodyDesc(ex);
+  else if(ex.type==="ouinon") body = exBodyOuiNon(ex);
+  else if(ex.type==="intention") body = exBodyIntention(ex);
+  else if(ex.type==="pression") body = exBodyPression(ex);
+  else if(ex.type==="ecoute") body = exBodyEcoute(ex);
+  else if(ex.type==="deleguer") body = exBodyDeleg(ex);
+  sheet.innerHTML = `
+    <div class="ex-head">
+      <span style="font-size:22px;">${def.icon}</span>
+      <div style="flex:1;min-width:0;"><div style="font-size:17px;font-weight:700;">${escapeHtml(def.label)}</div>
+      <div style="font-size:12px;color:var(--text-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(t.title||"(tâche sans titre)")}</div></div>
+      <button class="btn small ${ex.done?'primary':''}" id="exDoneBtn" title="Marquer l'échange comme fait">${ex.done?'✓ Échange fait':'Échange fait ?'}</button>
+      <button class="icon-btn" id="exCloseBtn" title="Fermer">✕</button>
+    </div>
+    ${fil ? `<div class="ex-banner">🎯 <b>Fil rouge</b> : ${escapeHtml(fil)}</div>` : ""}
+    ${body}
+    <div class="ex-sec" style="background:transparent;">${exMemoBlock(ex.type)}</div>
+    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+      <button class="btn small danger" id="exDeleteBtn">Supprimer</button>
+      <button class="btn primary small" id="exCloseBtn2">Fermer</button>
+    </div>
+    ${exCollabDatalist()}`;
+  exWire(sheet);
+  if(ov) ov.scrollTop = keepScroll;
+}
+
+/* ----- DESC ----- */
+function exBodyDesc(ex){
+  const d = ex.data; const checks = d.checks || {};
+  return `
+  <div class="ex-sec">
+    <h3>Préparer</h3>
+    ${exWhoField()}
+    ${exField("subject","Le sujet (1 DESC = 1 sujet)",{type:"line", ph:"Ex. : retards aux réunions d'équipe"})}
+    <div class="ex-checks">${EX_DESC_CHECKS.map(c=>`<label class="ex-check"><input type="checkbox" data-k="checks.${c.k}" ${checks[c.k]?"checked":""}> ${c.t}</label>`).join("")}</div>
+    <div style="margin-top:8px;"><button type="button" class="btn small" id="exInviteBtn">✉️ Prévenir la personne (ordre du jour)</button></div>
+    <div id="exInviteBox" style="display:${d.invite?'block':'none'};margin-top:8px;">
+      <textarea data-k="invite" rows="5" class="ex-outtext">${escapeHtml(d.invite||"")}</textarea>
+      <button type="button" class="btn small" data-copy="invite" style="margin-top:6px;">Copier</button>
+    </div>
+  </div>
+  <div class="ex-sec"><h3><span class="ex-letter">D</span>Décrire les faits, le contexte</h3>
+    ${exField("d","",{rows:3, ph:"Ce qui s'est passé : quand, où, quoi. Observable et vérifiable.", check:"opinion"})}
+  </div>
+  <div class="ex-sec"><h3><span class="ex-letter">E</span>Exprimer mon ressenti : quel impact ?</h3>
+    ${exField("e","",{rows:2, ph:"Je me sens… / Cela m'a… / L'impact pour moi, pour l'équipe…", check:"accus", hint:"Je parle en « je » : « je me sens », « cela m'a »."})}
+  </div>
+  <div class="ex-sec"><h3><span class="ex-letter">S</span>Solutionner</h3>
+    <div class="ex-f"><label>Niveau</label>${exSeg("sLevel",[{v:"imposer",t:"Imposer une solution"},{v:"suggerer",t:"Suggérer une solution"},{v:"autre",t:"L'autre propose"}])}</div>
+    ${d.sLevel==="autre" ? exField("s","Ma question pour l'ouvrir",{rows:2, ph:"Qu'est-ce que tu proposes pour que… ?"}) : exField("s", d.sLevel==="imposer" ? "La solution que j'impose" : "La solution que je suggère",{rows:2})}
+    <div class="ex-hint">Laisser l'autre proposer sa solution, c'est souvent mieux.</div>
+  </div>
+  <div class="ex-sec"><h3><span class="ex-letter">C</span>Conséquences positives du changement</h3>
+    ${exField("c","",{rows:2, ph:"Ce que le changement va apporter : à l'autre, à moi, à l'équipe."})}
+  </div>
+  ${exAfterBlock("desc")}`;
+}
+function exGenInvite(ex){
+  const d = ex.data, vous = !!d.vous;
+  const first = exFirstName(d.who);
+  const L = [first ? "Bonjour "+first+"," : "Bonjour,", ""];
+  L.push((vous ? "J'aimerais que nous prenions un moment ensemble, en face à face, pour faire le point sur " : "J'aimerais qu'on prenne un moment ensemble, en face à face, pour faire le point sur ")+(d.subject ? exLowerFirst(exNoDot(d.subject)) : "[le sujet]")+".");
+  L.push(vous ? "Quel créneau vous conviendrait cette semaine ?" : "Quel créneau te conviendrait cette semaine ?");
+  L.push("", "Merci,");
+  return L.join("\n");
+}
+
+/* ----- Vrai oui / vrai non ----- */
+function exOuiNonSuggestion(d){
+  const c = d.crit || {};
+  const val = k=> c[k]||"";
+  const answered = EX_CRITERIA.filter(x=> val(x.k)).length;
+  if(!answered) return "Réponds aux questions : la piste de réponse apparaîtra ici.";
+  if(EX_CRITERIA.some(x=> val(x.k)==="?")) return "Il reste des « ? » : prends le temps de questionner et de reformuler la demande avant de répondre.";
+  if(val("attributions")==="non" || val("role")==="non") return "Piste : un vrai NON, argumenté par les faits (attributions, rôle). Tu peux en faire un « non, et… » en orientant vers la bonne personne.";
+  if(val("objectif")==="non") return "Piste : cette demande ne sert aucun objectif du Cap. Un vrai NON argumenté, ou « non, et… » en proposant autre chose.";
+  if(val("temps")==="non" && val("competences")!=="non") return "Piste : « oui, et… » en revoyant les priorités, ou un oui différé. Pas de promesse non tenable.";
+  if(val("competences")==="non") return "Piste : un oui partiel, ou « oui, et… » avec un appui ou une formation.";
+  const envieNon = ["interet","opportunite","appetence"].filter(k=> val(k)==="non").length;
+  if(envieNon>=2) return "Piste : tout est réuni sauf l'envie. Un oui reste possible, mais demande-toi ce qui pourrait le rendre intéressant pour toi (« oui, et… »).";
+  if(answered===EX_CRITERIA.length) return "Piste : un VRAI OUI. Pense quand même au délai : pas de réponse à chaud.";
+  return "Continue la grille pour affiner la piste.";
+}
+function exBodyOuiNon(ex){
+  const d = ex.data; const c = d.crit || {};
+  const tenWarn = d.decision==="oui" && !d.tenable ? `<div class="ex-warn">⚠️ Pas de promesse non tenable : vérifie que tu peux tenir cet engagement.</div>` : "";
+  return `
+  <div class="ex-sec">
+    <h3>La demande</h3>
+    ${exWhoField("Qui me le demande ?")}
+    ${exField("request","Ce qu'on me demande",{rows:2})}
+    <div class="ex-delay">⏳ Jamais de réponse à chaud : je prends le temps de questionner et de reformuler avant de décider.</div>
+    ${exField("questions","Mes questions pour clarifier (temps : questions, reformulation)",{rows:2, ph:"Pour quand ? Qu'est-ce qui est attendu exactement ? Qui d'autre est concerné ?"})}
+  </div>
+  <div class="ex-sec">
+    <h3>Vrai oui / vrai non ?</h3>
+    <div class="ex-crit">${EX_CRITERIA.map(x=>`<div class="ex-crit-row"><span>${x.q}</span>
+      <span class="ex-seg">${[{v:"oui",t:"Oui"},{v:"non",t:"Non"},{v:"?",t:"?"}].map(o=>`<button type="button" class="btn small chip ${c[x.k]===o.v?'on':''}" data-seg="crit.${x.k}" data-v="${o.v}">${o.t}</button>`).join("")}</span></div>`).join("")}</div>
+    <div class="ex-sugg">${escapeHtml(exOuiNonSuggestion(d))}</div>
+    ${(c.attributions==="non" || c.role==="non" || c.temps==="non") ? `<div style="margin-top:8px;"><button type="button" class="btn small" id="exOuiToDeleg">🤲 Déléguer à quelqu'un de l'équipe</button></div>` : ""}
+    ${exField("priorites","Priorités à revoir (si je dis oui)",{rows:2})}
+  </div>
+  <div class="ex-sec">
+    <h3>Ma réponse</h3>
+    <div class="ex-f"><label>Je réponds</label>${exSeg("decision",[{v:"oui",t:"Oui"},{v:"non",t:"Non"}])}</div>
+    <label class="ex-check"><input type="checkbox" data-k="decisionEt" ${d.decisionEt?"checked":""}> … et (« oui, et… » / « non, et… »)</label>
+    ${d.decisionEt ? exField("et", d.decision==="non" ? "Le « et… » : ce que je propose à la place" : "Le « et… » : ma condition ou ce que j'ajoute",{rows:2}) : ""}
+    <div class="ex-f"><label>Quand</label>${exSeg("quand",[{v:"immediat",t:"Immédiat"},{v:"differe",t:"Différé"}])}</div>
+    ${d.quand==="differe" ? exField("dateDiff","À partir du",{type:"date"}) : ""}
+    ${d.decision!=="non" ? `<div class="ex-f"><label>Ampleur</label>${exSeg("portee",[{v:"total",t:"Total"},{v:"partiel",t:"Partiel"}])}</div>` : ""}
+    ${d.portee==="partiel" && d.decision!=="non" ? exField("partie","Ce que je prends en charge",{rows:2}) : ""}
+    ${exField("faits","Mes arguments : les faits",{rows:2, check:"opinion"})}
+    ${d.decision==="oui" ? `<label class="ex-check"><input type="checkbox" data-k="tenable" ${d.tenable?"checked":""}> Je peux tenir cet engagement</label>${tenWarn}` : ""}
+    ${d.decision==="oui" ? `<div style="margin-top:8px;"><button type="button" class="btn small" id="exOuiToSub">↳ Ajouter en sous-tâche</button></div>` : ""}
+    <label class="ex-check"><input type="checkbox" data-k="vous" ${d.vous?"checked":""}> Vouvoyer</label>
+  </div>
+  ${exOutputBlock("✉️ Réponse à envoyer","out","Générer ma réponse")}`;
+}
+function exGenOuiNon(ex){
+  const d = ex.data, vous = !!d.vous;
+  const V = (tu, vo)=> vous ? vo : tu;
+  const first = exFirstName(d.who);
+  const L = [first ? "Bonjour "+first+"," : "Bonjour,", ""];
+  const req = d.request ? " concernant "+exLowerFirst(exNoDot(d.request)) : "";
+  L.push(V("Merci pour ta demande","Merci pour votre demande")+req+". J'ai pris le temps de la regarder.");
+  L.push("");
+  const faits = exNoDot(d.faits);
+  const et = exNoDot(d.et);
+  const dd = d.dateDiff ? exFrDateLong(d.dateDiff) : "";
+  if(d.decision==="non"){
+    if(d.quand==="differe") L.push("Je ne peux pas m'en charger pour le moment"+(faits ? " : "+exLowerFirst(faits) : "")+"."+(dd ? " En revanche, je pourrai m'en occuper à partir du "+dd+"." : ""));
+    else L.push("Je ne vais pas pouvoir m'en charger"+(faits ? " : "+exLowerFirst(faits) : "")+".");
+    if(d.decisionEt && et) L.push("En revanche, "+exLowerFirst(et)+".");
+  } else if(d.decision==="oui"){
+    let s;
+    if(d.portee==="partiel") s = "Je peux prendre en charge une partie"+(d.partie ? " : "+exLowerFirst(exNoDot(d.partie)) : "")+".";
+    else s = "C'est d'accord, je m'en charge.";
+    if(d.quand==="differe" && dd) s += " Je pourrai m'y mettre à partir du "+dd+".";
+    L.push(s);
+    if(d.decisionEt && et) L.push("Et "+exLowerFirst(et)+".");
+    if(faits) L.push(exSentence(faits));
+    if(d.priorites) L.push("Pour que ce soit tenable, "+exLowerFirst(exNoDot(d.priorites))+".");
+  } else {
+    L.push("[Choisis « Oui » ou « Non » dans « Ma réponse »]");
+  }
+  L.push("", V("Je reste disponible si tu veux en parler.","Je reste disponible si vous souhaitez en parler."), "", "Bonne journée,");
+  return L.join("\n");
+}
+
+/* ----- Préparer avec intention ----- */
+function exBodyIntention(ex){
+  const d = ex.data; const sel = d.questions || [];
+  return `
+  <div class="ex-sec">
+    <h3>Stratégie d'objectif</h3>
+    ${exWhoField("Avec qui ? (acteurs)")}
+    ${exField("etatPresent","État présent : où on en est",{rows:2})}
+    ${exField("etatDesire","État désiré : où je veux arriver",{rows:2})}
+    ${exField("perimetre","Mon périmètre : ce qui dépend de moi",{rows:2})}
+  </div>
+  <div class="ex-sec ex-intent">
+    <h3>🎯 Mon intention = mon fil rouge</h3>
+    ${exField("intention","",{type:"line", ph:"En une phrase : ce que je veux obtenir"})}
+    <div class="ex-hint">Elle s'affiche en haut de la tâche et de ses autres méthodes, et dans le mode réunion de l'onglet Collaboration.</div>
+  </div>
+  <div class="ex-sec">
+    <h3>Préparation : 1 ou 2 questions maximum</h3>
+    <div class="ex-seg" style="margin-bottom:6px;">${EX_PREP_QUESTIONS.map(q=>`<button type="button" class="btn small chip ${sel.includes(q.k)?'on':''}" data-prepq="${q.k}">${q.q}</button>`).join("")}</div>
+    ${sel.map(k=>{ const q = EX_PREP_QUESTIONS.find(x=>x.k===k); return q ? exField("q."+k, q.q,{rows:2}) : ""; }).join("")}
+  </div>
+  <div class="ex-sec">
+    <h3>Bilan : je suis reparti avec…</h3>
+    <div class="ex-f">${exSeg("atteint",[{v:"oui",t:"Intention atteinte"},{v:"partiel",t:"En partie"},{v:"non",t:"Pas atteinte"}])}</div>
+    ${exField("bilan","Ce que je retiens pour la prochaine fois",{rows:2})}
+  </div>
+  ${exAfterBlock("generic")}`;
+}
+
+/* ----- Garder le cap ----- */
+function exBodyPression(ex){
+  const d = ex.data; const ph = d.phrases || ["","",""];
+  return `
+  <div class="ex-sec">
+    <h3>La situation</h3>
+    ${exWhoField("Face à qui ?")}
+    ${exField("situation","Ce qui se passe, ce qu'on me demande",{rows:2})}
+    ${exField("intention","🎯 Mon intention = mon fil rouge",{type:"line"})}
+  </div>
+  <div class="ex-sec">
+    <h3>Sur quelle base ?</h3>
+    ${exField("base","Les faits vérifiés, ma préparation",{rows:2, check:"opinion"})}
+    ${exField("regle","Le rappel à la règle (faits)",{rows:2})}
+  </div>
+  <div class="ex-sec">
+    <h3>Mes phrases courtes</h3>
+    <div class="ex-hint" style="margin:0 0 6px;">Discours bref, ferme. Après chaque phrase : silence.</div>
+    ${ph.map((p,i)=> `<div class="ex-f"><input type="text" data-k="phrases.${i}" value="${exAttr(p||"")}" placeholder="Phrase ${i+1}"><div class="ex-warn" data-warn="phrases.${i}" data-check="short"></div></div>`).join("")}
+    ${exField("limite","Ma limite : stop, non",{type:"line", ph:"Ex. : « Non. Ce point n'est pas négociable. »"})}
+  </div>
+  ${exAfterBlock("pression")}`;
+}
+
+/* ----- Écoute active ----- */
+function exBodyEcoute(ex){
+  return `
+  <div class="ex-sec">
+    <h3>Avant d'écouter</h3>
+    ${exWhoField()}
+    <div class="ex-hint">Je me mets en retrait : présence physique, émotionnelle et mentale. Silence = 1 respiration.</div>
+  </div>
+  <div class="ex-sec">
+    <h3>Questionner pour comprendre</h3>
+    ${exField("demande","« Quelle est ta demande ? »",{rows:2})}
+    ${exField("besoin","« De quoi tu as besoin ? »",{rows:2})}
+    ${exField("aide","« Comment je peux t'aider ? »",{rows:2})}
+  </div>
+  <div class="ex-sec">
+    <h3>Reformuler</h3>
+    ${exField("reformFaits","Les faits",{rows:2})}
+    ${exField("reformEmotions","Les émotions",{rows:2})}
+    ${exField("nonVerbal","Ce que j'ai perçu : attitude, voix, mots",{rows:2})}
+  </div>
+  ${exAfterBlock("ecoute")}`;
+}
+
+/* ----- Compte rendu / écrit de confirmation ----- */
+function exGenAfter(ex){
+  const d = ex.data, a = d.after || {}, vous = !!d.vous;
+  const V = (tu, vo)=> vous ? vo : tu;
+  const first = exFirstName(d.who);
+  const L = [first ? "Bonjour "+first+"," : "Bonjour,", ""];
+  const when = a.date ? " du "+exFrDateLong(a.date) : "";
+  const sujet = d.subject || (ex.type==="ouinon" ? d.request : "") || "";
+  if(ex.type==="pression"){
+    L.push("Pour faire suite à notre échange"+when+", je "+V("te","vous")+" confirme par écrit les points suivants.");
+    if(d.regle) L.push("", "Le cadre : "+exLowerFirst(exSentence(d.regle)));
+    if(d.base) L.push("Les faits : "+exLowerFirst(exSentence(d.base)));
+    if(a.autreDit) L.push("", V("Tu m'as demandé : ","Vous m'avez demandé : ")+exLowerFirst(exSentence(a.autreDit)));
+    if(a.solution) L.push("", "Ce qui a été décidé : "+exLowerFirst(exSentence(a.solution)));
+  } else {
+    L.push(V("Merci pour notre échange","Merci pour notre échange")+when+(sujet ? " au sujet de "+exLowerFirst(exNoDot(sujet)) : "")+". Comme convenu, je "+V("te","vous")+" fais un point écrit pour garder une trace de ce que nous nous sommes dit.");
+    if(ex.type==="desc" && d.d) L.push("", "Pour rappel, le point de départ : "+exLowerFirst(exSentence(d.d)));
+    if(ex.type==="desc" && a.ressenti && d.e) L.push(V("Je t'ai aussi partagé ce que cela me faisait : ","Je vous ai aussi partagé ce que cela me faisait : ")+exLowerFirst(exSentence(d.e)));
+    if(ex.type==="ecoute"){
+      if(d.demande) L.push("", V("Ta demande : ","Votre demande : ")+exLowerFirst(exSentence(d.demande)));
+      if(d.besoin) L.push(V("Ce dont tu as besoin : ","Ce dont vous avez besoin : ")+exLowerFirst(exSentence(d.besoin)));
+      if(d.aide) L.push(V("Ce que je peux faire pour t'aider : ","Ce que je peux faire pour vous aider : ")+exLowerFirst(exSentence(d.aide)));
+    }
+    if(a.autreDit) L.push("", V("Ce que j'ai retenu de ton point de vue : ","Ce que j'ai retenu de votre point de vue : ")+exLowerFirst(exSentence(a.autreDit)));
+    if(a.solution){
+      const sol = exNoDot(a.solution);
+      const o = a.origine;
+      let s;
+      if(ex.type!=="desc") s = "Nous nous sommes mis d'accord sur la solution suivante : "+exLowerFirst(sol)+".";
+      else if(o==="autre") s = V("Tu as proposé la solution suivante, et nous l'avons retenue : ","Vous avez proposé la solution suivante, et nous l'avons retenue : ")+exLowerFirst(sol)+".";
+      else if(o==="moi") s = V("Je t'ai suggéré la solution suivante, et nous l'avons validée ensemble : ","Je vous ai suggéré la solution suivante, et nous l'avons validée ensemble : ")+exLowerFirst(sol)+".";
+      else if(o==="impose") s = "La solution retenue est la suivante : "+exLowerFirst(sol)+".";
+      else s = "Nous nous sommes mis d'accord sur la solution suivante : "+exLowerFirst(sol)+".";
+      L.push("", s);
+    }
+  }
+  const engs = (a.engagements||[]).filter(e=> String(e.text||"").trim());
+  if(engs.length){
+    L.push("", "Concrètement :");
+    engs.forEach(e=>{
+      const bits = [exNoDot(e.text)];
+      const meta = [];
+      if(e.who) meta.push(e.who);
+      if(e.due) meta.push("d'ici le "+exFrDate(e.due));
+      L.push("- "+bits[0]+(meta.length ? " ("+meta.join(", ")+")" : ""));
+    });
+  }
+  if(ex.type==="desc" && d.c) L.push("", "Ce que ce changement va apporter : "+exLowerFirst(exSentence(d.c)));
+  if(a.nextPoint) L.push("", V("Je te propose qu'on refasse un point le ","Je vous propose que nous refassions un point le ")+exFrDateLong(a.nextPoint)+V(" pour voir comment ça se passe."," pour voir comment les choses avancent."));
+  if(ex.type==="pression") L.push("", "Merci de "+V("ta","votre")+" compréhension.", "", "Bonne journée,");
+  else L.push("", V("Merci encore pour ton écoute et ta participation.","Merci encore pour votre écoute et votre participation."), "", "Bonne journée,");
+  return L.join("\n");
+}
+
+/* ---------- IA (facultatif, clé Anthropic des paramètres) ---------- */
+async function exImproveAI(text, kind){
+  if(!anthropicApiKey) throw new Error("Aucune clé API renseignée. Va dans Paramètres → Assistant IA.");
+  const system = "Tu aides un manager à écrire à un collaborateur, en français, dans une posture assertive. "+
+    "Améliore le message fourni : garde exactement les faits, décisions, noms, dates et engagements ; n'ajoute aucune information. "+
+    "Phrases courtes, ton calme, factuel et bienveillant, en « je ». Aucun jugement, aucune généralisation (toujours, jamais, souvent), aucune ironie. "+
+    "Garde le tutoiement ou le vouvoiement du texte. "+(kind==="pression" ? "C'est un écrit de confirmation : reste bref et ferme. " : "")+
+    "Réponds uniquement avec le message, sans explication ni guillemets.";
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method:"POST",
+    headers:{"Content-Type":"application/json","x-api-key":anthropicApiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+    body: JSON.stringify({model:"claude-haiku-4-5-20251001", max_tokens:1500, system, messages:[{role:"user", content:text}]})
+  });
+  if(!res.ok){ const e = await res.text().catch(()=> ""); throw new Error("Erreur API ("+res.status+") : "+e.slice(0,200)); }
+  const data = await res.json();
+  const out = (data.content||[]).filter(b=> b.type==="text").map(b=> b.text).join("").trim();
+  if(!out) throw new Error("Réponse vide de l'IA.");
+  return out;
+}
+
+/* ---------- Câblage de l'éditeur ---------- */
+function exUpdateWarn(el){
+  if(!el) return;
+  const key = el.dataset.warn, check = el.dataset.check;
+  const {ex} = exCur(); if(!ex) return;
+  const v = String(exGetPath(ex.data, key)||"");
+  let html = "";
+  if(check==="opinion"){
+    const hits = exOpinionHits(v);
+    if(hits.length) html = "⚠️ Opinion repérée : "+hits.map(h=> `« ${escapeHtml(h.w)} » (${h.kind})`).join(", ")+". Un fait est observable et vérifiable : "+escapeHtml(hits[0].tip)+".";
+  } else if(check==="accus"){
+    const hits = exAccusHits(v);
+    if(hits.length) html = "⚠️ "+hits.map(h=> `« ${escapeHtml(h)}… »`).join(", ")+" : ça peut sonner comme un « tu » accusateur. Reformule en « je ».";
+  } else if(check==="short"){
+    const n = v.trim() ? v.trim().split(/\s+/).length : 0;
+    if(n>14) html = "⚠️ "+n+" mots : raccourcis pour créer l'impact.";
+    const hits = exOpinionHits(v);
+    if(hits.length) html += (html?" ":"")+"⚠️ « "+escapeHtml(hits[0].w)+" » : reste sur les faits.";
+  }
+  el.innerHTML = html;
+}
+function exWire(sheet){
+  sheet.querySelectorAll("[data-warn]").forEach(exUpdateWarn);
+  sheet.querySelectorAll("[data-k]").forEach(inp=>{
+    const key = inp.dataset.k;
+    const handler = ()=>{
+      const {ex} = exCur(); if(!ex) return;
+      let v = inp.type==="checkbox" ? inp.checked : inp.value;
+      if(key.indexOf("after.engagements.")===0){
+        const [, , idx, field] = key.split(".");
+        const a = ex.data.after || (ex.data.after = {engagements:[]});
+        if(!a.engagements[idx]) a.engagements[idx] = {};
+        a.engagements[idx][field] = v;
+      } else if(key.indexOf("phrases.")===0){
+        if(!Array.isArray(ex.data.phrases)) ex.data.phrases = ["","",""];
+        ex.data.phrases[Number(key.split(".")[1])] = v;
+      } else exSetPath(ex.data, key, v);
+      exTouch();
+      sheet.querySelectorAll(`[data-warn="${key}"]`).forEach(exUpdateWarn);
+      if(inp.type==="checkbox" && (key==="decisionEt" || key==="tenable")) renderExchangeEditor();
+    };
+    inp.addEventListener(inp.type==="checkbox" || inp.type==="date" ? "change" : "input", handler);
+  });
+  sheet.querySelectorAll("[data-seg]").forEach(b=> b.addEventListener("click", ()=>{
+    const {ex} = exCur(); if(!ex) return;
+    const key = b.dataset.seg, v = b.dataset.v;
+    exSetPath(ex.data, key, exGetPath(ex.data, key)===v ? "" : v);
+    exTouch(); renderExchangeEditor();
+  }));
+  sheet.querySelectorAll("[data-prepq]").forEach(b=> b.addEventListener("click", ()=>{
+    const {ex} = exCur(); if(!ex) return;
+    const sel = ex.data.questions || (ex.data.questions = []);
+    const k = b.dataset.prepq, i = sel.indexOf(k);
+    if(i>-1) sel.splice(i,1);
+    else { if(sel.length>=2){ exToast("1 ou 2 questions maximum : retire-en une d'abord"); return; } sel.push(k); }
+    exTouch(); renderExchangeEditor();
+  }));
+  sheet.querySelectorAll("[data-gen]").forEach(b=> b.addEventListener("click", ()=>{
+    const {ex} = exCur(); if(!ex) return;
+    const key = b.dataset.gen;
+    const cur = String(exGetPath(ex.data, key)||"").trim();
+    if(cur && ex.data["_gen_"+key] !== cur && !confirm("Remplacer le texte actuel (et tes retouches) par une nouvelle version ?")) return;
+    const text = key!=="out" ? exGenAfter(ex) : (ex.type==="deleguer" ? exGenDeleg(ex) : exGenOuiNon(ex));
+    exSetPath(ex.data, key, text); ex.data["_gen_"+key] = text;
+    exTouch(); renderExchangeEditor();
+  }));
+  sheet.querySelectorAll("[data-copy]").forEach(b=> b.addEventListener("click", ()=>{
+    const {ex} = exCur(); if(!ex) return;
+    const v = String(exGetPath(ex.data, b.dataset.copy)||"").trim();
+    if(!v){ exToast("Rien à copier pour l'instant"); return; }
+    exCopy(v);
+  }));
+  sheet.querySelectorAll("[data-ai]").forEach(b=> b.addEventListener("click", async ()=>{
+    const {ex} = exCur(); if(!ex) return;
+    const key = b.dataset.ai;
+    const v = String(exGetPath(ex.data, key)||"").trim();
+    if(!v){ exToast("Génère d'abord le texte"); return; }
+    const label = b.textContent; b.textContent = "…"; b.disabled = true;
+    try{
+      const out = await exImproveAI(v, ex.type);
+      const again = exCur(); if(!again.ex) return;
+      exSetPath(again.ex.data, key, out); exTouch(); renderExchangeEditor();
+    }catch(e){
+      if(e.message && e.message.includes("Aucune clé API")){ if(confirm(e.message+"\nOuvrir les paramètres maintenant ?")) showAIModal(); }
+      else alert("Échec : "+e.message);
+    }finally{ if(b.isConnected){ b.textContent = label; b.disabled = false; } }
+  }));
+  const engAdd = sheet.querySelector("#exEngAdd");
+  if(engAdd) engAdd.addEventListener("click", ()=>{
+    const {ex} = exCur(); if(!ex) return;
+    const a = ex.data.after || (ex.data.after = {engagements:[]});
+    (a.engagements || (a.engagements = [])).push({text:"", who: ex.data.who||"", due:""});
+    exTouch(); renderExchangeEditor();
+    requestAnimationFrame(()=>{ const r = document.querySelectorAll("#exEngList .ex-eng"); const last = r[r.length-1]; if(last) last.querySelector("input").focus(); });
+  });
+  sheet.querySelectorAll("[data-engdel]").forEach(b=> b.addEventListener("click", ()=>{
+    const {ex} = exCur(); if(!ex) return;
+    ex.data.after.engagements.splice(Number(b.dataset.engdel),1);
+    exTouch(); renderExchangeEditor();
+  }));
+  const toSubs = sheet.querySelector("#exEngToSubs");
+  if(toSubs) toSubs.addEventListener("click", ()=>{
+    const {t, ex} = exCur(); if(!ex) return;
+    const engs = (ex.data.after.engagements||[]).filter(e=> String(e.text||"").trim() && !e.subId);
+    if(!engs.length){ exToast("Tous les engagements sont déjà en sous-tâches"); return; }
+    snapshot();
+    if(!t.subtasks) t.subtasks = [];
+    engs.forEach(e=>{
+      const c = exCollabByName(e.who);
+      const s = {id:uid("sub"), text:e.text.trim(), done:false};
+      if(e.due) s.dueDate = e.due;
+      if(c) s.assignedTo = c.id;
+      t.subtasks.push(s); e.subId = s.id;
+    });
+    exTouch(); renderSubtaskList(t); renderExchangeEditor();
+    exToast(engs.length+" sous-tâche(s) créée(s)");
+  });
+  const inviteBtn = sheet.querySelector("#exInviteBtn");
+  if(inviteBtn) inviteBtn.addEventListener("click", ()=>{
+    const {ex} = exCur(); if(!ex) return;
+    if(!ex.data.invite || confirm("Recréer le message ?")) { ex.data.invite = exGenInvite(ex); exTouch(); }
+    renderExchangeEditor();
+  });
+  const ouiSub = sheet.querySelector("#exOuiToSub");
+  if(ouiSub) ouiSub.addEventListener("click", ()=>{
+    const {t, ex} = exCur(); if(!ex) return;
+    if(ex.data.subId && (t.subtasks||[]).some(s=> s.id===ex.data.subId)){ exToast("Déjà ajoutée en sous-tâche"); return; }
+    snapshot();
+    if(!t.subtasks) t.subtasks = [];
+    const s = {id:uid("sub"), text: (ex.data.portee==="partiel" && ex.data.partie) ? ex.data.partie.trim() : (ex.data.request||"Répondre à la demande").trim(), done:false};
+    if(ex.data.dateDiff) s.dueDate = ex.data.dateDiff;
+    t.subtasks.push(s); ex.data.subId = s.id;
+    exTouch(); renderSubtaskList(t); exToast("Sous-tâche ajoutée");
+  });
+  exWireExtra(sheet);
+  sheet.querySelector("#exDoneBtn").addEventListener("click", ()=>{
+    const {ex} = exCur(); if(!ex) return;
+    ex.done = !ex.done;
+    if(ex.done && ex.data.after && !ex.data.after.date) ex.data.after.date = todayStr();
+    exTouch(); renderExchangeEditor();
+  });
+  sheet.querySelector("#exCloseBtn").addEventListener("click", ()=> closeExchangeEditor());
+  sheet.querySelector("#exCloseBtn2").addEventListener("click", ()=> closeExchangeEditor());
+  sheet.querySelector("#exDeleteBtn").addEventListener("click", ()=>{
+    const {t, ex} = exCur(); if(!ex) return;
+    if(!confirm("Supprimer cette méthode et son contenu ?")) return;
+    snapshot();
+    t.exchanges = (t.exchanges||[]).filter(e=> e.id!==ex.id);
+    t.updatedAt = Date.now(); saveData();
+    closeExchangeEditor();
+  });
+}
+
+/* =========================================================
+   CAP (objectifs communs à tous les espaces)
+   DATA.cap = {general, equipe, objectives:[{id,text,scope,collab,done}], updatedAt}
+========================================================= */
+function capGet(){
+  if(!DATA.cap || typeof DATA.cap!=="object") DATA.cap = {general:"", equipe:"", objectives:[], updatedAt:0};
+  if(!Array.isArray(DATA.cap.objectives)) DATA.cap.objectives = [];
+  return DATA.cap;
+}
+function capSave(){ capGet().updatedAt = Date.now(); saveData(); }
+function capObjective(id){ return id ? capGet().objectives.find(o=> o.id===id) || null : null; }
+function capScopeLabel(o){
+  if(!o) return "";
+  if(o.scope==="equipe") return "Équipe";
+  if(o.scope==="collab") return o.collab || "Collaborateur";
+  return "Moi";
+}
+function capObjectiveOptions(selected, emptyLabel){
+  const list = capGet().objectives.filter(o=> !o.done || o.id===selected);
+  const groups = {};
+  list.forEach(o=>{ const g = capScopeLabel(o); (groups[g] = groups[g]||[]).push(o); });
+  let h = `<option value="">${escapeHtml(emptyLabel||"— Aucun objectif —")}</option>`;
+  Object.keys(groups).forEach(g=>{
+    h += `<optgroup label="${exAttr(g)}">`+groups[g].map(o=>`<option value="${exAttr(o.id)}" ${o.id===selected?"selected":""}>${escapeHtml(o.text||"(objectif sans titre)")}</option>`).join("")+`</optgroup>`;
+  });
+  return h;
+}
+function capWorkTasks(){
+  // Tâches actives « de travail » de tous les espaces (hors fiches mémo / base de connaissances).
+  return DATA.tasks.filter(t=> !t.done && !t.isDraft && !t.knowledge && !t.memoKey);
+}
+function openTaskAnywhere(t){
+  if(t.workspaceId && t.workspaceId!==currentWsId){ currentWsId = t.workspaceId; renderSidebar(); renderMain(); }
+  openTaskDrawer(t.id);
+}
+
+/* ----- champ « Contribue à » dans la fiche tâche ----- */
+function renderTaskObjectiveField(t){
+  const sel = document.getElementById("taskObjectiveSelect"); if(!sel) return;
+  const has = capGet().objectives.length>0;
+  sel.innerHTML = capObjectiveOptions(t ? t.objectiveId||"" : "", has ? "— Aucun objectif —" : "— Définis tes objectifs dans l'onglet Cap —");
+  sel.disabled = !has;
+}
+document.getElementById("taskObjectiveSelect").addEventListener("change", e=>{
+  const t = curTask(); if(!t) return;
+  snapshot();
+  t.objectiveId = e.target.value || null; if(!t.objectiveId) delete t.objectiveId;
+  t.updatedAt = Date.now(); saveData(); renderMain();
+});
+
+/* ----- onglet Cap ----- */
+let capOpenObjectives = new Set();
+function renderCapTab(el){
+  const cap = capGet();
+  const tasks = capWorkTasks();
+  const wsName = id=>{ const w = DATA.workspaces.find(x=> x.id===id); return w ? (w.icon?w.icon+" ":"")+w.name : ""; };
+  const taskLine = t=> `<div class="cap-task" data-open="${exAttr(t.id)}"><span>${escapeHtml(t.title||"(sans titre)")}${t.meetingDef?" <span class=\"cap-tag\">🗓️ réunion</span>":""}</span><span class="cap-ws">${escapeHtml(wsName(t.workspaceId))}</span></div>`;
+  const collabOpts = DATA.collaborators.filter(c=> c.id!==DATA.currentUserId);
+  const objRow = o=>{
+    const linked = tasks.filter(t=> t.objectiveId===o.id);
+    const open = capOpenObjectives.has(o.id);
+    return `<div class="cap-obj ${o.done?'done':''}">
+      <div class="cap-obj-row">
+        <input type="text" class="cap-input" data-capobj="${exAttr(o.id)}" value="${exAttr(o.text||"")}" placeholder="L'objectif, en une phrase">
+        <select class="fieldselect cap-scope" data-capscope="${exAttr(o.id)}">
+          <option value="moi" ${o.scope==="moi"||!o.scope?"selected":""}>Moi</option>
+          <option value="equipe" ${o.scope==="equipe"?"selected":""}>Équipe</option>
+          ${collabOpts.map(c=>`<option value="c:${exAttr(c.name)}" ${o.scope==="collab"&&o.collab===c.name?"selected":""}>${escapeHtml(c.name)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="cap-obj-foot">
+        <button class="btn small ghost" data-captoggle="${exAttr(o.id)}">${open?"▾":"▸"} ${linked.length} tâche${linked.length>1?"s":""} et réunion${linked.length>1?"s":""}</button>
+        <span style="flex:1;"></span>
+        <button class="btn small ghost" data-capdone="${exAttr(o.id)}">${o.done?"↺ Réactiver":"✓ Atteint"}</button>
+        <button class="btn small ghost" data-capdel="${exAttr(o.id)}" title="Supprimer">✕</button>
+      </div>
+      ${open ? `<div class="cap-tasks">${linked.length ? linked.map(taskLine).join("") : `<div class="ex-hint">Aucune tâche rattachée. Choisis cet objectif dans « Contribue à » d'une tâche ou d'une réunion.</div>`}</div>` : ""}
+    </div>`;
+  };
+  const active = cap.objectives.filter(o=> !o.done), reached = cap.objectives.filter(o=> o.done);
+  const orphans = tasks.filter(t=> !t.objectiveId || !capObjective(t.objectiveId));
+  const orphOpen = capOpenObjectives.has("__orphans");
+  el.innerHTML = `
+    <div class="cap-wrap">
+      <div class="ex-hint" style="margin:0 0 12px;">Le Cap est commun à tous tes espaces de travail.</div>
+      <div class="ex-sec">
+        <h3>🧭 Mon objectif général</h3>
+        <textarea class="cap-area" data-capfield="general" rows="2" placeholder="Ce qui définit mon travail au quotidien">${escapeHtml(cap.general||"")}</textarea>
+      </div>
+      <div class="ex-sec">
+        <h3>👥 L'objectif de l'équipe</h3>
+        <textarea class="cap-area" data-capfield="equipe" rows="2" placeholder="Ce qui définit le travail de l'équipe au quotidien">${escapeHtml(cap.equipe||"")}</textarea>
+      </div>
+      <div class="ex-sec">
+        <h3>🎯 Les objectifs</h3>
+        ${active.length ? active.map(objRow).join("") : `<div class="ex-hint" style="margin-bottom:8px;">Ajoute les objectifs concrets qui découlent de ton objectif général : pour toi, pour l'équipe ou pour un collaborateur.</div>`}
+        <button class="btn small" id="capAddObj">+ Ajouter un objectif</button>
+        ${reached.length ? `<details class="ex-memo" style="margin-top:10px;"><summary>Objectifs atteints (${reached.length})</summary>${reached.map(objRow).join("")}</details>` : ""}
+      </div>
+      <div class="ex-sec">
+        <h3>❔ Tâches qui ne servent aucun objectif</h3>
+        <div class="ex-hint" style="margin:0 0 6px;">Des candidates à un « non », à une délégation, ou à un rattachement.</div>
+        <button class="btn small ghost" data-captoggle="__orphans">${orphOpen?"▾":"▸"} ${orphans.length} tâche${orphans.length>1?"s":""}</button>
+        ${orphOpen ? `<div class="cap-tasks">${orphans.slice(0,80).map(taskLine).join("")}${orphans.length>80?`<div class="ex-hint">… et ${orphans.length-80} autres.</div>`:""}</div>` : ""}
+      </div>
+    </div>`;
+  el.querySelectorAll("[data-capfield]").forEach(a=> a.addEventListener("input", ()=>{ capGet()[a.dataset.capfield] = a.value; capSave(); }));
+  el.querySelectorAll("[data-capobj]").forEach(inp=> inp.addEventListener("input", ()=>{
+    const o = capObjective(inp.dataset.capobj); if(!o) return; o.text = inp.value; capSave();
+  }));
+  el.querySelectorAll("[data-capscope]").forEach(sel=> sel.addEventListener("change", ()=>{
+    const o = capObjective(sel.dataset.capscope); if(!o) return;
+    if(sel.value.indexOf("c:")===0){ o.scope = "collab"; o.collab = sel.value.slice(2); } else { o.scope = sel.value; delete o.collab; }
+    capSave();
+  }));
+  el.querySelectorAll("[data-captoggle]").forEach(b=> b.addEventListener("click", ()=>{
+    const k = b.dataset.captoggle; capOpenObjectives.has(k) ? capOpenObjectives.delete(k) : capOpenObjectives.add(k); renderCapTab(el);
+  }));
+  el.querySelectorAll("[data-capdone]").forEach(b=> b.addEventListener("click", ()=>{
+    const o = capObjective(b.dataset.capdone); if(!o) return; snapshot(); o.done = !o.done; capSave(); renderCapTab(el);
+  }));
+  el.querySelectorAll("[data-capdel]").forEach(b=> b.addEventListener("click", ()=>{
+    const o = capObjective(b.dataset.capdel); if(!o) return;
+    if(!confirm("Supprimer cet objectif ? Les tâches rattachées seront détachées.")) return;
+    snapshot();
+    const cap = capGet(); cap.objectives = cap.objectives.filter(x=> x.id!==o.id);
+    DATA.tasks.forEach(t=>{ if(t.objectiveId===o.id){ delete t.objectiveId; t.updatedAt = Date.now(); } });
+    capSave(); renderCapTab(el);
+  }));
+  el.querySelectorAll("[data-open]").forEach(r=> r.addEventListener("click", ()=>{
+    const t = DATA.tasks.find(x=> x.id===r.dataset.open); if(!t) return;
+    if(t.meetingDef){ if(t.workspaceId!==currentWsId){ currentWsId = t.workspaceId; renderSidebar(); } openMeeting(t.id); }
+    else openTaskAnywhere(t);
+  }));
+  el.querySelector("#capAddObj").addEventListener("click", ()=>{
+    snapshot();
+    const o = {id:uid("obj"), text:"", scope:"moi", done:false};
+    capGet().objectives.push(o); capSave(); renderCapTab(el);
+    const inp = el.querySelector(`[data-capobj="${o.id}"]`); if(inp) inp.focus();
+  });
+}
+
+/* =========================================================
+   DÉLÉGATION (méthode du bloc Échanges)
+========================================================= */
+EX_TYPES.deleguer = {icon:"🤲", label:"Déléguer", sub:"Confier une tâche et garder le contrôle par des points d'étape"};
+EX_ORDER.splice(2, 0, "deleguer");
+EX_MEMOS.deleguer = {title:"Déléguer sans perdre le contrôle (repère)", text:
+"Déléguer n'empêche pas le contrôle : le contrôle se prévoit dès le départ.\n"+
+"1. Le résultat attendu, décrit en FAITS : à quoi je verrai que c'est réussi ?\n"+
+"2. Pourquoi : à quel objectif du Cap ça sert.\n"+
+"3. Le cadre : l'échéance, les moyens, ce qu'il peut décider seul, ce sur quoi il revient vers moi.\n"+
+"4. Faire reformuler : « Qu'est-ce que tu retiens de ce que je te confie ? »\n"+
+"5. Les points de contrôle, datés à l'avance. Entre deux points, je laisse faire.\n"+
+"6. À chaque point : dans les clous → on continue ; à recadrer → DESC.\n"+
+"7. À la fin : bilan et remerciement."};
+EX_MEMOS.reunion = {title:"Réunion : objectif, intention, reformulation", text:
+"Chaque réunion a un OBJECTIF (pourquoi elle existe) et, à chaque séance, une INTENTION = mon fil rouge.\n"+
+"Préparation : 1 ou 2 questions maximum (de quoi j'ai besoin ? avec quoi je veux repartir ?).\n"+
+"Pour chaque sujet : plutôt que « C'est ok pour vous ? », je demande à quelqu'un de REFORMULER ce qu'il a compris.\n"+
+"Un point écrit en synthèse après la réunion : décisions et engagements (qui, quoi, pour quand)."};
+EX_MEMOS_FOR.deleguer = ["deleguer","faits"];
+
+function exBodyDeleg(ex){
+  const d = ex.data; const ctrls = d.controles || (d.controles = []);
+  const {t} = exCur();
+  const who = String(d.who||"").trim();
+  const c = exCollabByName(who);
+  const assigned = c && (t.assignedTo||[]).includes(c.id);
+  return `
+  <div class="ex-sec">
+    <h3>Ce que je confie</h3>
+    ${exWhoField("À qui ?")}
+    ${who ? (c ? (assigned ? `<div class="ex-hint">✓ La tâche est affectée à ${escapeHtml(c.name)}.</div>` : `<button type="button" class="btn small" id="exDelegAssign" style="margin-top:6px;">Affecter la tâche à ${escapeHtml(c.name)}</button>`) : `<div class="ex-hint">« ${escapeHtml(who)} » n'est pas dans tes collaborateurs : ajoute-le via « Affecter un collaborateur » pour suivre la tâche dans Collaboration.</div>`) : ""}
+    ${exField("resultat","Le résultat attendu : à quoi je verrai que c'est réussi ?",{rows:3, ph:"Décris des faits observables : livrable, critère, chiffre…", check:"opinion"})}
+    <div class="ex-f"><label>Pourquoi : l'objectif du Cap</label><select class="fieldselect" data-k="objectiveId">${capObjectiveOptions(d.objectiveId||"")}</select></div>
+    ${exField("pourquoi","Pourquoi c'est important (en clair)",{rows:2})}
+    ${exField("echeance","Échéance",{type:"date"})}
+  </div>
+  <div class="ex-sec">
+    <h3>Le cadre</h3>
+    ${exField("moyens","Les moyens à sa disposition",{rows:2})}
+    ${exField("seul","Ce qu'il peut décider seul",{rows:2})}
+    ${exField("demander","Ce sur quoi il revient vers moi",{rows:2})}
+    <label class="ex-check"><input type="checkbox" data-k="reformule" ${d.reformule?"checked":""}> Il a reformulé ce qu'il a compris</label>
+    <div class="ex-hint">Plutôt que « c'est clair ? » : « Qu'est-ce que tu retiens de ce que je te confie ? »</div>
+  </div>
+  <div class="ex-sec">
+    <h3>🔎 Points de contrôle</h3>
+    <div class="ex-hint" style="margin:0 0 8px;">Datés dès le départ. Entre deux points, je laisse faire.</div>
+    ${ctrls.map((k,i)=>`<div class="ex-ctrl ${k.etat||''}">
+      <div class="ex-ctrl-row">
+        <input type="date" data-k="controles.${i}.date" value="${exAttr(k.date||"")}">
+        <span class="ex-seg">
+          <button type="button" class="btn small chip ${k.etat==="ok"?"on":""}" data-ctrl="${i}" data-v="ok">✓ Dans les clous</button>
+          <button type="button" class="btn small chip ${k.etat==="recadrer"?"on warn":""}" data-ctrl="${i}" data-v="recadrer">↺ À recadrer</button>
+        </span>
+        <button type="button" class="btn small ghost" data-ctrldel="${i}" title="Retirer">✕</button>
+      </div>
+      <input type="text" data-k="controles.${i}.note" value="${exAttr(k.note||"")}" placeholder="Ce que j'ai constaté (faits)">
+      ${k.etat==="recadrer" ? `<button type="button" class="btn small" data-ctrldesc="${i}" style="margin-top:6px;">🗣️ Préparer un DESC</button>` : ""}
+    </div>`).join("")}
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+      <button type="button" class="btn small" id="exCtrlAdd">+ Ajouter un point de contrôle</button>
+      ${ctrls.some(k=> k.date && !k.subId) ? `<button type="button" class="btn small" id="exCtrlToSubs">↳ Mettre les points dans mes sous-tâches</button>` : ""}
+    </div>
+  </div>
+  <div class="ex-sec">
+    <h3>Clôture</h3>
+    ${exField("bilan","Bilan : ce qui a marché, ce que je retiens",{rows:2})}
+    <div class="ex-hint">Pense à remercier. Marque l'échange comme fait quand la délégation est terminée.</div>
+    <label class="ex-check"><input type="checkbox" data-k="vous" ${d.vous?"checked":""}> Vouvoyer</label>
+  </div>
+  ${exOutputBlock("📝 Écrit de confirmation de délégation","out","Générer l'écrit de délégation")}`;
+}
+function exGenDeleg(ex){
+  const d = ex.data, vous = !!d.vous;
+  const V = (tu, vo)=> vous ? vo : tu;
+  const first = exFirstName(d.who);
+  const L = [first ? "Bonjour "+first+"," : "Bonjour,", ""];
+  L.push(V("Merci pour notre échange. Comme convenu, je te confie : ","Merci pour notre échange. Comme convenu, je vous confie : ")+(d.resultat ? exLowerFirst(exSentence(d.resultat)) : "[le résultat attendu]."));
+  const o = capObjective(d.objectiveId);
+  const why = [d.pourquoi ? exNoDot(d.pourquoi) : "", o && o.text ? "cela sert notre objectif « "+exLowerFirst(exNoDot(o.text))+" »" : ""].filter(Boolean).join(" ; ");
+  if(why) L.push("", "Pourquoi c'est important : "+exLowerFirst(why)+".");
+  if(d.echeance) L.push("", "Échéance : "+exFrDateLong(d.echeance)+".");
+  if(d.moyens) L.push(V("Tes moyens : ","Vos moyens : ")+exLowerFirst(exSentence(d.moyens)));
+  if(d.seul) L.push(V("Ce que tu peux décider seul : ","Ce que vous pouvez décider seul : ")+exLowerFirst(exSentence(d.seul)));
+  if(d.demander) L.push(V("Ce sur quoi tu reviens vers moi : ","Ce sur quoi vous revenez vers moi : ")+exLowerFirst(exSentence(d.demander)));
+  const dates = (d.controles||[]).filter(k=> k.date).map(k=> exFrDateLong(k.date));
+  if(dates.length) L.push("", "Nos points d'étape : "+dates.join(", ")+".");
+  L.push("", V("Je compte sur toi et je reste disponible si tu as besoin.","Je compte sur vous et je reste disponible si besoin."), "", "Bonne journée,");
+  return L.join("\n");
+}
+function exWireExtra(sheet){
+  const {t, ex} = exCur(); if(!ex) return;
+  const delegBtn = sheet.querySelector("#exOuiToDeleg");
+  if(delegBtn) delegBtn.addEventListener("click", ()=>{
+    const cur = exCur(); if(!cur.ex) return;
+    const nx = createExchange(cur.t, "deleguer");
+    nx.data.resultat = cur.ex.data.request || "";
+    nx.data.who = ""; exTouch();
+    openExchangeEditor(cur.t.id, nx.id);
+  });
+  if(ex.type!=="deleguer") return;
+  const assignBtn = sheet.querySelector("#exDelegAssign");
+  if(assignBtn) assignBtn.addEventListener("click", ()=>{
+    const c = exCollabByName(ex.data.who); if(!c) return;
+    snapshot();
+    if(!(t.assignedTo||[]).includes(c.id)) t.assignedTo = (t.assignedTo||[]).concat([c.id]);
+    exTouch(); if(openTaskId===t.id) renderAssignChips(t); renderExchangeEditor();
+    exToast("Tâche affectée à "+c.name);
+  });
+  const add = sheet.querySelector("#exCtrlAdd");
+  if(add) add.addEventListener("click", ()=>{
+    (ex.data.controles || (ex.data.controles = [])).push({id:uid("ctl"), date:"", note:"", etat:""});
+    exTouch(); renderExchangeEditor();
+  });
+  sheet.querySelectorAll("[data-ctrl]").forEach(b=> b.addEventListener("click", ()=>{
+    const k = ex.data.controles[Number(b.dataset.ctrl)]; if(!k) return;
+    k.etat = k.etat===b.dataset.v ? "" : b.dataset.v;
+    if(k.subId){ const s = (t.subtasks||[]).find(x=> x.id===k.subId); if(s){ s.done = !!k.etat; s.doneAt = k.etat ? Date.now() : null; } }
+    exTouch(); renderExchangeEditor(); if(openTaskId===t.id) renderSubtaskList(t);
+  }));
+  sheet.querySelectorAll("[data-ctrldel]").forEach(b=> b.addEventListener("click", ()=>{
+    ex.data.controles.splice(Number(b.dataset.ctrldel),1); exTouch(); renderExchangeEditor();
+  }));
+  sheet.querySelectorAll("[data-ctrldesc]").forEach(b=> b.addEventListener("click", ()=>{
+    const k = ex.data.controles[Number(b.dataset.ctrldesc)];
+    const nx = createExchange(t, "desc");
+    nx.data.who = ex.data.who || "";
+    nx.data.subject = "Délégation : "+(ex.data.resultat ? exNoDot(ex.data.resultat).slice(0,80) : (t.title||""));
+    if(k && k.note) nx.data.d = (k.date ? "Au point du "+exFrDate(k.date)+" : " : "")+k.note;
+    exTouch(); openExchangeEditor(t.id, nx.id);
+  }));
+  const toSubs = sheet.querySelector("#exCtrlToSubs");
+  if(toSubs) toSubs.addEventListener("click", ()=>{
+    snapshot();
+    if(!t.subtasks) t.subtasks = [];
+    let n = 0;
+    (ex.data.controles||[]).forEach(k=>{
+      if(!k.date || k.subId) return;
+      const s = {id:uid("sub"), text:"🔎 Point de contrôle"+(ex.data.who?" avec "+ex.data.who:"")+(ex.data.resultat?" : "+exNoDot(ex.data.resultat).slice(0,60):""), done:!!k.etat, dueDate:k.date, assignedTo:DATA.currentUserId};
+      t.subtasks.push(s); k.subId = s.id; n++;
+    });
+    exTouch(); if(openTaskId===t.id) renderSubtaskList(t); renderExchangeEditor();
+    exToast(n+" point(s) de contrôle dans tes sous-tâches (et dans Trajectoire)");
+  });
+}
+function exNextControl(ex){
+  return (ex.data.controles||[]).filter(k=> k.date && k.etat!=="ok").sort((a,b)=> a.date.localeCompare(b.date))[0] || null;
+}
+function renderDelegationsSection(el){
+  const rows = [];
+  DATA.tasks.forEach(t=>{
+    if(t.done) return;
+    (t.exchanges||[]).forEach(ex=>{ if(ex.type==="deleguer" && !ex.done) rows.push({t, ex}); });
+  });
+  const box = document.createElement("div");
+  box.className = "ex-sec"; box.style.marginTop = "18px";
+  if(!rows.length){
+    box.innerHTML = `<h3>🤲 Délégations en cours</h3><div class="ex-hint">Aucune. Dans une tâche : « + Utiliser une méthode » → « Déléguer ».</div>`;
+    el.appendChild(box); return;
+  }
+  const today = todayStr();
+  rows.sort((a,b)=> String((exNextControl(a.ex)||{}).date||a.ex.data.echeance||"9999").localeCompare(String((exNextControl(b.ex)||{}).date||b.ex.data.echeance||"9999")));
+  box.innerHTML = `<h3>🤲 Délégations en cours (${rows.length})</h3>`+rows.map(({t, ex}, i)=>{
+    const d = ex.data, nx = exNextControl(ex);
+    const late = nx && nx.date < today;
+    const recadrer = (d.controles||[]).some(k=> k.etat==="recadrer");
+    const echLate = d.echeance && d.echeance < today;
+    return `<div class="ex-item" data-deleg="${i}">
+      <span class="ex-item-ico">🤲</span>
+      <span style="flex:1;min-width:0;"><span style="display:block;font-size:13px;font-weight:600;">${escapeHtml(d.who||"?")} · ${escapeHtml(t.title||"")}</span>
+      <span style="display:block;font-size:12px;color:var(--text-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(d.resultat||"Résultat à préciser")}</span></span>
+      <span style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;">
+        ${nx ? `<span class="ex-status ${late?'late':''}">🔎 ${exFrDate(nx.date)}</span>` : `<span class="ex-status">pas de point prévu</span>`}
+        ${recadrer ? `<span class="ex-status late">à recadrer</span>` : ""}
+        ${d.echeance ? `<span style="font-size:11px;color:${echLate?'var(--danger)':'var(--text-sub)'};">échéance ${exFrDate(d.echeance)}</span>` : ""}
+      </span>
+    </div>`;
+  }).join("");
+  el.appendChild(box);
+  box.querySelectorAll("[data-deleg]").forEach(r=> r.addEventListener("click", ()=>{
+    const {t, ex} = rows[Number(r.dataset.deleg)];
+    openTaskAnywhere(t); openExchangeEditor(t.id, ex.id);
+  }));
+}
+
+/* =========================================================
+   RÉUNIONS (onglet) — une réunion = une tâche avec t.meetingDef
+   meetingDef = {objectif, participants, frequence, seances:[{id,date,intention,sujets:[{id,text,decision,reformulePar,etat,engagements:[]}],done,cr,inviteIntention}]}
+========================================================= */
+const MT_REFORMULE = "Pas « C'est ok pour vous ? » → « Qui peut reformuler ce qu'on vient de décider ? »";
+let MT = null; // {taskId, view:"fiche"|"seance"|"live", seanceId, idx}
+function mtCur(){
+  if(!MT) return {};
+  const t = DATA.tasks.find(x=> x.id===MT.taskId);
+  const m = t && t.meetingDef;
+  const se = m && MT.seanceId ? (m.seances||[]).find(s=> s.id===MT.seanceId) : null;
+  return {t, m, se};
+}
+function mtTouch(){ const {t} = mtCur(); if(!t) return; t.updatedAt = Date.now(); saveData(); }
+function mtParticipants(m){
+  const names = String(m.participants||"").split(/[,;\n]/).map(x=> x.trim()).filter(Boolean);
+  DATA.collaborators.forEach(c=>{ if(c.id!==DATA.currentUserId && !names.includes(c.name)) names.push(c.name); });
+  return names;
+}
+function mtNextSeance(m){
+  const open = (m.seances||[]).filter(s=> !s.done).sort((a,b)=> String(a.date||"9999").localeCompare(String(b.date||"9999")));
+  return open[0] || null;
+}
+function renderMeetingsTab(el){
+  const list = wsTasks().filter(t=> t.meetingDef && !t.done);
+  el.innerHTML = `<div class="cap-wrap">
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+      <button class="btn small primary" id="mtNew">+ Nouvelle réunion</button>
+      <span class="ex-hint" style="margin:0;">Tes réunions restent dans Outlook : ici, tu gardes leur objectif, l'intention de chaque séance et le fil des décisions.</span>
+    </div>
+    <div class="ex-banner">💬 ${escapeHtml(MT_REFORMULE)}</div>
+    <div id="mtList"></div>
+  </div>`;
+  const wrap = el.querySelector("#mtList");
+  if(!list.length) wrap.innerHTML = `<div class="empty-hint">Aucune réunion pour l'instant. Crée tes réunions récurrentes (hebdo d'équipe, points individuels…) et tes réunions ponctuelles.</div>`;
+  list.sort((a,b)=> String((mtNextSeance(a.meetingDef)||{}).date||"9999").localeCompare(String((mtNextSeance(b.meetingDef)||{}).date||"9999")) || String(a.title).localeCompare(String(b.title)));
+  list.forEach(t=>{
+    const m = t.meetingDef, nx = mtNextSeance(m), o = capObjective(t.objectiveId);
+    const card = document.createElement("div");
+    card.className = "ex-item"; card.style.alignItems = "flex-start";
+    card.innerHTML = `<span class="ex-item-ico">🗓️</span>
+      <span style="flex:1;min-width:0;">
+        <span style="display:block;font-size:14px;font-weight:600;">${escapeHtml(t.title||"(réunion sans titre)")}</span>
+        <span style="display:block;font-size:12px;color:var(--text-sub);">${escapeHtml(m.objectif ? "Objectif : "+m.objectif : "Objectif à définir")}</span>
+        ${o ? `<span style="display:block;font-size:11.5px;color:var(--text-sub);">🧭 ${escapeHtml(o.text)}</span>` : ""}
+        ${m.frequence ? `<span style="display:block;font-size:11.5px;color:var(--text-sub);">🔁 ${escapeHtml(m.frequence)}</span>` : ""}
+      </span>
+      <span class="ex-status ${nx?'':'done'}" style="align-self:center;">${nx ? "Séance "+(nx.date?exFrDate(nx.date):"à dater") : (m.seances||[]).length ? "À jour" : "Pas de séance"}</span>`;
+    card.addEventListener("click", ()=> openMeeting(t.id));
+    wrap.appendChild(card);
+  });
+  el.querySelector("#mtNew").addEventListener("click", ()=>{
+    snapshot();
+    const t = {
+      id: uid("task"), workspaceId: currentWsId, title: "", description:"",
+      assignedTo: [DATA.currentUserId], today:false, urgent:false, quick:false, knowledge:false,
+      reminderDate:null, dueDate:null, recurrence:null, done:false, doneAt:null,
+      attachments:[], subtasks:[], process:null, createdAt:Date.now(), updatedAt:Date.now(),
+      meetingDef:{objectif:"", participants:"", frequence:"", seances:[]}
+    };
+    DATA.tasks.push(t); saveData(); renderMain();
+    openMeeting(t.id);
+    requestAnimationFrame(()=>{ const i = document.querySelector("#mtSheet [data-mt='title']"); if(i) i.focus(); });
+  });
+}
+function openMeeting(taskId, seanceId, view){
+  const had = !!document.getElementById("mtOverlay");
+  MT = {taskId, view: view || (seanceId ? "seance" : "fiche"), seanceId: seanceId||null, idx:0};
+  if(!had){
+    const ov = document.createElement("div");
+    ov.className = "ex-ov"; ov.id = "mtOverlay";
+    ov.innerHTML = `<div class="ex-sheet" id="mtSheet"></div>`;
+    document.body.appendChild(ov);
+    history.pushState({sensitacheModal:"meeting"}, "", location.href);
+  }
+  renderMeeting();
+}
+function closeMeeting(silent){
+  const ov = document.getElementById("mtOverlay"); if(!ov) return;
+  const {t, m} = mtCur();
+  ov.remove(); MT = null;
+  if(t && m && !String(t.title||"").trim() && !m.objectif && !(m.seances||[]).length){
+    DATA.tasks = DATA.tasks.filter(x=> x.id!==t.id); DATA.tombstones.tasks[t.id] = Date.now(); saveData();
+  }
+  renderMain();
+  if(!silent && history.state && history.state.sensitacheModal==="meeting"){ suppressNextPopstate = true; history.back(); }
+}
+function mtBack(){
+  if(!MT) return;
+  if(MT.view==="live"){ MT.view = "seance"; renderMeeting(); return; }
+  if(MT.view==="seance"){ MT.view = "fiche"; MT.seanceId = null; renderMeeting(); return; }
+  closeMeeting();
+}
+function mtFieldBind(root){
+  root.querySelectorAll("[data-mt]").forEach(inp=>{
+    const key = inp.dataset.mt;
+    const ev = (inp.tagName==="SELECT" || inp.type==="checkbox" || inp.type==="date") ? "change" : "input";
+    inp.addEventListener(ev, ()=>{
+      const {t, m, se} = mtCur(); if(!t) return;
+      const v = inp.type==="checkbox" ? inp.checked : inp.value;
+      if(key==="title") t.title = v;
+      else if(key==="objectiveId"){ if(v) t.objectiveId = v; else delete t.objectiveId; }
+      else if(key.indexOf("se.")===0 && se) exSetPath(se, key.slice(3), v);
+      else exSetPath(m, key, v);
+      mtTouch();
+      if(inp.dataset.rerender) renderMeeting();
+    });
+  });
+}
+function renderMeeting(){
+  const sheet = document.getElementById("mtSheet"); if(!sheet) return;
+  const {t, m, se} = mtCur(); if(!t || !m){ closeMeeting(); return; }
+  if(MT.view!=="fiche" && !se){ MT.view = "fiche"; MT.seanceId = null; }
+  const ov = document.getElementById("mtOverlay");
+  const keep = ov ? ov.scrollTop : 0;
+  const head = (sub)=> `<div class="ex-head">
+      <button class="btn small ghost" id="mtBackBtn">${MT.view==="fiche" ? "✕" : "←"}</button>
+      <span style="font-size:22px;">🗓️</span>
+      <div style="flex:1;min-width:0;"><div style="font-size:17px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(t.title||"Nouvelle réunion")}</div>
+      <div style="font-size:12px;color:var(--text-sub);">${sub}</div></div>
+    </div>`;
+  const dl = `<datalist id="mtPeople">${mtParticipants(m).map(n=>`<option value="${exAttr(n)}"></option>`).join("")}</datalist>`;
+  if(MT.view==="fiche") sheet.innerHTML = head("Fiche réunion") + mtFicheHtml(t, m) + dl;
+  else if(MT.view==="seance") sheet.innerHTML = head("Séance"+(se.date?" du "+exFrDateLong(se.date):"")) + mtSeanceHtml(t, m, se) + dl;
+  else sheet.innerHTML = mtLiveHtml(t, m, se) + dl;
+  mtFieldBind(sheet);
+  mtWire(sheet);
+  if(ov) ov.scrollTop = MT.view==="live" ? 0 : keep;
+}
+function mtFicheHtml(t, m){
+  const seances = (m.seances||[]).slice().sort((a,b)=> String(b.date||"9999").localeCompare(String(a.date||"9999")));
+  return `
+  <div class="ex-sec">
+    <h3>La réunion</h3>
+    <div class="ex-f"><label>Nom</label><input type="text" data-mt="title" value="${exAttr(t.title||"")}" placeholder="Ex. : Hebdo d'équipe du lundi"></div>
+    <div class="ex-f"><label>🎯 Objectif de la réunion : pourquoi elle existe</label><textarea data-mt="objectif" rows="2" placeholder="Ce que cette réunion doit produire, à chaque fois">${escapeHtml(m.objectif||"")}</textarea></div>
+    <div class="ex-f"><label>🧭 Contribue à (Cap)</label><select class="fieldselect" data-mt="objectiveId">${capObjectiveOptions(t.objectiveId||"")}</select></div>
+    <div class="ex-f"><label>Participants</label><input type="text" data-mt="participants" value="${exAttr(m.participants||"")}" placeholder="Prénoms séparés par des virgules"></div>
+    <div class="ex-f"><label>Fréquence, horaire (pour mémoire)</label><input type="text" data-mt="frequence" value="${exAttr(m.frequence||"")}" placeholder="Ex. : chaque lundi 9h, 45 min"></div>
+  </div>
+  <div class="ex-sec">
+    <h3>Séances</h3>
+    <button class="btn small primary" id="mtNewSeance" style="margin-bottom:10px;">+ Préparer une séance</button>
+    ${seances.length ? seances.map(s=>{
+      const ok = (s.sujets||[]).filter(x=> x.etat==="ok").length, n = (s.sujets||[]).length;
+      return `<div class="ex-item" data-seance="${exAttr(s.id)}">
+        <span style="flex:1;min-width:0;"><span style="display:block;font-size:13px;font-weight:600;">${s.date ? escapeHtml(exFrDateLong(s.date)) : "Date à définir"}</span>
+        <span style="display:block;font-size:12px;color:var(--text-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.intention ? "Fil rouge : "+escapeHtml(s.intention) : "Intention à poser"} · ${n} sujet${n>1?"s":""}</span></span>
+        <span class="ex-status ${s.done?'done':''}">${s.done ? "Faite · "+ok+"/"+n+" reformulés" : "À venir"}</span>
+      </div>`;
+    }).join("") : `<div class="ex-hint">Prépare la prochaine séance : intention, ordre du jour, puis le texte à coller dans l'invitation Outlook.</div>`}
+  </div>
+  <div class="ex-sec" style="background:transparent;">${["reunion","intention"].map(k=>`<details class="ex-memo"><summary>📚 Mémo · ${escapeHtml(EX_MEMOS[k].title)}</summary><div>${escapeHtml(EX_MEMOS[k].text).replace(/\n/g,"<br>")}</div></details>`).join("")}</div>
+  <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+    <button class="btn small danger" id="mtDelete">Supprimer la réunion</button>
+    <button class="btn primary small" id="mtClose">Fermer</button>
+  </div>`;
+}
+function mtSeanceHtml(t, m, se){
+  const sujets = se.sujets || (se.sujets = []);
+  const engs = []; sujets.forEach(s=> (s.engagements||[]).forEach(e=> engs.push(e)));
+  return `
+  ${m.objectif ? `<div class="ex-banner" style="border-left-color:var(--knowledge);background:rgba(31,169,113,.12);">🎯 <b>Objectif de la réunion</b> : ${escapeHtml(m.objectif)}</div>` : ""}
+  <div class="ex-sec">
+    <h3>Préparer</h3>
+    <div class="ex-f"><label>Date</label><input type="date" data-mt="se.date" value="${exAttr(se.date||"")}"></div>
+    <div class="ex-f"><label>🎯 Mon intention pour cette séance = mon fil rouge</label><input type="text" data-mt="se.intention" value="${exAttr(se.intention||"")}" placeholder="Avec quoi je veux repartir ?"></div>
+    <div class="ex-f"><label>Ordre du jour</label>
+      ${sujets.map((s,i)=>`<div class="mt-sujet-row"><span class="mt-num">${i+1}</span><input type="text" data-sujet="${i}" value="${exAttr(s.text||"")}" placeholder="Sujet"><button type="button" class="btn small ghost" data-sujetup="${i}" title="Monter" ${i===0?"disabled":""}>↑</button><button type="button" class="btn small ghost" data-sujetdel="${i}" title="Retirer">✕</button></div>`).join("")}
+      <button type="button" class="btn small" id="mtAddSujet">+ Ajouter un sujet</button>
+    </div>
+  </div>
+  <div class="ex-sec ex-out">
+    <h3>✉️ Texte pour l'invitation Outlook</h3>
+    <label class="ex-check" style="margin:0 0 8px;"><input type="checkbox" data-mt="se.inviteIntention" ${se.inviteIntention?"checked":""}> Inclure mon intention dans l'invitation</label>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;"><button type="button" class="btn small primary" id="mtGenInvite">Générer</button><button type="button" class="btn small" id="mtCopyInvite">Copier</button></div>
+    <textarea data-mt="se.invite" rows="8" class="ex-outtext" style="min-height:150px;">${escapeHtml(se.invite||"")}</textarea>
+  </div>
+  <button class="btn primary" id="mtLive" style="width:100%;justify-content:center;padding:11px;font-size:15px;margin-bottom:12px;">▶ Lancer la réunion</button>
+  ${se.done || sujets.some(s=> s.decision || s.etat) ? `
+  <div class="ex-sec">
+    <h3>✅ Après la réunion</h3>
+    ${sujets.map((s,i)=>`<div style="font-size:13px;margin-bottom:6px;"><b>${i+1}. ${escapeHtml(s.text||"")}</b> ${s.etat==="ok"?'<span class="ex-status done">reformulé ✓</span>':s.etat==="reprendre"?'<span class="ex-status late">à reprendre</span>':''}${s.decision?`<div style="color:var(--text-sub);">Décision : ${escapeHtml(s.decision)}</div>`:""}</div>`).join("")}
+    ${engs.length ? `<div style="margin-top:8px;"><button type="button" class="btn small" id="mtEngToSubs" ${engs.every(e=> e.subId || !String(e.text||"").trim())?"disabled":""}>↳ Créer les sous-tâches des engagements (${engs.length})</button></div>` : ""}
+  </div>
+  <div class="ex-sec ex-out">
+    <h3>📝 Compte rendu</h3>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;"><button type="button" class="btn small primary" id="mtGenCR">Générer le compte rendu</button><button type="button" class="btn small" id="mtCopyCR">Copier</button><button type="button" class="btn small" id="mtAICR">✨ Améliorer avec l'IA</button></div>
+    <textarea data-mt="se.cr" rows="12" class="ex-outtext">${escapeHtml(se.cr||"")}</textarea>
+  </div>` : ""}
+  <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+    <button class="btn small danger" id="mtDelSeance">Supprimer la séance</button>
+    <button class="btn small ${se.done?'primary':''}" id="mtDoneSeance">${se.done?"✓ Séance faite":"Marquer la séance comme faite"}</button>
+  </div>`;
+}
+function mtLiveHtml(t, m, se){
+  const sujets = se.sujets || [];
+  const n = sujets.length;
+  if(MT.idx > n) MT.idx = n;
+  const fil = se.intention ? `<div class="ex-banner">🎯 <b>Fil rouge</b> : ${escapeHtml(se.intention)}</div>` : "";
+  const top = `<div class="ex-head"><button class="btn small ghost" id="mtBackBtn">←</button><div style="flex:1;min-width:0;"><div style="font-size:16px;font-weight:700;">🔴 En réunion · ${escapeHtml(t.title||"")}</div>${m.objectif?`<div style="font-size:12px;color:var(--text-sub);">Objectif : ${escapeHtml(m.objectif)}</div>`:""}</div></div>${fil}`;
+  if(!n) return top + `<div class="empty-hint">Ajoute des sujets à l'ordre du jour pour lancer la réunion.</div>`;
+  if(MT.idx===n){
+    const ok = sujets.filter(s=> s.etat==="ok").length, rep = sujets.filter(s=> s.etat==="reprendre").length;
+    return top + `<div class="ex-sec mt-live-end">
+      <div style="font-size:18px;font-weight:700;margin-bottom:6px;">Fin de l'ordre du jour</div>
+      <div>${ok} sujet${ok>1?"s":""} reformulé${ok>1?"s":""} ✓ · ${rep} à reprendre · ${n-ok-rep} sans reformulation</div>
+      ${se.intention ? `<div style="margin-top:10px;">Ton fil rouge est-il atteint ? « ${escapeHtml(se.intention)} »</div>` : ""}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">
+        <button class="btn small" id="mtPrev">← Dernier sujet</button>
+        <button class="btn primary" id="mtFinish">✅ Terminer la réunion</button>
+      </div></div>`;
+  }
+  const s = sujets[MT.idx];
+  const engs = s.engagements || [];
+  return top + `
+  <div class="mt-progress">${sujets.map((x,i)=>`<span class="${i===MT.idx?'cur':''} ${x.etat||''}" data-goto="${i}"></span>`).join("")}</div>
+  <div class="mt-live-sujet"><span class="mt-num">${MT.idx+1}/${n}</span> ${escapeHtml(s.text||"(sujet sans titre)")}</div>
+  <div class="ex-f"><label>Décision, ce qui est retenu</label><textarea data-livek="decision" rows="3">${escapeHtml(s.decision||"")}</textarea></div>
+  <div class="mt-reform">
+    <div class="mt-reform-q">💬 Pas « C'est ok pour vous ? »<br><b>« Qui peut reformuler ce qu'on vient de décider ? »</b></div>
+    <div class="ex-f"><label>Reformulé par</label><input type="text" data-livek="reformulePar" value="${exAttr(s.reformulePar||"")}" list="mtPeople" placeholder="Prénom"></div>
+    <div class="ex-seg" style="margin-top:8px;">
+      <button type="button" class="btn chip ${s.etat==="ok"?"on":""}" data-etat="ok">✓ Compris</button>
+      <button type="button" class="btn chip ${s.etat==="reprendre"?"on warn":""}" data-etat="reprendre">↺ À reprendre</button>
+    </div>
+  </div>
+  <div class="ex-f"><label>Engagements : qui fait quoi, pour quand</label>
+    ${engs.map((e,i)=>`<div class="ex-eng">
+      <input type="text" data-engk="${i}.text" value="${exAttr(e.text||"")}" placeholder="Action">
+      <input type="text" data-engk="${i}.who" value="${exAttr(e.who||"")}" placeholder="Qui" list="mtPeople">
+      <input type="date" data-engk="${i}.due" value="${exAttr(e.due||"")}">
+      <button type="button" class="btn small ghost" data-engdel="${i}">✕</button></div>`).join("")}
+    <button type="button" class="btn small" id="mtAddEng">+ Engagement</button>
+  </div>
+  <div style="display:flex;justify-content:space-between;gap:8px;margin-top:16px;">
+    <button class="btn" id="mtPrev" ${MT.idx===0?"disabled":""}>← Précédent</button>
+    <button class="btn primary" id="mtNext">${MT.idx===n-1?"Fin de l'ordre du jour →":"Sujet suivant →"}</button>
+  </div>`;
+}
+function mtGenInvite(t, m, se){
+  const L = [];
+  if(m.objectif) L.push("Objectif de la réunion : "+exNoDot(m.objectif)+".");
+  if(se.inviteIntention && se.intention) L.push("Ce que je souhaite que nous obtenions : "+exLowerFirst(exNoDot(se.intention))+".");
+  const sujets = (se.sujets||[]).filter(s=> String(s.text||"").trim());
+  if(sujets.length){ L.push("", "Ordre du jour :"); sujets.forEach((s,i)=> L.push((i+1)+". "+s.text.trim())); }
+  L.push("", "Pour chaque sujet, nous prendrons un moment pour reformuler ensemble ce qui est décidé.");
+  return L.join("\n");
+}
+function mtGenCR(t, m, se){
+  const L = ["Bonjour à tous,", ""];
+  L.push("Voici le compte rendu de notre réunion « "+(t.title||"réunion")+" »"+(se.date ? " du "+exFrDateLong(se.date) : "")+".");
+  if(m.objectif) L.push("Objectif de la réunion : "+exLowerFirst(exNoDot(m.objectif))+".");
+  const sujets = se.sujets||[];
+  sujets.forEach((s,i)=>{
+    L.push("", (i+1)+". "+String(s.text||"").trim());
+    if(s.decision) L.push("   Décision : "+exNoDot(s.decision)+".");
+    if(s.etat==="reprendre") L.push("   À reprendre lors de la prochaine réunion.");
+    (s.engagements||[]).filter(e=> String(e.text||"").trim()).forEach(e=>{
+      const meta = []; if(e.who) meta.push(e.who); if(e.due) meta.push("d'ici le "+exFrDate(e.due));
+      L.push("   → "+exNoDot(e.text)+(meta.length ? " ("+meta.join(", ")+")" : ""));
+    });
+  });
+  L.push("", "Merci à tous pour votre participation.", "", "Bonne journée,");
+  return L.join("\n");
+}
+function mtWire(sheet){
+  const q = id=> sheet.querySelector(id);
+  const on = (id, fn)=>{ const b = q(id); if(b) b.addEventListener("click", fn); };
+  on("#mtBackBtn", mtBack);
+  on("#mtClose", ()=> closeMeeting());
+  on("#mtDelete", ()=>{
+    const {t} = mtCur(); if(!t) return;
+    if(!confirm("Supprimer cette réunion et toutes ses séances ?")) return;
+    snapshot(); DATA.tasks = DATA.tasks.filter(x=> x.id!==t.id); DATA.tombstones.tasks[t.id] = Date.now(); saveData();
+    closeMeeting();
+  });
+  on("#mtNewSeance", ()=>{
+    const {m} = mtCur(); if(!m) return;
+    snapshot();
+    // Reprend les sujets « à reprendre » de la dernière séance faite.
+    const last = (m.seances||[]).filter(s=> s.done).sort((a,b)=> String(b.date||"").localeCompare(String(a.date||"")))[0];
+    const carry = last ? (last.sujets||[]).filter(s=> s.etat==="reprendre").map(s=> ({id:uid("suj"), text:s.text, engagements:[]})) : [];
+    const se = {id:uid("se"), date:"", intention:"", sujets: carry.length ? carry : [{id:uid("suj"), text:"", engagements:[]}], done:false};
+    (m.seances || (m.seances = [])).push(se);
+    mtTouch(); MT.view = "seance"; MT.seanceId = se.id; renderMeeting();
+    if(carry.length) exToast(carry.length+" sujet(s) « à reprendre » repris de la dernière séance");
+  });
+  sheet.querySelectorAll("[data-seance]").forEach(r=> r.addEventListener("click", ()=>{ MT.view = "seance"; MT.seanceId = r.dataset.seance; renderMeeting(); }));
+  sheet.querySelectorAll("[data-sujet]").forEach(inp=> inp.addEventListener("input", ()=>{
+    const {se} = mtCur(); if(!se) return; se.sujets[Number(inp.dataset.sujet)].text = inp.value; mtTouch();
+  }));
+  sheet.querySelectorAll("[data-sujet]").forEach(inp=> inp.addEventListener("keydown", e=>{
+    if(e.key==="Enter"){ e.preventDefault(); const b = q("#mtAddSujet"); if(b) b.click(); }
+  }));
+  on("#mtAddSujet", ()=>{
+    const {se} = mtCur(); if(!se) return;
+    se.sujets.push({id:uid("suj"), text:"", engagements:[]}); mtTouch(); renderMeeting();
+    const all = sheet.querySelectorAll("[data-sujet]"); if(all.length) all[all.length-1].focus();
+  });
+  sheet.querySelectorAll("[data-sujetdel]").forEach(b=> b.addEventListener("click", ()=>{
+    const {se} = mtCur(); if(!se) return; se.sujets.splice(Number(b.dataset.sujetdel),1); mtTouch(); renderMeeting();
+  }));
+  sheet.querySelectorAll("[data-sujetup]").forEach(b=> b.addEventListener("click", ()=>{
+    const {se} = mtCur(); if(!se) return; const i = Number(b.dataset.sujetup); if(i<1) return;
+    const [x] = se.sujets.splice(i,1); se.sujets.splice(i-1,0,x); mtTouch(); renderMeeting();
+  }));
+  on("#mtGenInvite", ()=>{
+    const {t, m, se} = mtCur(); if(!se) return;
+    if(se.invite && se.invite!==se._genInvite && !confirm("Remplacer le texte actuel ?")) return;
+    se.invite = mtGenInvite(t, m, se); se._genInvite = se.invite; mtTouch(); renderMeeting();
+  });
+  on("#mtCopyInvite", ()=>{ const {se} = mtCur(); if(se && se.invite) exCopy(se.invite); else exToast("Génère d'abord le texte"); });
+  on("#mtLive", ()=>{
+    const {se} = mtCur(); if(!se) return;
+    se.sujets = (se.sujets||[]).filter(s=> String(s.text||"").trim());
+    if(!se.sujets.length){ exToast("Ajoute au moins un sujet à l'ordre du jour"); renderMeeting(); return; }
+    if(!se.date){ se.date = todayStr(); }
+    mtTouch(); MT.view = "live"; MT.idx = 0; renderMeeting();
+  });
+  on("#mtDoneSeance", ()=>{ const {se} = mtCur(); if(!se) return; se.done = !se.done; mtTouch(); renderMeeting(); });
+  on("#mtDelSeance", ()=>{
+    const {m, se} = mtCur(); if(!se) return;
+    if(!confirm("Supprimer cette séance ?")) return;
+    snapshot(); m.seances = m.seances.filter(s=> s.id!==se.id); mtTouch(); MT.view = "fiche"; MT.seanceId = null; renderMeeting();
+  });
+  on("#mtGenCR", ()=>{
+    const {t, m, se} = mtCur(); if(!se) return;
+    if(se.cr && se.cr!==se._genCR && !confirm("Remplacer le texte actuel ?")) return;
+    se.cr = mtGenCR(t, m, se); se._genCR = se.cr; mtTouch(); renderMeeting();
+  });
+  on("#mtCopyCR", ()=>{ const {se} = mtCur(); if(se && se.cr) exCopy(se.cr); else exToast("Génère d'abord le compte rendu"); });
+  on("#mtAICR", async ()=>{
+    const {se} = mtCur(); if(!se || !se.cr){ exToast("Génère d'abord le compte rendu"); return; }
+    const b = q("#mtAICR"); const label = b.textContent; b.textContent = "…"; b.disabled = true;
+    try{ const out = await exImproveAI(se.cr, "reunion"); const c = mtCur(); if(c.se){ c.se.cr = out; mtTouch(); renderMeeting(); } }
+    catch(e){ if(e.message && e.message.includes("Aucune clé API")){ if(confirm(e.message+"\nOuvrir les paramètres maintenant ?")) showAIModal(); } else alert("Échec : "+e.message); }
+    finally{ if(b.isConnected){ b.textContent = label; b.disabled = false; } }
+  });
+  on("#mtEngToSubs", ()=>{
+    const {t, se} = mtCur(); if(!se) return;
+    snapshot(); if(!t.subtasks) t.subtasks = [];
+    let n = 0;
+    (se.sujets||[]).forEach(s=> (s.engagements||[]).forEach(e=>{
+      if(e.subId || !String(e.text||"").trim()) return;
+      const c = exCollabByName(e.who);
+      const sub = {id:uid("sub"), text:e.text.trim()+(se.date?" (réunion du "+exFrDate(se.date)+")":""), done:false};
+      if(e.due) sub.dueDate = e.due;
+      if(c) sub.assignedTo = c.id;
+      t.subtasks.push(sub); e.subId = sub.id; n++;
+    }));
+    mtTouch(); renderMeeting(); exToast(n+" sous-tâche(s) créée(s) : visibles dans Collaboration et Trajectoire");
+  });
+  // --- mode en réunion
+  const cur = ()=>{ const {se} = mtCur(); return se ? se.sujets[MT.idx] : null; };
+  sheet.querySelectorAll("[data-livek]").forEach(inp=> inp.addEventListener("input", ()=>{ const s = cur(); if(!s) return; s[inp.dataset.livek] = inp.value; mtTouch(); }));
+  sheet.querySelectorAll("[data-etat]").forEach(b=> b.addEventListener("click", ()=>{ const s = cur(); if(!s) return; s.etat = s.etat===b.dataset.etat ? "" : b.dataset.etat; mtTouch(); renderMeeting(); }));
+  sheet.querySelectorAll("[data-engk]").forEach(inp=> inp.addEventListener(inp.type==="date"?"change":"input", ()=>{
+    const s = cur(); if(!s) return; const [i, f] = inp.dataset.engk.split("."); (s.engagements[Number(i)]||{})[f] = inp.value; mtTouch();
+  }));
+  on("#mtAddEng", ()=>{ const s = cur(); if(!s) return; (s.engagements || (s.engagements = [])).push({text:"", who:"", due:""}); mtTouch(); renderMeeting();
+    const r = sheet.querySelectorAll(".ex-eng"); const last = r[r.length-1]; if(last) last.querySelector("input").focus(); });
+  sheet.querySelectorAll("[data-engdel]").forEach(b=> b.addEventListener("click", ()=>{ const s = cur(); if(!s) return; s.engagements.splice(Number(b.dataset.engdel),1); mtTouch(); renderMeeting(); }));
+  sheet.querySelectorAll("[data-goto]").forEach(b=> b.addEventListener("click", ()=>{ MT.idx = Number(b.dataset.goto); renderMeeting(); }));
+  on("#mtPrev", ()=>{ if(MT.idx>0){ MT.idx--; renderMeeting(); } });
+  on("#mtNext", ()=>{ const s = cur(); if(s && !s.etat && !confirm("Personne n'a reformulé ce sujet. Passer quand même au suivant ?")) return; MT.idx++; renderMeeting(); });
+  on("#mtFinish", ()=>{
+    const {t, m, se} = mtCur(); if(!se) return;
+    se.done = true; if(!se.cr) { se.cr = mtGenCR(t, m, se); se._genCR = se.cr; }
+    mtTouch(); MT.view = "seance"; renderMeeting(); exToast("Réunion terminée : compte rendu prêt");
+  });
+}
 
 })();
 </script>
