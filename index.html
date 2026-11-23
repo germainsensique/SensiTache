@@ -8006,7 +8006,7 @@ function createExchange(t, type){
   const data = {who, subject:"", after:{engagements:[]}};
   if(type==="ouinon"){ data.request = t.title||""; data.crit = {}; }
   if(type==="intention"){ data.questions = []; data.q = {}; }
-  if(type==="desc"){ data.checks = {}; data.sLevel = ""; }
+  if(type==="desc"){ data.sLevel = ""; data.mode = "presentiel"; }
   if(type==="pression"){ data.phrases = ["","",""]; }
   if(type==="deleguer"){ data.controles = []; data.objectiveId = t.objectiveId || ""; }
   const ex = {id:uid("ex"), type, createdAt:Date.now(), updatedAt:Date.now(), done:false, data};
@@ -8181,12 +8181,7 @@ function exBodyDesc(ex){
     <h3>Préparer</h3>
     ${exWhoField()}
     ${exField("subject","Le sujet (1 DESC = 1 sujet)",{type:"line", ph:"Ex. : retards aux réunions d'équipe"})}
-    <div class="ex-checks">${EX_DESC_CHECKS.map(c=>`<label class="ex-check"><input type="checkbox" data-k="checks.${c.k}" ${checks[c.k]?"checked":""}> ${c.t}</label>`).join("")}</div>
-    <div style="margin-top:8px;"><button type="button" class="btn small" id="exInviteBtn">✉️ Prévenir la personne (ordre du jour)</button></div>
-    <div id="exInviteBox" style="display:${d.invite?'block':'none'};margin-top:8px;">
-      <textarea data-k="invite" rows="5" class="ex-outtext">${escapeHtml(d.invite||"")}</textarea>
-      <button type="button" class="btn small" data-copy="invite" style="margin-top:6px;">Copier</button>
-    </div>
+    <div class="ex-f"><label>L'échange se fait</label>${exSeg("mode",[{v:"presentiel",t:"🤝 En présentiel"},{v:"mail",t:"✉️ Par mail"}])}</div>
   </div>
   <div class="ex-sec"><h3><span class="ex-letter">D</span>Décrire les faits, le contexte</h3>
     ${exField("d","",{rows:3, ph:"Ce qui s'est passé : quand, où, quoi. Observable et vérifiable.", check:"opinion"})}
@@ -8202,7 +8197,41 @@ function exBodyDesc(ex){
   <div class="ex-sec"><h3><span class="ex-letter">C</span>Conséquences positives du changement</h3>
     ${exField("c","",{rows:2, ph:"Ce que le changement va apporter : à l'autre, à moi, à l'équipe."})}
   </div>
-  ${exAfterBlock("desc")}`;
+  ${d.mode==="mail" ? exDescMailBlock(ex) : exAfterBlock("desc")}`;
+}
+function exDescMailBlock(ex){
+  const d = ex.data;
+  return `<div class="ex-sec ex-out">
+    <h3>✉️ Mail à envoyer</h3>
+    <label class="ex-check" style="margin:0 0 8px;"><input type="checkbox" data-k="vous" ${d.vous?"checked":""}> Vouvoyer</label>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+      <button type="button" class="btn small primary" data-gen="mail">Générer le mail</button>
+      <button type="button" class="btn small" data-ai="mail">✨ Améliorer avec l'IA</button>
+    </div>
+    <div class="ex-f"><label>Objet</label><div style="display:flex;gap:6px;"><input type="text" data-k="mailObjet" value="${exAttr(d.mailObjet||"")}" style="flex:1;"><button type="button" class="btn small" data-copy="mailObjet">Copier</button></div></div>
+    <div class="ex-f"><label>Corps du mail</label><textarea data-k="mail" rows="12" class="ex-outtext" placeholder="Clique sur « Générer le mail » : le texte reprend tes faits, ton ressenti, la solution et les conséquences, rédigé comme un mail.">${escapeHtml(d.mail||"")}</textarea></div>
+    <button type="button" class="btn small" data-copy="mail">Copier le corps du mail</button>
+    <div class="ex-hint">Le texte reste modifiable. « Générer » le recrée à partir des champs D, E, S, C.</div>
+  </div>`;
+}
+function exGenDescMail(ex){
+  const d = ex.data, vous = !!d.vous;
+  const V = (tu, vo)=> vous ? vo : tu;
+  const first = exFirstName(d.who);
+  const L = [first ? "Bonjour "+first+"," : "Bonjour,", ""];
+  if(d.subject) L.push(V("Je souhaite revenir avec toi sur ","Je souhaite revenir avec vous sur ")+exLowerFirst(exNoDot(d.subject))+".", "");
+  if(d.d) L.push("Ce que j'ai constaté : "+exLowerFirst(exSentence(d.d)));
+  if(d.e) L.push("De mon côté, "+exLowerFirst(exSentence(d.e)));
+  const sv = exNoDot(d.s);
+  if(sv){
+    L.push("");
+    if(d.sLevel==="imposer") L.push("Pour la suite, voici ce que je "+V("te","vous")+" demande : "+exLowerFirst(sv)+".");
+    else if(d.sLevel==="autre") L.push(exSentence(d.s).replace(/\.$/,"")+(/[?]$/.test(String(d.s).trim()) ? "" : " ?"), V("J'attends ta proposition.","J'attends votre proposition."));
+    else L.push("Pour la suite, je "+V("te","vous")+" propose : "+exLowerFirst(sv)+". "+V("Qu'en penses-tu ?","Qu'en pensez-vous ?"));
+  }
+  if(d.c) L.push("", "Ce changement permettra : "+exLowerFirst(exSentence(d.c)));
+  L.push("", V("Je reste disponible pour en parler de vive voix si tu le souhaites.","Je reste disponible pour en parler de vive voix si vous le souhaitez."), "", "Merci,");
+  return L.join("\n");
 }
 function exGenInvite(ex){
   const d = ex.data, vous = !!d.vous;
@@ -8508,7 +8537,8 @@ function exWire(sheet){
     const key = b.dataset.gen;
     const cur = String(exGetPath(ex.data, key)||"").trim();
     if(cur && ex.data["_gen_"+key] !== cur && !confirm("Remplacer le texte actuel (et tes retouches) par une nouvelle version ?")) return;
-    const text = key!=="out" ? exGenAfter(ex) : (ex.type==="deleguer" ? exGenDeleg(ex) : exGenOuiNon(ex));
+    if(key==="mail") ex.data.mailObjet = ex.data.subject ? "Point sur "+exLowerFirst(exNoDot(ex.data.subject)) : "Faisons le point";
+    const text = key==="mail" ? exGenDescMail(ex) : key!=="out" ? exGenAfter(ex) : (ex.type==="deleguer" ? exGenDeleg(ex) : exGenOuiNon(ex));
     exSetPath(ex.data, key, text); ex.data["_gen_"+key] = text;
     exTouch(); renderExchangeEditor();
   }));
