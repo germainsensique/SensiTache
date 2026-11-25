@@ -389,6 +389,33 @@
   .mt-reform{border:2px solid var(--clock);background:rgba(58,160,214,.1);border-radius:12px;padding:12px 14px;margin:12px 0;}
   .mt-reform-q{font-size:15px;line-height:1.45;}
   .mt-live-end{text-align:center;padding:22px 16px;}
+  .add-split{display:flex;align-items:center;flex-shrink:0;align-self:center;margin-right:8px;background:#ECEBE6;border-radius:15px;height:28px;}
+  .add-split button{height:28px;min-width:30px;border:none;background:transparent;color:#15171C;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0 8px;border-radius:15px;}
+  .add-split button:hover{background:rgba(0,0,0,.08);}
+  .add-split button+button{border-left:1px solid rgba(0,0,0,.18);border-radius:0 15px 15px 0;}
+  .add-split button:first-child{border-radius:15px 0 0 15px;}
+  .va-sheet{max-width:min(520px, 100%);overflow-x:hidden;}
+  .va-sheet .ex-head > div{min-width:0;}
+  .va-steps{display:flex;gap:4px;margin-bottom:14px;flex-wrap:wrap;}
+  .va-steps span{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;font-size:11px;padding:4px 2px;border-radius:6px;background:var(--bg-panel-2);color:var(--text-sub);}
+  .va-steps span.ok{background:rgba(31,169,113,.2);color:#5FD9A4;}
+  .va-steps span.cur{background:var(--accent);color:var(--bg-app);font-weight:700;}
+  .va-question{font-size:20px;font-weight:700;line-height:1.35;margin:4px 0 14px;min-height:54px;}
+  .va-mic{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text-sub);margin-bottom:8px;}
+  .va-dot{width:16px;height:16px;border-radius:50%;background:var(--bg-panel-2);flex-shrink:0;}
+  .va-mic.listening .va-dot{background:var(--danger);animation:vaPulse 1s infinite;}
+  .va-mic.listening{color:var(--text-main);font-weight:600;}
+  .va-mic.speaking .va-dot{background:var(--clock);}
+  .va-mic.paused .va-dot{background:var(--urgent);}
+  @keyframes vaPulse{0%{box-shadow:0 0 0 0 rgba(224,85,95,.6);}100%{box-shadow:0 0 0 12px rgba(224,85,95,0);}}
+  .va-live{min-height:22px;font-size:15px;color:#9FE3C5;margin-bottom:14px;font-style:italic;}
+  .va-btns{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px;}
+  .va-btns .btn{justify-content:center;padding:12px 6px;font-size:14px;}
+  .va-btns #vaResume{grid-column:1 / -1;}
+  .va-type{display:flex;gap:6px;margin-bottom:12px;}
+  .va-type input{flex:1;min-width:0;border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;background:var(--bg-app);color:var(--text-main);font-size:13.5px;}
+  .va-draft{border:1px solid var(--border-soft);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.6;background:var(--bg-card);}
+  .va-draft b{display:inline-block;min-width:92px;color:var(--text-sub);font-weight:600;}
   @media (max-width:640px){
     .ex-ov{padding:0;}
     .ex-sheet{border-radius:0;border:none;min-height:100%;padding:14px 14px 30px;}
@@ -426,7 +453,10 @@
       <button class="icon-btn" id="btnOpenSettings2" title="Paramètres" style="position:relative;"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82A1.65 1.65 0 0 0 3 13.09H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span id="driveDotTopbar" class="drive-dot" style="top:2px;right:2px;"></span></button>
     </div>
     <div class="tabs" id="tabs">
-      <button id="btnAddTask" title="Nouvelle tâche" style="width:28px;height:28px;flex-shrink:0;align-self:center;border-radius:50%;background:#ECEBE6;color:#15171C;border:none;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;margin-right:8px;">+</button>
+      <div class="add-split">
+        <button id="btnAddTask" title="Nouvelle tâche">+</button>
+        <button id="btnVoiceTask" title="Note vocale" aria-label="Note vocale"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+      </div>
       <div id="tabsInner" style="display:contents;"></div>
     </div>
     <div class="main-content" id="mainContent"></div>
@@ -1294,6 +1324,7 @@ function renderTabsBar(){
   });
 }
 renderTabsBar();
+document.getElementById("btnVoiceTask").addEventListener("click", ()=> startVoiceNote());
 document.getElementById("btnAddTask").addEventListener("click", ()=>{
   if(currentTab!=="tasks"){
     currentTab = "tasks";
@@ -7370,7 +7401,10 @@ function openQuickAddModal(prefill){
           <span id="driveDotQuickAdd" class="drive-dot" style="top:2px;right:2px;"></span>
         </button>
       </div>
-      <input type="text" id="qaTitle" class="fieldinput" placeholder="Titre de la tâche" value="${escapeHtml(prefill.title||"")}" style="margin-bottom:10px;">
+      <div style="display:flex;gap:6px;margin-bottom:10px;">
+        <input type="text" id="qaTitle" class="fieldinput" placeholder="Titre de la tâche" value="${escapeHtml(prefill.title||"")}" style="flex:1;">
+        <button class="btn" id="qaVoice" title="Note vocale" style="flex-shrink:0;">🎤</button>
+      </div>
       <select id="qaWorkspace" class="fieldselect" style="margin-bottom:10px;"></select>
       <div id="qaPhotoPreview" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;"></div>
       <input type="file" id="qaPhotoInput" accept="image/*" capture="environment" multiple style="display:none">
@@ -7399,6 +7433,11 @@ function openQuickAddModal(prefill){
   if(prefill.description) overlay.querySelector("#qaDesc").value = prefill.description;
   overlay.querySelector("#qaTitle").focus();
   overlay.querySelector("#qaSettingsBtn").addEventListener("click", ()=> showSettingsModal());
+  overlay.querySelector("#qaVoice").addEventListener("click", ()=>{
+    overlay.remove();
+    const appEl = document.getElementById("app"); if(appEl) appEl.style.display = "";
+    startVoiceNote();
+  });
   let qaToday=false, qaUrgent=false, qaQuick=false, qaKnowledge=false;
   overlay.querySelector("#qaChipToday").addEventListener("click", e=>{ qaToday=!qaToday; e.currentTarget.classList.toggle("on", qaToday); });
   overlay.querySelector("#qaChipUrgent").addEventListener("click", e=>{ qaUrgent=!qaUrgent; e.currentTarget.classList.toggle("on", qaUrgent); });
@@ -7638,6 +7677,10 @@ window.addEventListener("popstate", ()=>{
   }
   if(document.getElementById("mtOverlay")){
     closeMeeting(true);
+    return;
+  }
+  if(document.getElementById("vaOverlay")){
+    vaCancel(true);
     return;
   }
   if(document.getElementById("procOverlay").classList.contains("show")){
@@ -9328,6 +9371,460 @@ function mtWire(sheet){
     se.done = true; if(!se.cr) { se.cr = mtGenCR(t, m, se); se._genCR = se.cr; }
     mtTouch(); MT.view = "seance"; renderMeeting(); exToast("Réunion terminée : compte rendu prêt");
   });
+}
+
+/* =========================================================
+   NOTE VOCALE — création d'une tâche entièrement à la voix
+   Titre (phrase tout-en-un possible) → description → marqueur
+   → affectation → récap + validation → compléter ?
+========================================================= */
+const VA = {active:false, gen:0, rec:null, queued:null, inject:null, resume:null, paused:false, draft:null, step:"", noSpeech:0, wake:null, speaking:false, speakDone:null};
+const VA_ABORT = {abort:true};
+const VA_CMDS = {
+  annuler:["annuler","annule","annulez","annulation","stop","arrete","arreter","laisse tomber"],
+  repete:["repete","repeter","repetes","tu peux repeter","pardon","quoi","comment"],
+  recommence:["recommence","recommencer","corriger","corrige","on recommence"],
+  passer:["passer","passe","suivant","je passe","on passe","saute"],
+  enregistre:["enregistre","enregistrer","enregistre la","sauvegarde","valide tout"]
+};
+const VA_YES = ["oui","ouais","ouai","ouaip","yes","d'accord","d accord","ok","okay","oki","exact","exactement","c'est ca","c est ca","oui c'est ca","oui c est ca","bien sur","tout a fait","valide","je valide","vas y","vas-y","oui merci","oui s'il te plait","oui s il te plait","affirmatif","parfait","c'est bon","c est bon"];
+const VA_NO = ["non","nan","non merci","pas besoin","rien","aucune","aucun","negatif","non c'est bon","non c est bon","pas de description","sans description","personne","moi","moi meme","non personne","c'est pour moi","c est pour moi","pour moi","non pas besoin"];
+function vaNorm(s){
+  return String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[’]/g,"'").replace(/[^a-z0-9' ]/g," ").replace(/\s+/g," ").trim();
+}
+function vaIsCmd(text){
+  const n = vaNorm(text).replace(/ (s'il te plait|s il te plait|stp)$/,"");
+  for(const k in VA_CMDS) if(VA_CMDS[k].includes(n)) return k;
+  return null;
+}
+function vaYesNo(text){
+  const n = vaNorm(text).replace(/ (s'il te plait|s il te plait|stp|merci)$/,"");
+  if(VA_YES.includes(n)) return "yes";
+  if(VA_NO.includes(n)) return "no";
+  if(/^(oui|ouais|ok|d'accord)\b/.test(n)) return "yes";
+  if(/^(non|nan)\b/.test(n)) return "no";
+  return null;
+}
+function vaLev(a, b){
+  if(a===b) return 0; if(!a.length) return b.length; if(!b.length) return a.length;
+  let prev = Array.from({length:b.length+1}, (_,i)=> i);
+  for(let i=1;i<=a.length;i++){
+    const cur = [i];
+    for(let j=1;j<=b.length;j++) cur[j] = Math.min(prev[j]+1, cur[j-1]+1, prev[j-1]+(a[i-1]===b[j-1]?0:1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+function vaMatchCollabs(spoken, minScore){
+  minScore = minScore || 60;
+  let sp = vaNorm(spoken).replace(/^(oui |c'est |c est |a |pour |affecte a |affecter a |affectee a |je l'affecte a |je l affecte a |a affecter a )+/,"").trim();
+  if(!sp) return [];
+  const cands = DATA.collaborators.filter(c=> c.id!==DATA.currentUserId);
+  const scored = cands.map(c=>{
+    const full = vaNorm(c.name), parts = full.split(" ");
+    let s = 0;
+    if(sp===full) s = 100;
+    else if(parts.includes(sp)) s = 90;
+    else if(sp.split(" ").length>1 && sp.split(" ").every(w=> parts.includes(w))) s = 88;
+    else if(full.startsWith(sp+" ") || sp.startsWith(full)) s = 80;
+    else {
+      const tol = w=> w.length>5 ? 2 : 1;
+      if(parts.some(p=> p.length>2 && vaLev(sp, p) <= tol(p))) s = 70;
+      else if(vaLev(sp, full) <= 2) s = 70;
+      else if(sp.split(" ").some(w=> w.length>2 && parts.some(p=> vaLev(w, p) <= tol(p)))) s = 60;
+    }
+    return {c, s};
+  }).filter(x=> x.s>=minScore);
+  if(!scored.length) return [];
+  const best = Math.max(...scored.map(x=> x.s));
+  return scored.filter(x=> x.s===best).map(x=> x.c);
+}
+function vaMatchNames(spoken, minScore){
+  // « Julie et Paul » → plusieurs personnes ; chaque partie doit être reconnue sans ambiguïté.
+  const parts = vaNorm(spoken).split(/ et |, /).map(x=> x.trim()).filter(Boolean);
+  const res = parts.map(p=> ({p, m: vaMatchCollabs(p, minScore)}));
+  return res;
+}
+/* --- phrase tout-en-un : « Relancer le fournisseur, urgent, pour Julie » --- */
+function vaParseOneShot(text){
+  let t = " "+String(text||"").trim()+" ";
+  const out = {today:false, urgent:false, assign:[]};
+  if(/[\s,](c'est |c’est )?urgente?[\s,.]/i.test(t)){ out.urgent = true; t = t.replace(/[\s,]*(c'est |c’est )?urgente?(?=[\s,.])/ig," "); }
+  if(/aujourd[’' ]?hui/i.test(t)){ out.today = true; t = t.replace(/[\s,]*(pour |à faire )?aujourd[’' ]?hui/ig," "); }
+  const m = t.match(/[\s,]+(?:pour|à affecter à|a affecter a|affecter à|affecté à|affectée à|attribuer à|confier à)\s+([^,.]+?)\s*[,.]?\s*$/i);
+  if(m){
+    const names = vaMatchNames(m[1], 80); // phrase tout-en-un : nom reconnu sans approximation
+    if(names.length && names.every(x=> x.m.length===1)){
+      out.assign = names.map(x=> x.m[0].id);
+      t = t.slice(0, m.index);
+    }
+  }
+  t = t.replace(/\s+/g," ").replace(/^[\s,.;:-]+|[\s,;:-]+$/g,"").trim();
+  out.title = t ? t.charAt(0).toUpperCase()+t.slice(1) : "";
+  return out;
+}
+
+/* --- parole et écoute --- */
+function vaGuard(g){ if(g!==VA.gen || !VA.active) throw VA_ABORT; }
+function vaSpeak(text){
+  return new Promise(res=>{
+    vaUi({speaking:true});
+    if(!("speechSynthesis" in window)){ VA.speaking = false; res(); return; }
+    VA.speaking = true;
+    let done = false;
+    const fin = ()=>{ if(done) return; done = true; VA.speaking = false; VA.speakDone = null; res(); };
+    VA.speakDone = fin;
+    try{ mailSpeak(text, fin); }catch(e){ fin(); }
+    setTimeout(fin, 3000 + text.length*150); // filet de sécurité si la fin de lecture n'est pas signalée
+  });
+}
+function vaListen(long){
+  return new Promise(res=>{
+    if(VA.queued!=null){ const q = VA.queued; VA.queued = null; res({text:q, manual:true}); return; }
+    const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if(!Ctor){ VA.inject = (txt)=>{ VA.inject = null; res({text:txt, manual:true}); }; vaUi({listening:false, noMic:true}); return; }
+    const rec = new Ctor();
+    rec.lang = "fr-FR"; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = !!long;
+    VA.rec = rec;
+    let finals = "", settled = false, error = null, heard = false, quiet = null;
+    const finish = (obj)=>{ if(settled) return; settled = true; clearTimeout(quiet); VA.inject = null; VA.rec = null; try{ rec.abort(); }catch(e){} vaUi({listening:false}); res(obj); };
+    // Rien entendu au bout de 10 s, ou 6 s de silence après avoir parlé (dictée longue) : on clôt l'écoute.
+    const arm = (ms)=>{ clearTimeout(quiet); quiet = setTimeout(()=>{ if(finals) finish({text:finals, ended:"silence"}); else finish({error:"no-speech"}); }, ms); };
+    arm(10000);
+    VA.inject = (txt)=> finish({text:txt, manual:true});
+    rec.onresult = (e)=>{
+      let interim = "";
+      for(let i=e.resultIndex;i<e.results.length;i++){
+        const r = e.results[i];
+        if(r.isFinal) finals += (finals?" ":"")+r[0].transcript.trim();
+        else interim += r[0].transcript;
+      }
+      heard = true;
+      vaUi({live: (finals+" "+interim).trim()});
+      if(long) arm(finals && !interim ? 6000 : 10000);
+      const fn = vaNorm(finals);
+      if(long && finals && !interim && (VA_YES.includes(fn) || VA_NO.includes(fn) || vaIsCmd(finals))){ finish({text:finals}); return; }
+      if(long && /(^|\s)(c'est |c’est )?termin[ée]e?[\s.!]*$/i.test(finals)){
+        finish({text: finals.replace(/(^|\s)(c'est |c’est )?termin[ée]e?[\s.!]*$/i,"").trim(), ended:"termine"});
+      } else if(!long && finals){
+        finish({text: finals});
+      }
+    };
+    rec.onerror = (e)=>{ error = e.error; };
+    rec.onend = ()=>{
+      if(settled) return;
+      if(finals) finish({text: finals, ended:"silence"});
+      else finish({error: error || (heard ? null : "no-speech")});
+    };
+    try{ rec.start(); vaUi({listening:true, live:""}); }catch(e){ finish({error:"start"}); }
+  });
+}
+/* Pose une question et renvoie {text} ou {cmd}. Gère silence, pause, répète. */
+async function vaAsk(question, opts){
+  opts = opts || {};
+  const g = VA.gen;
+  let q = question, misses = 0;
+  while(true){
+    vaGuard(g);
+    if(VA.paused){
+      vaUi({question:q, paused:true});
+      await new Promise(r=> VA.resume = r);
+      VA.resume = null; VA.paused = false; vaGuard(g);
+    }
+    vaUi({question:q, paused:false, live:""});
+    if(VA.queued==null) await vaSpeak(q);
+    vaGuard(g);
+    const r = await vaListen(opts.long);
+    vaGuard(g);
+    if(r.error){
+      if(r.error==="not-allowed" || r.error==="service-not-allowed"){
+        alert("Le micro est bloqué. Autorise le micro pour cette appli dans les réglages du navigateur, puis réessaie.");
+        vaCancel(true); throw VA_ABORT;
+      }
+      if(r.error==="network"){ VA.paused = true; vaUi({msg:"Pas de connexion : la reconnaissance vocale a besoin d'internet."}); continue; }
+      misses++;
+      if(misses>=2){ VA.paused = true; await vaSpeak("Je me mets en pause. Touche Reprendre quand tu veux."); misses = 0; q = question; continue; }
+      q = "Je n'ai rien entendu. "+question;
+      continue;
+    }
+    const text = String(r.text||"").trim();
+    if(!text) continue;
+    vaUi({heard:text});
+    const cmd = vaIsCmd(text);
+    if(cmd==="repete"){ q = question; continue; }
+    if(cmd==="annuler"){ await vaSpeak("Note annulée."); vaCancel(true); throw VA_ABORT; }
+    if(cmd) return {cmd, text};
+    return {text, ended:r.ended};
+  }
+}
+
+/* --- déroulé --- */
+const VA_STEPS = [["title","Titre"],["desc","Description"],["marker","Marqueur"],["assign","Affectation"],["recap","Validation"]];
+function vaMarkerLabel(d){ return d.today && d.urgent ? "aujourd'hui et urgent" : d.today ? "aujourd'hui" : d.urgent ? "urgent" : "aucun"; }
+function vaAssignNames(d){ return d.assign.map(id=> (collabById(id)||{}).name).filter(Boolean); }
+async function vaStepTitle(){
+  while(true){
+    const r = await vaAsk("Quel est le titre ?");
+    if(r.cmd==="passer" || r.cmd==="enregistre"){ await vaSpeak("Le titre est obligatoire."); continue; }
+    if(r.cmd==="recommence") continue;
+    const p = vaParseOneShot(r.text);
+    if(!p.title){ await vaSpeak("Je n'ai pas compris le titre."); continue; }
+    const d = VA.draft;
+    d.title = p.title;
+    if(p.today || p.urgent){ d.today = p.today; d.urgent = p.urgent; d.markerDone = true; }
+    if(p.assign.length){ d.assign = p.assign; d.assignDone = true; }
+    vaUi({});
+    return;
+  }
+}
+async function vaStepDesc(){
+  const d = VA.draft;
+  let r = await vaAsk("Une description ? Dis non, ou dicte-la et termine par : terminé.", {long:true});
+  if(r.cmd==="passer"){ d.desc = ""; return; }
+  if(r.cmd==="recommence"){ d.desc = ""; return vaStepDesc(); }
+  if(r.cmd==="enregistre") return "save";
+  const yn = vaYesNo(r.text);
+  if(yn==="no"){ d.desc = ""; return; }
+  let text = yn==="yes" ? "" : r.text, ended = yn==="yes" ? null : r.ended;
+  while(ended!=="termine"){
+    if(text){
+      const c = await vaAsk("C'est terminé ?");
+      if(c.cmd==="recommence"){ text = ""; }
+      else if(c.cmd==="passer" || vaYesNo(c.text)==="yes") break;
+      else if(!c.cmd && vaYesNo(c.text)===null){ text += " "+c.text; continue; }
+    }
+    const more = await vaAsk(text ? "Je t'écoute, continue." : "Je t'écoute. Termine par : terminé.", {long:true});
+    if(more.cmd==="passer") break;
+    if(more.cmd==="recommence"){ text = ""; continue; }
+    text = (text+" "+more.text).trim(); ended = more.ended;
+  }
+  text = text.trim();
+  d.desc = text ? text.charAt(0).toUpperCase()+text.slice(1) : "";
+  vaUi({});
+}
+async function vaStepMarker(){
+  const d = VA.draft;
+  while(true){
+    const r = await vaAsk("Aujourd'hui, urgent, ou rien ?");
+    if(r.cmd==="passer"){ d.today = false; d.urgent = false; return; }
+    if(r.cmd==="recommence") continue;
+    if(r.cmd==="enregistre") return "save";
+    const n = vaNorm(r.text);
+    const today = /aujourd'?\s?hui|aujourd hui/.test(n), urgent = /urgent/.test(n), both = /les deux|deux/.test(n);
+    if(both){ d.today = true; d.urgent = true; }
+    else if(today || urgent){ d.today = today; d.urgent = urgent; }
+    else if(vaYesNo(r.text)==="no" || /rien|aucun|normal|pas presse/.test(n)){ d.today = false; d.urgent = false; }
+    else { await vaSpeak("Je n'ai pas compris. Dis aujourd'hui, urgent, les deux, ou rien."); continue; }
+    d.markerDone = true; vaUi({}); return;
+  }
+}
+async function vaPickPerson(spoken){
+  // Renvoie un id de collaborateur, null (abandon) ou "retry"
+  const names = vaMatchNames(spoken);
+  const ids = [];
+  for(const x of names){
+    if(!x.m.length){ await vaSpeak("Je ne trouve pas "+x.p+" dans tes collaborateurs."); return "retry"; }
+    if(x.m.length===1){ ids.push(x.m[0].id); continue; }
+    const list = x.m.map(c=> c.name);
+    const r = await vaAsk("J'ai trouvé "+list.slice(0,-1).join(", ")+" et "+list[list.length-1]+". Qui exactement ?");
+    if(r.cmd) return "retry";
+    const m = vaMatchCollabs(r.text).filter(c=> x.m.includes(c));
+    if(m.length!==1){ await vaSpeak("Je n'ai pas compris."); return "retry"; }
+    ids.push(m[0].id);
+  }
+  const label = ids.map(id=> collabById(id).name);
+  const c = await vaAsk((label.length>1 ? label.slice(0,-1).join(", ")+" et "+label[label.length-1] : label[0])+", c'est bien ça ?");
+  if(c.cmd==="recommence" || vaYesNo(c.text)!=="yes") return "retry";
+  return ids;
+}
+async function vaStepAssign(){
+  const d = VA.draft;
+  if(!DATA.collaborators.some(c=> c.id!==DATA.currentUserId)){ d.assignDone = true; return; }
+  while(true){
+    const r = await vaAsk("Tu l'affectes à un collaborateur ? Dis non, ou donne son nom.");
+    if(r.cmd==="passer"){ d.assign = []; return; }
+    if(r.cmd==="recommence") continue;
+    if(r.cmd==="enregistre") return "save";
+    const yn = vaYesNo(r.text);
+    if(yn==="no"){ d.assign = []; d.assignDone = true; vaUi({}); return; }
+    let spoken = r.text;
+    if(yn==="yes" && vaNorm(r.text).split(" ").length<=2){
+      const w = await vaAsk("À qui ?");
+      if(w.cmd==="passer"){ d.assign = []; return; }
+      if(w.cmd) continue;
+      spoken = w.text;
+    }
+    const res = await vaPickPerson(spoken);
+    if(res==="retry"){ continue; }
+    d.assign = res; d.assignDone = true; vaUi({}); return;
+  }
+}
+function vaRecapText(){
+  const d = VA.draft;
+  const words = d.desc ? d.desc.split(/\s+/).length : 0;
+  const parts = ["Récapitulatif. Titre : "+d.title+"."];
+  if(d.desc) parts.push(words<=25 ? "Description : "+d.desc+"." : "Avec une description de "+words+" mots.");
+  else parts.push("Pas de description.");
+  parts.push("Marqueur : "+vaMarkerLabel(d)+".");
+  const n = vaAssignNames(d);
+  parts.push(n.length ? "Affectée à "+n.join(" et ")+"." : "Pour toi.");
+  return parts.join(" ");
+}
+async function vaStepRecap(){
+  while(true){
+    VA.step = "recap"; vaUi({});
+    const r = await vaAsk(vaRecapText()+" Je l'enregistre ?");
+    if(r.cmd==="enregistre" || (!r.cmd && vaYesNo(r.text)==="yes")) return "save";
+    if(r.cmd==="recommence" || r.cmd==="passer" || (!r.cmd && vaYesNo(r.text)==="no") || !r.cmd){
+      let target = r.cmd ? null : vaFixTarget(r.text);
+      if(!target){
+        const w = await vaAsk("Que veux-tu corriger : le titre, la description, le marqueur, ou l'affectation ?");
+        if(w.cmd==="passer") continue;
+        if(w.cmd==="enregistre") return "save";
+        target = w.cmd ? null : vaFixTarget(w.text);
+        if(!target){ await vaSpeak("Je n'ai pas compris."); continue; }
+      }
+      VA.step = target; vaUi({});
+      if(target==="title") await vaStepTitle();
+      else if(target==="desc") await vaStepDesc();
+      else if(target==="marker") await vaStepMarker();
+      else if(target==="assign"){ VA.draft.assignDone = false; await vaStepAssign(); }
+    }
+  }
+}
+function vaFixTarget(text){
+  const n = vaNorm(text);
+  if(/titre/.test(n)) return "title";
+  if(/descri/.test(n)) return "desc";
+  if(/marqu|urgent|aujourd/.test(n)) return "marker";
+  if(/affect|collab|personne|qui/.test(n)) return "assign";
+  return null;
+}
+function vaSave(){
+  const d = VA.draft;
+  const ws = currentWsId || (DATA.workspaces[0] && DATA.workspaces[0].id);
+  snapshot();
+  const t = {
+    id: uid("task"), workspaceId: ws, title: d.title, description: d.desc||"",
+    assignedTo: d.assign.length ? d.assign.slice() : [DATA.currentUserId],
+    today: !!d.today, urgent: !!d.urgent, quick:false, knowledge:false,
+    reminderDate:null, dueDate:null, recurrence:null, done:false, doneAt:null,
+    attachments:[], subtasks:[], process:null, createdAt:Date.now(), updatedAt:Date.now()
+  };
+  DATA.tasks.push(t);
+  saveData(); renderSidebar(); renderMain();
+  return t;
+}
+async function vaRun(){
+  const g = VA.gen;
+  try{
+    VA.step = "title"; vaUi({});
+    await vaStepTitle(); vaGuard(g);
+    let s;
+    VA.step = "desc"; vaUi({}); s = await vaStepDesc(); vaGuard(g);
+    if(s!=="save" && !VA.draft.markerDone){ VA.step = "marker"; vaUi({}); s = await vaStepMarker(); vaGuard(g); }
+    if(s!=="save" && !VA.draft.assignDone){ VA.step = "assign"; vaUi({}); s = await vaStepAssign(); vaGuard(g); }
+    if(s!=="save") await vaStepRecap();
+    vaGuard(g);
+    const t = vaSave();
+    VA.step = "done"; vaUi({saved:t});
+    const r = await vaAsk("C'est enregistré. Tu veux la compléter ?");
+    if(!r.cmd && vaYesNo(r.text)==="yes"){ vaCancel(true, true); openTaskAnywhere(t); }
+    else { await vaSpeak("C'est noté."); vaCancel(true); }
+  }catch(e){
+    if(e!==VA_ABORT){ console.warn(e); vaCancel(true); alert("La note vocale s'est arrêtée : "+(e && e.message || e)); }
+  }
+}
+
+/* --- interface --- */
+function startVoiceNote(){
+  const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!Ctor){ alert("La dictée vocale n'est pas disponible dans ce navigateur. Utilise Chrome ou Edge (Android ou ordinateur), ou Safari sur iPhone."); return; }
+  if(DATA.workspaces.length===0){ alert("Crée d'abord un espace de travail."); return; }
+  try{ if(typeof mrStop==="function") mrStop(true); }catch(e){}
+  try{ mailStopSpeaking(); }catch(e){}
+  vaCancel(true);
+  VA.active = true; VA.gen++; VA.queued = null; VA.paused = false;
+  VA.draft = {title:"", desc:"", today:false, urgent:false, assign:[], markerDone:false, assignDone:false};
+  const ov = document.createElement("div");
+  ov.className = "ex-ov va-ov"; ov.id = "vaOverlay";
+  ov.innerHTML = `<div class="ex-sheet va-sheet">
+    <div class="ex-head"><span style="font-size:22px;">🎤</span><div style="flex:1;font-size:17px;font-weight:700;">Note vocale</div><button class="btn small danger" id="vaCancel">Annuler</button></div>
+    <div class="va-steps" id="vaSteps"></div>
+    <div class="va-question" id="vaQuestion">…</div>
+    <div class="va-mic" id="vaMic"><span class="va-dot"></span><span id="vaMicLabel">Prépare-toi…</span></div>
+    <div class="va-live" id="vaLive"></div>
+    <div class="va-btns">
+      <button class="btn" data-va="oui">Oui</button>
+      <button class="btn" data-va="non">Non</button>
+      <button class="btn" data-va="passer">Passer</button>
+      <button class="btn" data-va="répète">Répète</button>
+      <button class="btn primary" id="vaResume" style="display:none;">▶ Reprendre</button>
+    </div>
+    <div class="va-type"><input type="text" id="vaTyped" placeholder="Ou tape ta réponse ici"><button class="btn small" id="vaTypedSend">Envoyer</button></div>
+    <div class="va-draft" id="vaDraft"></div>
+    <details class="ex-memo" style="margin-top:10px;"><summary>Commandes vocales</summary><div>« oui » / « non » · « passer » · « répète » · « recommence » (refaire la question) · « annuler » (tout abandonner) · « enregistre » (valider tout de suite)<br>Description : dicte, puis dis « terminé ».<br>Au titre, tu peux tout dire d'un coup : « Relancer le fournisseur, urgent, pour Julie ».</div></details>
+  </div>`;
+  document.body.appendChild(ov);
+  history.pushState({sensitacheModal:"voice"}, "", location.href);
+  ov.querySelector("#vaCancel").addEventListener("click", ()=> vaCancel());
+  ov.querySelectorAll("[data-va]").forEach(b=> b.addEventListener("click", ()=> vaInjectAnswer(b.dataset.va)));
+  ov.querySelector("#vaResume").addEventListener("click", ()=>{ if(VA.resume) VA.resume(); });
+  const typed = ov.querySelector("#vaTyped");
+  const send = ()=>{ const v = typed.value.trim(); if(!v) return; typed.value = ""; vaInjectAnswer(v); };
+  ov.querySelector("#vaTypedSend").addEventListener("click", send);
+  typed.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); send(); } });
+  try{ if("wakeLock" in navigator) navigator.wakeLock.request("screen").then(l=> VA.wake = l).catch(()=>{}); }catch(e){}
+  vaUi({});
+  vaRun();
+}
+function vaInjectAnswer(text){
+  if(!VA.active) return;
+  if(VA.paused && VA.resume){ VA.queued = text; VA.resume(); return; }
+  if(VA.inject){ VA.inject(text); return; }
+  // Réponse donnée pendant que l'appli parle : on coupe la voix et on garde la réponse.
+  VA.queued = text;
+  if(VA.speaking){ try{ mailStopSpeaking(); }catch(e){} if(VA.speakDone) VA.speakDone(); }
+}
+function vaCancel(silent, keepHistory){
+  const was = VA.active;
+  VA.active = false; VA.gen++;
+  try{ if(VA.rec) VA.rec.abort(); }catch(e){}
+  VA.rec = null; VA.inject = null; VA.queued = null;
+  if(VA.resume){ const r = VA.resume; VA.resume = null; r(); }
+  if(VA.speaking){ try{ mailStopSpeaking(); }catch(e){} if(VA.speakDone) VA.speakDone(); }
+  try{ if(VA.wake) VA.wake.release(); }catch(e){} VA.wake = null;
+  const ov = document.getElementById("vaOverlay");
+  if(ov) ov.remove();
+  if(was && history.state && history.state.sensitacheModal==="voice"){
+    if(keepHistory) history.replaceState(null, "", location.href);
+    else { suppressNextPopstate = true; history.back(); }
+  }
+}
+function vaUi(o){
+  o = o || {};
+  const ov = document.getElementById("vaOverlay"); if(!ov) return;
+  const d = VA.draft || {};
+  if(o.question!==undefined) ov.querySelector("#vaQuestion").textContent = o.question;
+  const mic = ov.querySelector("#vaMic"), lab = ov.querySelector("#vaMicLabel");
+  if(o.speaking){ mic.className = "va-mic speaking"; lab.textContent = "L'appli parle… (tu peux répondre avec les boutons)"; }
+  if(o.listening===true){ mic.className = "va-mic listening"; lab.textContent = "Je t'écoute…"; }
+  if(o.listening===false && !VA.paused){ mic.className = "va-mic"; lab.textContent = o.noMic ? "Micro indisponible : réponds avec les boutons ou au clavier." : "…"; }
+  if(o.paused===true){ mic.className = "va-mic paused"; lab.textContent = "En pause"; }
+  if(o.msg){ lab.textContent = o.msg; }
+  ov.querySelector("#vaResume").style.display = VA.paused ? "" : "none";
+  if(o.live!==undefined) ov.querySelector("#vaLive").textContent = o.live;
+  if(o.heard!==undefined) ov.querySelector("#vaLive").textContent = "« "+o.heard+" »";
+  const order = VA_STEPS.map(x=> x[0]);
+  const curIdx = VA.step==="done" ? order.length : order.indexOf(VA.step);
+  ov.querySelector("#vaSteps").innerHTML = VA_STEPS.map(([k,l],i)=> `<span class="${i<curIdx?'ok':i===curIdx?'cur':''}">${l}</span>`).join("");
+  const names = d.assign ? vaAssignNames(d) : [];
+  ov.querySelector("#vaDraft").innerHTML = `
+    <div><b>Titre</b> ${d.title ? escapeHtml(d.title) : "<i>—</i>"}</div>
+    <div><b>Description</b> ${d.desc ? escapeHtml(d.desc) : "<i>—</i>"}</div>
+    <div><b>Marqueur</b> ${d.today?"🔥 Aujourd'hui ":""}${d.urgent?"🎯 Urgent":""}${!d.today&&!d.urgent?"<i>aucun</i>":""}</div>
+    <div><b>Affectation</b> ${names.length ? escapeHtml(names.join(", ")) : "<i>moi</i>"}</div>
+    ${o.saved ? `<div style="color:#5FD9A4;margin-top:6px;">✓ Tâche enregistrée</div>` : ""}`;
 }
 
 })();
