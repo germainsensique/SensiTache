@@ -416,6 +416,26 @@
   .va-type input{flex:1;min-width:0;border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;background:var(--bg-app);color:var(--text-main);font-size:13.5px;}
   .va-draft{border:1px solid var(--border-soft);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.6;background:var(--bg-card);}
   .va-draft b{display:inline-block;min-width:92px;color:var(--text-sub);font-weight:600;}
+  .btn.chip.on.note{background:rgba(255,226,122,.18);border-color:#E8C547;color:#FFE27A;}
+  .notes-section{border:1px solid rgba(232,197,71,.45);background:rgba(255,226,122,.05);border-radius:12px;padding:10px 12px 6px;margin-bottom:16px;}
+  .notes-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
+  .va-choices{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 10px;}
+  .va-choices .btn{padding:11px 14px;font-size:14px;flex:1 1 auto;justify-content:center;}
+  .va-choices .btn.on{background:rgba(31,169,113,.22);border-color:var(--knowledge);color:#5FD9A4;}
+  .va-count{font-size:12px;color:var(--text-sub);margin-right:4px;}
+  .va-kind{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-sub);margin-bottom:4px;}
+  .obj-block{border:1px solid rgba(31,169,113,.45);background:rgba(31,169,113,.08);border-radius:10px;padding:10px 12px;margin:0 0 14px;font-size:13.5px;}
+  .obj-block.empty{border-color:rgba(232,129,58,.6);background:rgba(232,129,58,.08);}
+  .obj-block.muted{border-color:var(--border-soft);background:transparent;color:var(--text-sub);display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .obj-label{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-sub);margin-bottom:4px;font-weight:700;}
+  .obj-block.empty .obj-label{color:#F0A46B;}
+  .obj-text{font-size:14.5px;line-height:1.45;white-space:pre-wrap;}
+  .obj-input{width:100%;border:1px solid var(--border-soft);border-radius:8px;padding:8px 10px;background:var(--bg-app);color:var(--text-main);font-size:13.5px;font-family:inherit;resize:vertical;}
+  .relance-section{border:1px solid rgba(58,160,214,.45);background:rgba(58,160,214,.05);border-radius:12px;padding:10px 12px 6px;margin-bottom:16px;}
+  .deleg-row .avatar{flex-shrink:0;}
+  .va-draft.va-warn{border-color:rgba(232,129,58,.6);}
+  .va-obj{font-size:13px;margin-top:6px;padding:6px 10px;border-radius:8px;background:rgba(31,169,113,.1);}
+  .va-obj.warn{background:rgba(232,129,58,.12);color:#F0A46B;}
   @media (max-width:640px){
     .ex-ov{padding:0;}
     .ex-sheet{border-radius:0;border:none;min-height:100%;padding:14px 14px 30px;}
@@ -489,17 +509,22 @@
       <div class="field-row">
         <div class="field-label">Marqueurs</div>
         <div class="chiprow">
+          <button class="btn chip small note" id="chipNote">📝 Note</button>
           <button class="btn chip small flame" id="chipToday">🔥 Aujourd'hui</button>
           <button class="btn chip small urgent" id="chipUrgent">🎯 Urgent</button>
           <button class="btn chip small quick" id="chipQuick">⚡ Rapide</button>
-          <button class="btn chip small followup" id="chipFollowUp">👁️ À suivre (sans action)</button>
-          <button class="btn chip small knowledge" id="chipKnowledge">📚 Base de connaissances</button>
+          <button class="btn chip small followup" id="chipFollowUp">👁️ En attente de…</button>
         </div>
       </div>
 
       <div class="field-row">
-        <div class="field-label">🧭 Contribue à</div>
-        <select id="taskObjectiveSelect" class="fieldselect"></select>
+        <div class="field-label">Rangement</div>
+        <button class="btn chip small knowledge" id="chipKnowledge">📚 Ranger en connaissance</button>
+      </div>
+
+      <div class="field-row">
+        <div class="field-label">🤲 Déléguer</div>
+        <div id="delegRow"></div>
       </div>
 
       <div class="field-row">
@@ -1200,8 +1225,9 @@ function showCollabManagerModal(){
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.innerHTML = `
-    <div class="modal" style="width:380px;">
+    <div class="modal" style="width:440px;">
       <h2>Collaborateurs</h2>
+      <p style="font-size:12px;color:var(--text-sub);margin:-4px 0 10px;">« 👥 Équipe » : les personnes de ton équipe, pour qui tu définis un objectif.</p>
       <div id="collabMgrList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;"></div>
       <button class="btn small" id="collabMgrAdd" style="width:100%;justify-content:center;">+ Ajouter un collaborateur</button>
       <div class="modal-actions" style="margin-top:14px;"><button class="btn primary" id="collabMgrClose">Fermer</button></div>
@@ -1215,8 +1241,10 @@ function showCollabManagerModal(){
       row.style="display:flex;align-items:center;gap:8px;";
       row.innerHTML = `<span style="width:20px;height:20px;border-radius:50%;background:${c.color};flex-shrink:0;"></span>
         <input type="text" value="${escapeHtml(c.name)}" style="flex:1;border:1px solid var(--border-soft);border-radius:6px;padding:5px 8px;font-size:13px;background:var(--bg-app);color:var(--text-main);">
-        ${c.id===DATA.currentUserId?'<span style="font-size:11px;color:var(--text-sub);">(vous)</span>':'<button class="btn small danger">✕</button>'}`;
+        ${c.id===DATA.currentUserId?'<span style="font-size:11px;color:var(--text-sub);">(vous)</span>':`<button class="btn small chip ${c.team?'on knowledge':''}" data-team title="Fait partie de mon équipe">👥 Équipe</button><button class="btn small danger">✕</button>`}`;
       row.querySelector("input").addEventListener("input", e=>{ c.name=e.target.value; c.updatedAt=Date.now(); saveData(); renderMain(); });
+      const teamBtn = row.querySelector("[data-team]");
+      if(teamBtn) teamBtn.addEventListener("click", ()=>{ c.team = !c.team; c.updatedAt = Date.now(); saveData(); draw(); renderMain(); });
       const delBtn = row.querySelector("button.danger");
       if(delBtn) delBtn.addEventListener("click", ()=>{
         if(!confirm("Supprimer ce collaborateur ? Les tâches lui étant affectées seront réaffectées à vous.")) return;
@@ -1255,7 +1283,6 @@ const TAB_DEFS = {
   reminders: {label:"Rappels"},
   mail: {label:"Mail"},
   trajectoire: {label:"Trajectoire"},
-  cap: {label:"Cap"},
   reunions: {label:"Réunions"}
 };
 let tabOrder = (function(){
@@ -1378,7 +1405,7 @@ function myVisibleTasks(){
   // hors récurrences dont la prochaine échéance n'est pas encore arrivée,
   // et hors rappels dont la date n'est pas encore arrivée (le rappel agit comme un filtre, pas juste un tri)
   const today = todayStr();
-  return activeTasks().filter(t=> !t.knowledge && !t.meetingDef && (t.assignedTo||[]).includes(DATA.currentUserId) && !recurrenceNotDueYet(t) && !(t.reminderDate && t.reminderDate>today && !t.today));
+  return activeTasks().filter(t=> !t.knowledge && !t.meetingDef && (t.assignedTo||[]).includes(DATA.currentUserId) && !recurrenceNotDueYet(t) && !(t.reminderDate && t.reminderDate>today && !t.today && !t.followUp));
 }
 function recurringTasks(){ return activeTasks().filter(t=> t.recurrence && t.recurrence.freq); }
 function sortCategory(t){
@@ -1389,11 +1416,12 @@ function sortCategory(t){
   if(recurrenceIsDue(t)) return 2;
   if(t.followUp) return 7;
   if(t.today) return 3;
-  if(t.urgent) return 4;
+  // Urgent : marqué à la main, ou date butoir dans les 2 jours (ou dépassée).
+  if(t.urgent || (t.dueDate && t.dueDate <= addDays(today, 2))) return 4;
   if(t.quick) return 5;
   return 6;
 }
-const CATEGORY_LABEL = {1:"Rappels", 2:"Récurrence", 3:"Aujourd'hui", 4:"Urgent", 5:"Rapide", 6:"Non prioritaire", 7:"À suivre (sans action)"};
+const CATEGORY_LABEL = {1:"Rappels", 2:"Récurrence", 3:"Aujourd'hui", 4:"Urgent", 5:"Rapide", 6:"Plus tard", 7:"En attente de…"};
 function addDays(dateStr, n){ const d=new Date(dateStr+"T00:00:00"); d.setDate(d.getDate()+n); return dateToStr(d); }
 function addYears(dateStr, n){ const d=new Date(dateStr+"T00:00:00"); d.setFullYear(d.getFullYear()+n); return dateToStr(d); }
 function nthWeekdayOfMonth(year, month, weekday, nth){
@@ -1524,6 +1552,7 @@ function iconSvg(name){
    MAIN CONTENT DISPATCH
 ========================================================= */
 function renderMain(){
+  if(!TAB_DEFS[currentTab]) currentTab = "tasks";
   if(currentWsId) localStorage.setItem("sensitache.lastWsId", currentWsId);
   localStorage.setItem("sensitache.lastTab", currentTab);
   const ws = DATA.workspaces.find(w=>w.id===currentWsId);
@@ -1563,12 +1592,14 @@ function renderMain(){
 
 /* ---------- TASKS TAB ---------- */
 function renderTasksTab(el){
-  el.innerHTML = `<div id="taskGroups"></div>`;
+  el.innerHTML = `<div id="notesSection" class="notes-section"></div><div id="relanceSection" class="relance-section"></div><div id="taskGroups"></div>`;
+  renderNotesSection();
+  renderRelanceSection();
   renderTasksGroupedList();
 }
 function renderTasksGroupedList(){
   const groupsEl = document.getElementById("taskGroups");
-  const tasks = myVisibleTasks();
+  const tasks = myVisibleTasks().filter(t=> !t.note);
   if(tasks.length===0){
     groupsEl.className = "";
     groupsEl.innerHTML = "<div class=\"empty-hint\">Aucune tache active qui te soit affectee pour le moment. Regarde aussi l onglet Collaboration.</div>";
@@ -1624,10 +1655,10 @@ function renderTasksGroupedList(){
     fillCol(left, 1, "Rappels");
     fillCol(left, 3, "Aujourd'hui");
     fillCol(left, 5, "Rapide");
-    fillCol(right, 7, "À suivre (sans action)", true);
+    fillCol(right, 7, "En attente de…", true);
     fillCol(right, 4, "Urgences");
     fillCol(right, 2, "Récurrence");
-    fillCol(right, 6, "Non prioritaire");
+    fillCol(right, 6, "Plus tard");
   }
 }
 
@@ -1700,7 +1731,7 @@ function createAndOpenNewTask(){
 function isDraftTaskEmpty(t){
   const hasTitle = t.title && t.title.trim();
   const hasDesc = t.description && t.description.trim();
-  const hasFlags = t.today || t.urgent || t.quick || t.knowledge || t.followUp;
+  const hasFlags = t.today || t.urgent || t.quick || t.knowledge || t.followUp || t.note;
   const hasDates = t.reminderDate || t.dueDate;
   const hasRecur = !!t.recurrence;
   const hasSub = t.subtasks && t.subtasks.length>0;
@@ -1723,7 +1754,10 @@ function renderTaskRow(t, bucketList, forCollabId){
   if(t.today) badges += `<span class="badge flame" title="Aujourd'hui">${iconSvg("flame")}</span>`;
   if(t.urgent) badges += `<span class="badge urgent" title="Urgent">${iconSvg("target")}</span>`;
   if(t.quick) badges += `<span class="badge quick" title="Rapide">${iconSvg("bolt")}</span>`;
-  if(t.followUp) badges += `<span class="badge followup" title="À suivre (sans action)">${iconSvg("eye")}</span>`;
+  if(t.followUp) badges += `<span class="badge followup" title="En attente de…">${iconSvg("eye")}</span>`;
+  if(t.followUp && !t.reminderDate) badges += `<span class="badge" style="width:auto;padding:0 6px;font-size:10.5px;background:rgba(232,129,58,.15);color:#F0A46B;" title="En attente : ajoute la personne et une date de relance (Rappel)">relance ?</span>`;
+  if(t.note) badges += `<span class="badge" style="background:rgba(255,226,122,.15);color:#FFE27A;" title="Note à trier">📝</span>`;
+  badges += delegBadge(t);
   if(t.knowledge) badges += `<span class="badge knowledge" title="Base de connaissances">${iconSvg("book")}</span>`;
   if(t.exchanges && t.exchanges.length) badges += `<span class="badge" style="background:rgba(232,129,58,.15);color:#F0A46B;width:auto;padding:0 5px;font-size:11px;" title="Échanges et méthodes : ${t.exchanges.length}">🤝${t.exchanges.length>1?" "+t.exchanges.length:""}</span>`;
   if(t.process) badges += `<span class="badge proc" title="Processus associé">${iconSvg("link")}</span>`;
@@ -1731,7 +1765,7 @@ function renderTaskRow(t, bucketList, forCollabId){
   if(t.attachments && t.attachments.length) badges += `<span class="badge attach" title="Documents joints">${t.attachments.length}📎</span>`;
   if(t.dueDate){
     const overdue = t.dueDate < todayStr();
-    badges += `<span class="badge" style="background:${overdue?'rgba(224,85,95,.2)':'rgba(255,255,255,.08)'};color:${overdue?'#F0838C':'var(--text-sub)'};" title="Date butoir : ${t.dueDate}">${iconSvg("flag")} ${t.dueDate}</span>`;
+    badges += `<span class="badge" style="width:auto;padding:0 6px;gap:3px;font-size:11px;white-space:nowrap;background:${overdue?'rgba(224,85,95,.2)':'rgba(255,255,255,.08)'};color:${overdue?'#F0838C':'var(--text-sub)'};" title="Date butoir : ${t.dueDate}">${iconSvg("flag")} ${t.dueDate.split("-").reverse().join("/")}</span>`;
   }
   const nextSub = forCollabId
     ? ((t.subtasks||[]).find(s=> !s.done && s.assignedTo===forCollabId) || nextUndoneSubtask(t))
@@ -1941,6 +1975,7 @@ function renderCollabTab(el){
         <span class="avatar" style="background:${c.color};flex-shrink:0;">${escapeHtml(c.name.slice(0,2).toUpperCase())}</span>
         <span style="flex:1;min-width:0;font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(c.name)} <span style="color:var(--text-sub);font-weight:400;font-size:13px;">(${list.length})</span></span>`;
       el.appendChild(head);
+      el.appendChild(buildCollabObjectiveBlock(c));
       if(list.length) el.appendChild(buildCollabGroup(c, list, {focus:true}));
       else { const h = document.createElement("div"); h.className="empty-hint"; h.textContent = "Aucune tâche active pour "+c.name+"."; el.appendChild(h); }
       head.querySelector("#collabFocusClose").addEventListener("click", ()=>{ collabFocusId = null; renderMain(); el.scrollTop = 0; });
@@ -1980,6 +2015,7 @@ function renderCollabTab(el){
         <span style="width:46px;height:46px;border-radius:50%;background:${c.color};color:#15171C;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;">${escapeHtml(c.name.slice(0,2).toUpperCase())}</span>
         <span style="font-size:13.5px;font-weight:700;line-height:1.2;word-break:break-word;">${escapeHtml(c.name)}</span>
         <span style="font-size:11.5px;color:var(--text-sub);">${list.length} tâche${list.length>1?"s":""}</span>
+        ${c.team ? (String(c.objectif||"").trim() ? `<span style="font-size:11px;color:#5FD9A4;">👥 🎯 objectif défini</span>` : `<span style="font-size:11px;font-weight:700;color:#F0A46B;">👥 ⚠ pas d'objectif</span>`) : ""}
         ${overdue ? `<span style="font-size:11px;font-weight:700;color:var(--danger);">${overdue} en retard</span>` : ""}
         ${selected ? `<span style="font-size:11px;font-weight:700;color:var(--accent);">☑ ${selected} cochée${selected>1?"s":""}</span>` : ""}`;
       tile.addEventListener("click", ()=>{ collabFocusId = c.id; renderMain(); el.scrollTop = 0; });
@@ -2435,6 +2471,7 @@ function openTaskDrawer(id){
   requestAnimationFrame(()=> autoGrowTextarea(document.getElementById("taskTitleInput")));
   setDescEditor(t);
   renderTaskDescLinks(t);
+  document.getElementById("chipNote").classList.toggle("on", !!t.note);
   document.getElementById("chipToday").classList.toggle("on", !!t.today);
   document.getElementById("chipUrgent").classList.toggle("on", !!t.urgent);
   document.getElementById("chipQuick").classList.toggle("on", !!t.quick);
@@ -2460,7 +2497,7 @@ function openTaskDrawer(id){
   renderSubtaskList(t);
   renderProcessLinkRow(t);
   renderExchangeList(t);
-  renderTaskObjectiveField(t);
+  renderDelegRow(t);
   document.getElementById("drawer").classList.remove("fullscreen");
   setFullscreenIcon(false);
   removeInlineProcessPreview();
@@ -7412,6 +7449,7 @@ function openQuickAddModal(prefill){
       <div id="qaMoreOptions">
         <textarea id="qaDesc" placeholder="Description…" style="width:100%;min-height:70px;border:1px solid var(--border-soft);border-radius:8px;padding:9px 11px;font-size:13.5px;background:var(--bg-card);color:var(--text-main);margin-bottom:10px;"></textarea>
         <div class="chiprow" style="margin-bottom:12px;">
+          <button class="btn chip small note" id="qaChipNote">📝 Note</button>
           <button class="btn chip small flame" id="qaChipToday">🔥 Aujourd'hui</button>
           <button class="btn chip small urgent" id="qaChipUrgent">🎯 Urgent</button>
           <button class="btn chip small quick" id="qaChipQuick">⚡ Rapide</button>
@@ -7438,7 +7476,8 @@ function openQuickAddModal(prefill){
     const appEl = document.getElementById("app"); if(appEl) appEl.style.display = "";
     startVoiceNote();
   });
-  let qaToday=false, qaUrgent=false, qaQuick=false, qaKnowledge=false;
+  let qaToday=false, qaUrgent=false, qaQuick=false, qaKnowledge=false, qaNote=false;
+  overlay.querySelector("#qaChipNote").addEventListener("click", e=>{ qaNote=!qaNote; e.currentTarget.classList.toggle("on", qaNote); });
   overlay.querySelector("#qaChipToday").addEventListener("click", e=>{ qaToday=!qaToday; e.currentTarget.classList.toggle("on", qaToday); });
   overlay.querySelector("#qaChipUrgent").addEventListener("click", e=>{ qaUrgent=!qaUrgent; e.currentTarget.classList.toggle("on", qaUrgent); });
   overlay.querySelector("#qaChipQuick").addEventListener("click", e=>{ qaQuick=!qaQuick; e.currentTarget.classList.toggle("on", qaQuick); });
@@ -7533,7 +7572,7 @@ function openQuickAddModal(prefill){
     const t = {
       id: uid("task"), workspaceId: wsId, title, description: overlay.querySelector("#qaDesc").value.trim(),
       assignedTo: qaAssignedTo.length ? qaAssignedTo : [DATA.currentUserId],
-      today: qaToday, urgent: qaUrgent, quick: qaQuick, knowledge: qaKnowledge,
+      today: qaToday, urgent: qaUrgent, quick: qaQuick, knowledge: qaKnowledge, note: qaNote || undefined,
       reminderDate: overlay.querySelector("#qaReminder").value || null,
       recurrence:null, done:false, doneAt:null,
       attachments: attMetas,
@@ -7680,7 +7719,7 @@ window.addEventListener("popstate", ()=>{
     return;
   }
   if(document.getElementById("vaOverlay")){
-    vaCancel(true);
+    vaCancel();
     return;
   }
   if(document.getElementById("procOverlay").classList.contains("show")){
@@ -7828,7 +7867,6 @@ const EX_PREP_QUESTIONS = [
   {k:"objectif", q:"Quel est l'objectif ?"}
 ];
 const EX_CRITERIA = [
-  {k:"objectif", q:"Ça sert un de nos objectifs (Cap) ?"},
   {k:"attributions", q:"C'est dans mes attributions ?"},
   {k:"temps", q:"J'ai le temps ?"},
   {k:"competences", q:"J'ai les compétences ?"},
@@ -8294,7 +8332,6 @@ function exOuiNonSuggestion(d){
   if(!answered) return "Réponds aux questions : la piste de réponse apparaîtra ici.";
   if(EX_CRITERIA.some(x=> val(x.k)==="?")) return "Il reste des « ? » : prends le temps de questionner et de reformuler la demande avant de répondre.";
   if(val("attributions")==="non" || val("role")==="non") return "Piste : un vrai NON, argumenté par les faits (attributions, rôle). Tu peux en faire un « non, et… » en orientant vers la bonne personne.";
-  if(val("objectif")==="non") return "Piste : cette demande ne sert aucun objectif du Cap. Un vrai NON argumenté, ou « non, et… » en proposant autre chose.";
   if(val("temps")==="non" && val("competences")!=="non") return "Piste : « oui, et… » en revoyant les priorités, ou un oui différé. Pas de promesse non tenable.";
   if(val("competences")==="non") return "Piste : un oui partiel, ou « oui, et… » avec un appui ou une formation.";
   const envieNon = ["interet","opportunite","appetence"].filter(k=> val(k)==="non").length;
@@ -8708,20 +8745,6 @@ function openTaskAnywhere(t){
   openTaskDrawer(t.id);
 }
 
-/* ----- champ « Contribue à » dans la fiche tâche ----- */
-function renderTaskObjectiveField(t){
-  const sel = document.getElementById("taskObjectiveSelect"); if(!sel) return;
-  const has = capGet().objectives.length>0;
-  sel.innerHTML = capObjectiveOptions(t ? t.objectiveId||"" : "", has ? "— Aucun objectif —" : "— Définis tes objectifs dans l'onglet Cap —");
-  sel.disabled = !has;
-}
-document.getElementById("taskObjectiveSelect").addEventListener("change", e=>{
-  const t = curTask(); if(!t) return;
-  snapshot();
-  t.objectiveId = e.target.value || null; if(!t.objectiveId) delete t.objectiveId;
-  t.updatedAt = Date.now(); saveData(); renderMain();
-});
-
 /* ----- onglet Cap ----- */
 let capOpenObjectives = new Set();
 function renderCapTab(el){
@@ -8818,7 +8841,6 @@ function renderCapTab(el){
    DÉLÉGATION (méthode du bloc Échanges)
 ========================================================= */
 EX_TYPES.deleguer = {icon:"🤲", label:"Déléguer", sub:"Confier une tâche et garder le contrôle par des points d'étape"};
-EX_ORDER.splice(2, 0, "deleguer");
 EX_MEMOS.deleguer = {title:"Déléguer sans perdre le contrôle (repère)", text:
 "Déléguer n'empêche pas le contrôle : le contrôle se prévoit dès le départ.\n"+
 "1. Le résultat attendu, décrit en FAITS : à quoi je verrai que c'est réussi ?\n"+
@@ -8910,10 +8932,10 @@ function exWireExtra(sheet){
   const delegBtn = sheet.querySelector("#exOuiToDeleg");
   if(delegBtn) delegBtn.addEventListener("click", ()=>{
     const cur = exCur(); if(!cur.ex) return;
-    const nx = createExchange(cur.t, "deleguer");
-    nx.data.resultat = cur.ex.data.request || "";
-    nx.data.who = ""; exTouch();
-    openExchangeEditor(cur.t.id, nx.id);
+    const tid = cur.t.id;
+    closeExchangeEditor();
+    if(openTaskId!==tid) openTaskDrawer(tid);
+    setTimeout(()=>{ const sel = document.getElementById("delegTo"); if(sel){ sel.scrollIntoView({block:"center"}); sel.focus(); } }, 120);
   });
   if(ex.type!=="deleguer") return;
   const assignBtn = sheet.querySelector("#exDelegAssign");
@@ -8963,7 +8985,7 @@ function exWireExtra(sheet){
 function exNextControl(ex){
   return (ex.data.controles||[]).filter(k=> k.date && k.etat!=="ok").sort((a,b)=> a.date.localeCompare(b.date))[0] || null;
 }
-function renderDelegationsSection(el){
+function _oldRenderDelegationsSection(el){
   const rows = [];
   DATA.tasks.forEach(t=>{
     if(t.done) return;
@@ -9044,7 +9066,6 @@ function renderMeetingsTab(el){
       <span style="flex:1;min-width:0;">
         <span style="display:block;font-size:14px;font-weight:600;">${escapeHtml(t.title||"(réunion sans titre)")}</span>
         <span style="display:block;font-size:12px;color:var(--text-sub);">${escapeHtml(m.objectif ? "Objectif : "+m.objectif : "Objectif à définir")}</span>
-        ${o ? `<span style="display:block;font-size:11.5px;color:var(--text-sub);">🧭 ${escapeHtml(o.text)}</span>` : ""}
         ${m.frequence ? `<span style="display:block;font-size:11.5px;color:var(--text-sub);">🔁 ${escapeHtml(m.frequence)}</span>` : ""}
       </span>
       <span class="ex-status ${nx?'':'done'}" style="align-self:center;">${nx ? "Séance "+(nx.date?exFrDate(nx.date):"à dater") : (m.seances||[]).length ? "À jour" : "Pas de séance"}</span>`;
@@ -9136,7 +9157,6 @@ function mtFicheHtml(t, m){
     <h3>La réunion</h3>
     <div class="ex-f"><label>Nom</label><input type="text" data-mt="title" value="${exAttr(t.title||"")}" placeholder="Ex. : Hebdo d'équipe du lundi"></div>
     <div class="ex-f"><label>🎯 Objectif de la réunion : pourquoi elle existe</label><textarea data-mt="objectif" rows="2" placeholder="Ce que cette réunion doit produire, à chaque fois">${escapeHtml(m.objectif||"")}</textarea></div>
-    <div class="ex-f"><label>🧭 Contribue à (Cap)</label><select class="fieldselect" data-mt="objectiveId">${capObjectiveOptions(t.objectiveId||"")}</select></div>
     <div class="ex-f"><label>Participants</label><input type="text" data-mt="participants" value="${exAttr(m.participants||"")}" placeholder="Prénoms séparés par des virgules"></div>
     <div class="ex-f"><label>Fréquence, horaire (pour mémoire)</label><input type="text" data-mt="frequence" value="${exAttr(m.frequence||"")}" placeholder="Ex. : chaque lundi 9h, 45 min"></div>
   </div>
@@ -9374,21 +9394,17 @@ function mtWire(sheet){
 }
 
 /* =========================================================
-   NOTE VOCALE — création d'une tâche entièrement à la voix
-   Titre (phrase tout-en-un possible) → description → marqueur
-   → affectation → récap + validation → compléter ?
+   VOIX : note vocale (titre par l'IA) + tri vocal (notes / aujourd'hui)
 ========================================================= */
-const VA = {active:false, gen:0, rec:null, queued:null, inject:null, resume:null, paused:false, draft:null, step:"", noSpeech:0, wake:null, speaking:false, speakDone:null};
+const VA = {active:false, gen:0, rec:null, queued:null, inject:null, resume:null, paused:false, speaking:false, speakDone:null, wake:null, render:null, choices:[], draft:null};
 const VA_ABORT = {abort:true};
 const VA_CMDS = {
-  annuler:["annuler","annule","annulez","annulation","stop","arrete","arreter","laisse tomber"],
-  repete:["repete","repeter","repetes","tu peux repeter","pardon","quoi","comment"],
-  recommence:["recommence","recommencer","corriger","corrige","on recommence"],
-  passer:["passer","passe","suivant","je passe","on passe","saute"],
-  enregistre:["enregistre","enregistrer","enregistre la","sauvegarde","valide tout"]
+  annuler:["annuler","annule","annulez","annulation","stop","arrete","arreter","laisse tomber","on arrete"],
+  repete:["repete","repeter","repetes","tu peux repeter","pardon","comment"],
+  passer:["passer","passe","suivant","suivante","je passe","on passe","saute"]
 };
-const VA_YES = ["oui","ouais","ouai","ouaip","yes","d'accord","d accord","ok","okay","oki","exact","exactement","c'est ca","c est ca","oui c'est ca","oui c est ca","bien sur","tout a fait","valide","je valide","vas y","vas-y","oui merci","oui s'il te plait","oui s il te plait","affirmatif","parfait","c'est bon","c est bon"];
-const VA_NO = ["non","nan","non merci","pas besoin","rien","aucune","aucun","negatif","non c'est bon","non c est bon","pas de description","sans description","personne","moi","moi meme","non personne","c'est pour moi","c est pour moi","pour moi","non pas besoin"];
+const VA_YES = ["oui","ouais","ouai","ouaip","yes","d'accord","d accord","ok","okay","oki","exact","exactement","c'est ca","c est ca","oui c'est ca","oui c est ca","bien sur","tout a fait","valide","je valide","valider","vas y","oui merci","affirmatif","parfait","c'est bon","c est bon","termine","c'est termine","c est termine","fini","c'est fini","c est fini"];
+const VA_NO = ["non","nan","non merci","pas encore","negatif","non pas encore","attends","attend"];
 function vaNorm(s){
   return String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[’]/g,"'").replace(/[^a-z0-9' ]/g," ").replace(/\s+/g," ").trim();
 }
@@ -9415,67 +9431,38 @@ function vaLev(a, b){
   }
   return prev[b.length];
 }
-function vaMatchCollabs(spoken, minScore){
-  minScore = minScore || 60;
-  let sp = vaNorm(spoken).replace(/^(oui |c'est |c est |a |pour |affecte a |affecter a |affectee a |je l'affecte a |je l affecte a |a affecter a )+/,"").trim();
+function vaMatchCollabs(spoken){
+  const sp = vaNorm(spoken).replace(/^(a |pour |c'est |c est )+/,"").trim();
   if(!sp) return [];
   const cands = DATA.collaborators.filter(c=> c.id!==DATA.currentUserId);
   const scored = cands.map(c=>{
     const full = vaNorm(c.name), parts = full.split(" ");
     let s = 0;
+    const tol = w=> w.length>5 ? 2 : 1;
     if(sp===full) s = 100;
     else if(parts.includes(sp)) s = 90;
     else if(sp.split(" ").length>1 && sp.split(" ").every(w=> parts.includes(w))) s = 88;
     else if(full.startsWith(sp+" ") || sp.startsWith(full)) s = 80;
-    else {
-      const tol = w=> w.length>5 ? 2 : 1;
-      if(parts.some(p=> p.length>2 && vaLev(sp, p) <= tol(p))) s = 70;
-      else if(vaLev(sp, full) <= 2) s = 70;
-      else if(sp.split(" ").some(w=> w.length>2 && parts.some(p=> vaLev(w, p) <= tol(p)))) s = 60;
-    }
+    else if(parts.some(p=> p.length>2 && vaLev(sp, p) <= tol(p)) || vaLev(sp, full) <= 2) s = 70;
     return {c, s};
-  }).filter(x=> x.s>=minScore);
+  }).filter(x=> x.s>=70);
   if(!scored.length) return [];
   const best = Math.max(...scored.map(x=> x.s));
   return scored.filter(x=> x.s===best).map(x=> x.c);
 }
-function vaMatchNames(spoken, minScore){
-  // « Julie et Paul » → plusieurs personnes ; chaque partie doit être reconnue sans ambiguïté.
-  const parts = vaNorm(spoken).split(/ et |, /).map(x=> x.trim()).filter(Boolean);
-  const res = parts.map(p=> ({p, m: vaMatchCollabs(p, minScore)}));
-  return res;
-}
-/* --- phrase tout-en-un : « Relancer le fournisseur, urgent, pour Julie » --- */
-function vaParseOneShot(text){
-  let t = " "+String(text||"").trim()+" ";
-  const out = {today:false, urgent:false, assign:[]};
-  if(/[\s,](c'est |c’est )?urgente?[\s,.]/i.test(t)){ out.urgent = true; t = t.replace(/[\s,]*(c'est |c’est )?urgente?(?=[\s,.])/ig," "); }
-  if(/aujourd[’' ]?hui/i.test(t)){ out.today = true; t = t.replace(/[\s,]*(pour |à faire )?aujourd[’' ]?hui/ig," "); }
-  const m = t.match(/[\s,]+(?:pour|à affecter à|a affecter a|affecter à|affecté à|affectée à|attribuer à|confier à)\s+([^,.]+?)\s*[,.]?\s*$/i);
-  if(m){
-    const names = vaMatchNames(m[1], 80); // phrase tout-en-un : nom reconnu sans approximation
-    if(names.length && names.every(x=> x.m.length===1)){
-      out.assign = names.map(x=> x.m[0].id);
-      t = t.slice(0, m.index);
-    }
-  }
-  t = t.replace(/\s+/g," ").replace(/^[\s,.;:-]+|[\s,;:-]+$/g,"").trim();
-  out.title = t ? t.charAt(0).toUpperCase()+t.slice(1) : "";
-  return out;
-}
 
-/* --- parole et écoute --- */
+/* ---------- parole / écoute ---------- */
 function vaGuard(g){ if(g!==VA.gen || !VA.active) throw VA_ABORT; }
 function vaSpeak(text){
   return new Promise(res=>{
     vaUi({speaking:true});
-    if(!("speechSynthesis" in window)){ VA.speaking = false; res(); return; }
+    if(!("speechSynthesis" in window)){ res(); return; }
     VA.speaking = true;
     let done = false;
     const fin = ()=>{ if(done) return; done = true; VA.speaking = false; VA.speakDone = null; res(); };
     VA.speakDone = fin;
     try{ mailSpeak(text, fin); }catch(e){ fin(); }
-    setTimeout(fin, 3000 + text.length*150); // filet de sécurité si la fin de lecture n'est pas signalée
+    setTimeout(fin, 3000 + text.length*150);
   });
 }
 function vaListen(long){
@@ -9486,12 +9473,11 @@ function vaListen(long){
     const rec = new Ctor();
     rec.lang = "fr-FR"; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = !!long;
     VA.rec = rec;
-    let finals = "", settled = false, error = null, heard = false, quiet = null;
+    let finals = "", settled = false, error = null, quiet = null;
     const finish = (obj)=>{ if(settled) return; settled = true; clearTimeout(quiet); VA.inject = null; VA.rec = null; try{ rec.abort(); }catch(e){} vaUi({listening:false}); res(obj); };
-    // Rien entendu au bout de 10 s, ou 6 s de silence après avoir parlé (dictée longue) : on clôt l'écoute.
     const arm = (ms)=>{ clearTimeout(quiet); quiet = setTimeout(()=>{ if(finals) finish({text:finals, ended:"silence"}); else finish({error:"no-speech"}); }, ms); };
-    arm(10000);
-    VA.inject = (txt)=> finish({text:txt, manual:true});
+    arm(long ? 12000 : 9000);
+    VA.inject = (txt)=> finish({text: long ? (finals+" "+txt).trim() : txt, manual:true});
     rec.onresult = (e)=>{
       let interim = "";
       for(let i=e.resultIndex;i<e.results.length;i++){
@@ -9499,27 +9485,18 @@ function vaListen(long){
         if(r.isFinal) finals += (finals?" ":"")+r[0].transcript.trim();
         else interim += r[0].transcript;
       }
-      heard = true;
-      vaUi({live: (finals+" "+interim).trim()});
-      if(long) arm(finals && !interim ? 6000 : 10000);
-      const fn = vaNorm(finals);
-      if(long && finals && !interim && (VA_YES.includes(fn) || VA_NO.includes(fn) || vaIsCmd(finals))){ finish({text:finals}); return; }
-      if(long && /(^|\s)(c'est |c’est )?termin[ée]e?[\s.!]*$/i.test(finals)){
-        finish({text: finals.replace(/(^|\s)(c'est |c’est )?termin[ée]e?[\s.!]*$/i,"").trim(), ended:"termine"});
-      } else if(!long && finals){
-        finish({text: finals});
-      }
+      vaUi({live:(finals+" "+interim).trim()});
+      if(long){
+        arm(finals && !interim ? 6000 : 12000);
+        if(/(^|\s)(c'est |c’est )?termin[ée]e?[\s.!]*$/i.test(finals)) finish({text:finals});
+        else if(finals && !interim && vaIsCmd(finals)) finish({text:finals});
+      } else if(finals) finish({text:finals});
     };
     rec.onerror = (e)=>{ error = e.error; };
-    rec.onend = ()=>{
-      if(settled) return;
-      if(finals) finish({text: finals, ended:"silence"});
-      else finish({error: error || (heard ? null : "no-speech")});
-    };
+    rec.onend = ()=>{ if(settled) return; if(finals) finish({text:finals, ended:"silence"}); else finish({error: error || "no-speech"}); };
     try{ rec.start(); vaUi({listening:true, live:""}); }catch(e){ finish({error:"start"}); }
   });
 }
-/* Pose une question et renvoie {text} ou {cmd}. Gère silence, pause, répète. */
 async function vaAsk(question, opts){
   opts = opts || {};
   const g = VA.gen;
@@ -9527,270 +9504,86 @@ async function vaAsk(question, opts){
   while(true){
     vaGuard(g);
     if(VA.paused){
-      vaUi({question:q, paused:true});
+      vaUi({question:q});
       await new Promise(r=> VA.resume = r);
       VA.resume = null; VA.paused = false; vaGuard(g);
     }
-    vaUi({question:q, paused:false, live:""});
-    if(VA.queued==null) await vaSpeak(q);
+    vaUi({question:q, live:""});
+    if(VA.queued==null) await vaSpeak(opts.say || q);
     vaGuard(g);
     const r = await vaListen(opts.long);
     vaGuard(g);
     if(r.error){
       if(r.error==="not-allowed" || r.error==="service-not-allowed"){
         alert("Le micro est bloqué. Autorise le micro pour cette appli dans les réglages du navigateur, puis réessaie.");
-        vaCancel(true); throw VA_ABORT;
+        vaCancel(); throw VA_ABORT;
       }
       if(r.error==="network"){ VA.paused = true; vaUi({msg:"Pas de connexion : la reconnaissance vocale a besoin d'internet."}); continue; }
+      if(opts.long && opts.keepText){ return {text:"", ended:"silence"}; }
       misses++;
-      if(misses>=2){ VA.paused = true; await vaSpeak("Je me mets en pause. Touche Reprendre quand tu veux."); misses = 0; q = question; continue; }
-      q = "Je n'ai rien entendu. "+question;
+      if(misses>=2){ VA.paused = true; vaUi({}); await vaSpeak("Je me mets en pause. Touche Reprendre quand tu veux."); misses = 0; q = question; continue; }
+      q = question; opts = Object.assign({}, opts, {say:"Je n'ai rien entendu. "+(opts.say||question)});
       continue;
     }
     const text = String(r.text||"").trim();
     if(!text) continue;
     vaUi({heard:text});
     const cmd = vaIsCmd(text);
-    if(cmd==="repete"){ q = question; continue; }
-    if(cmd==="annuler"){ await vaSpeak("Note annulée."); vaCancel(true); throw VA_ABORT; }
+    if(cmd==="repete"){ opts = Object.assign({}, opts, {say:null}); q = question; continue; }
+    if(cmd==="annuler"){ await vaSpeak("J'arrête."); vaCancel(); throw VA_ABORT; }
     if(cmd) return {cmd, text};
     return {text, ended:r.ended};
   }
 }
 
-/* --- déroulé --- */
-const VA_STEPS = [["title","Titre"],["desc","Description"],["marker","Marqueur"],["assign","Affectation"],["recap","Validation"]];
-function vaMarkerLabel(d){ return d.today && d.urgent ? "aujourd'hui et urgent" : d.today ? "aujourd'hui" : d.urgent ? "urgent" : "aucun"; }
-function vaAssignNames(d){ return d.assign.map(id=> (collabById(id)||{}).name).filter(Boolean); }
-async function vaStepTitle(){
-  while(true){
-    const r = await vaAsk("Quel est le titre ?");
-    if(r.cmd==="passer" || r.cmd==="enregistre"){ await vaSpeak("Le titre est obligatoire."); continue; }
-    if(r.cmd==="recommence") continue;
-    const p = vaParseOneShot(r.text);
-    if(!p.title){ await vaSpeak("Je n'ai pas compris le titre."); continue; }
-    const d = VA.draft;
-    d.title = p.title;
-    if(p.today || p.urgent){ d.today = p.today; d.urgent = p.urgent; d.markerDone = true; }
-    if(p.assign.length){ d.assign = p.assign; d.assignDone = true; }
-    vaUi({});
-    return;
-  }
-}
-async function vaStepDesc(){
-  const d = VA.draft;
-  let r = await vaAsk("Une description ? Dis non, ou dicte-la et termine par : terminé.", {long:true});
-  if(r.cmd==="passer"){ d.desc = ""; return; }
-  if(r.cmd==="recommence"){ d.desc = ""; return vaStepDesc(); }
-  if(r.cmd==="enregistre") return "save";
-  const yn = vaYesNo(r.text);
-  if(yn==="no"){ d.desc = ""; return; }
-  let text = yn==="yes" ? "" : r.text, ended = yn==="yes" ? null : r.ended;
-  while(ended!=="termine"){
-    if(text){
-      const c = await vaAsk("C'est terminé ?");
-      if(c.cmd==="recommence"){ text = ""; }
-      else if(c.cmd==="passer" || vaYesNo(c.text)==="yes") break;
-      else if(!c.cmd && vaYesNo(c.text)===null){ text += " "+c.text; continue; }
-    }
-    const more = await vaAsk(text ? "Je t'écoute, continue." : "Je t'écoute. Termine par : terminé.", {long:true});
-    if(more.cmd==="passer") break;
-    if(more.cmd==="recommence"){ text = ""; continue; }
-    text = (text+" "+more.text).trim(); ended = more.ended;
-  }
-  text = text.trim();
-  d.desc = text ? text.charAt(0).toUpperCase()+text.slice(1) : "";
-  vaUi({});
-}
-async function vaStepMarker(){
-  const d = VA.draft;
-  while(true){
-    const r = await vaAsk("Aujourd'hui, urgent, ou rien ?");
-    if(r.cmd==="passer"){ d.today = false; d.urgent = false; return; }
-    if(r.cmd==="recommence") continue;
-    if(r.cmd==="enregistre") return "save";
-    const n = vaNorm(r.text);
-    const today = /aujourd'?\s?hui|aujourd hui/.test(n), urgent = /urgent/.test(n), both = /les deux|deux/.test(n);
-    if(both){ d.today = true; d.urgent = true; }
-    else if(today || urgent){ d.today = today; d.urgent = urgent; }
-    else if(vaYesNo(r.text)==="no" || /rien|aucun|normal|pas presse/.test(n)){ d.today = false; d.urgent = false; }
-    else { await vaSpeak("Je n'ai pas compris. Dis aujourd'hui, urgent, les deux, ou rien."); continue; }
-    d.markerDone = true; vaUi({}); return;
-  }
-}
-async function vaPickPerson(spoken){
-  // Renvoie un id de collaborateur, null (abandon) ou "retry"
-  const names = vaMatchNames(spoken);
-  const ids = [];
-  for(const x of names){
-    if(!x.m.length){ await vaSpeak("Je ne trouve pas "+x.p+" dans tes collaborateurs."); return "retry"; }
-    if(x.m.length===1){ ids.push(x.m[0].id); continue; }
-    const list = x.m.map(c=> c.name);
-    const r = await vaAsk("J'ai trouvé "+list.slice(0,-1).join(", ")+" et "+list[list.length-1]+". Qui exactement ?");
-    if(r.cmd) return "retry";
-    const m = vaMatchCollabs(r.text).filter(c=> x.m.includes(c));
-    if(m.length!==1){ await vaSpeak("Je n'ai pas compris."); return "retry"; }
-    ids.push(m[0].id);
-  }
-  const label = ids.map(id=> collabById(id).name);
-  const c = await vaAsk((label.length>1 ? label.slice(0,-1).join(", ")+" et "+label[label.length-1] : label[0])+", c'est bien ça ?");
-  if(c.cmd==="recommence" || vaYesNo(c.text)!=="yes") return "retry";
-  return ids;
-}
-async function vaStepAssign(){
-  const d = VA.draft;
-  if(!DATA.collaborators.some(c=> c.id!==DATA.currentUserId)){ d.assignDone = true; return; }
-  while(true){
-    const r = await vaAsk("Tu l'affectes à un collaborateur ? Dis non, ou donne son nom.");
-    if(r.cmd==="passer"){ d.assign = []; return; }
-    if(r.cmd==="recommence") continue;
-    if(r.cmd==="enregistre") return "save";
-    const yn = vaYesNo(r.text);
-    if(yn==="no"){ d.assign = []; d.assignDone = true; vaUi({}); return; }
-    let spoken = r.text;
-    if(yn==="yes" && vaNorm(r.text).split(" ").length<=2){
-      const w = await vaAsk("À qui ?");
-      if(w.cmd==="passer"){ d.assign = []; return; }
-      if(w.cmd) continue;
-      spoken = w.text;
-    }
-    const res = await vaPickPerson(spoken);
-    if(res==="retry"){ continue; }
-    d.assign = res; d.assignDone = true; vaUi({}); return;
-  }
-}
-function vaRecapText(){
-  const d = VA.draft;
-  const words = d.desc ? d.desc.split(/\s+/).length : 0;
-  const parts = ["Récapitulatif. Titre : "+d.title+"."];
-  if(d.desc) parts.push(words<=25 ? "Description : "+d.desc+"." : "Avec une description de "+words+" mots.");
-  else parts.push("Pas de description.");
-  parts.push("Marqueur : "+vaMarkerLabel(d)+".");
-  const n = vaAssignNames(d);
-  parts.push(n.length ? "Affectée à "+n.join(" et ")+"." : "Pour toi.");
-  return parts.join(" ");
-}
-async function vaStepRecap(){
-  while(true){
-    VA.step = "recap"; vaUi({});
-    const r = await vaAsk(vaRecapText()+" Je l'enregistre ?");
-    if(r.cmd==="enregistre" || (!r.cmd && vaYesNo(r.text)==="yes")) return "save";
-    if(r.cmd==="recommence" || r.cmd==="passer" || (!r.cmd && vaYesNo(r.text)==="no") || !r.cmd){
-      let target = r.cmd ? null : vaFixTarget(r.text);
-      if(!target){
-        const w = await vaAsk("Que veux-tu corriger : le titre, la description, le marqueur, ou l'affectation ?");
-        if(w.cmd==="passer") continue;
-        if(w.cmd==="enregistre") return "save";
-        target = w.cmd ? null : vaFixTarget(w.text);
-        if(!target){ await vaSpeak("Je n'ai pas compris."); continue; }
-      }
-      VA.step = target; vaUi({});
-      if(target==="title") await vaStepTitle();
-      else if(target==="desc") await vaStepDesc();
-      else if(target==="marker") await vaStepMarker();
-      else if(target==="assign"){ VA.draft.assignDone = false; await vaStepAssign(); }
-    }
-  }
-}
-function vaFixTarget(text){
-  const n = vaNorm(text);
-  if(/titre/.test(n)) return "title";
-  if(/descri/.test(n)) return "desc";
-  if(/marqu|urgent|aujourd/.test(n)) return "marker";
-  if(/affect|collab|personne|qui/.test(n)) return "assign";
-  return null;
-}
-function vaSave(){
-  const d = VA.draft;
-  const ws = currentWsId || (DATA.workspaces[0] && DATA.workspaces[0].id);
-  snapshot();
-  const t = {
-    id: uid("task"), workspaceId: ws, title: d.title, description: d.desc||"",
-    assignedTo: d.assign.length ? d.assign.slice() : [DATA.currentUserId],
-    today: !!d.today, urgent: !!d.urgent, quick:false, knowledge:false,
-    reminderDate:null, dueDate:null, recurrence:null, done:false, doneAt:null,
-    attachments:[], subtasks:[], process:null, createdAt:Date.now(), updatedAt:Date.now()
-  };
-  DATA.tasks.push(t);
-  saveData(); renderSidebar(); renderMain();
-  return t;
-}
-async function vaRun(){
-  const g = VA.gen;
-  try{
-    VA.step = "title"; vaUi({});
-    await vaStepTitle(); vaGuard(g);
-    let s;
-    VA.step = "desc"; vaUi({}); s = await vaStepDesc(); vaGuard(g);
-    if(s!=="save" && !VA.draft.markerDone){ VA.step = "marker"; vaUi({}); s = await vaStepMarker(); vaGuard(g); }
-    if(s!=="save" && !VA.draft.assignDone){ VA.step = "assign"; vaUi({}); s = await vaStepAssign(); vaGuard(g); }
-    if(s!=="save") await vaStepRecap();
-    vaGuard(g);
-    const t = vaSave();
-    VA.step = "done"; vaUi({saved:t});
-    const r = await vaAsk("C'est enregistré. Tu veux la compléter ?");
-    if(!r.cmd && vaYesNo(r.text)==="yes"){ vaCancel(true, true); openTaskAnywhere(t); }
-    else { await vaSpeak("C'est noté."); vaCancel(true); }
-  }catch(e){
-    if(e!==VA_ABORT){ console.warn(e); vaCancel(true); alert("La note vocale s'est arrêtée : "+(e && e.message || e)); }
-  }
-}
-
-/* --- interface --- */
-function startVoiceNote(){
-  const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if(!Ctor){ alert("La dictée vocale n'est pas disponible dans ce navigateur. Utilise Chrome ou Edge (Android ou ordinateur), ou Safari sur iPhone."); return; }
-  if(DATA.workspaces.length===0){ alert("Crée d'abord un espace de travail."); return; }
+/* ---------- interface commune ---------- */
+function vaOpen(title, icon){
   try{ if(typeof mrStop==="function") mrStop(true); }catch(e){}
   try{ mailStopSpeaking(); }catch(e){}
-  vaCancel(true);
-  VA.active = true; VA.gen++; VA.queued = null; VA.paused = false;
-  VA.draft = {title:"", desc:"", today:false, urgent:false, assign:[], markerDone:false, assignDone:false};
+  vaCancel();
+  VA.active = true; VA.gen++; VA.queued = null; VA.paused = false; VA.choices = []; VA.render = null;
   const ov = document.createElement("div");
   ov.className = "ex-ov va-ov"; ov.id = "vaOverlay";
   ov.innerHTML = `<div class="ex-sheet va-sheet">
-    <div class="ex-head"><span style="font-size:22px;">🎤</span><div style="flex:1;font-size:17px;font-weight:700;">Note vocale</div><button class="btn small danger" id="vaCancel">Annuler</button></div>
-    <div class="va-steps" id="vaSteps"></div>
+    <div class="ex-head"><span style="font-size:22px;">${icon}</span><div style="flex:1;font-size:17px;font-weight:700;">${title}</div><span class="va-count" id="vaCount"></span><button class="btn small danger" id="vaCancel">Arrêter</button></div>
     <div class="va-question" id="vaQuestion">…</div>
     <div class="va-mic" id="vaMic"><span class="va-dot"></span><span id="vaMicLabel">Prépare-toi…</span></div>
     <div class="va-live" id="vaLive"></div>
-    <div class="va-btns">
-      <button class="btn" data-va="oui">Oui</button>
-      <button class="btn" data-va="non">Non</button>
-      <button class="btn" data-va="passer">Passer</button>
-      <button class="btn" data-va="répète">Répète</button>
-      <button class="btn primary" id="vaResume" style="display:none;">▶ Reprendre</button>
-    </div>
+    <div id="vaCard"></div>
+    <div class="va-choices" id="vaChoices"></div>
+    <button class="btn primary" id="vaResume" style="display:none;width:100%;justify-content:center;padding:12px;margin-bottom:10px;">▶ Reprendre</button>
     <div class="va-type"><input type="text" id="vaTyped" placeholder="Ou tape ta réponse ici"><button class="btn small" id="vaTypedSend">Envoyer</button></div>
-    <div class="va-draft" id="vaDraft"></div>
-    <details class="ex-memo" style="margin-top:10px;"><summary>Commandes vocales</summary><div>« oui » / « non » · « passer » · « répète » · « recommence » (refaire la question) · « annuler » (tout abandonner) · « enregistre » (valider tout de suite)<br>Description : dicte, puis dis « terminé ».<br>Au titre, tu peux tout dire d'un coup : « Relancer le fournisseur, urgent, pour Julie ».</div></details>
+    <details class="ex-memo" id="vaHelp" style="margin-top:6px;"><summary>Commandes vocales</summary><div id="vaHelpText"></div></details>
   </div>`;
   document.body.appendChild(ov);
   history.pushState({sensitacheModal:"voice"}, "", location.href);
   ov.querySelector("#vaCancel").addEventListener("click", ()=> vaCancel());
-  ov.querySelectorAll("[data-va]").forEach(b=> b.addEventListener("click", ()=> vaInjectAnswer(b.dataset.va)));
   ov.querySelector("#vaResume").addEventListener("click", ()=>{ if(VA.resume) VA.resume(); });
   const typed = ov.querySelector("#vaTyped");
   const send = ()=>{ const v = typed.value.trim(); if(!v) return; typed.value = ""; vaInjectAnswer(v); };
   ov.querySelector("#vaTypedSend").addEventListener("click", send);
   typed.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); send(); } });
+  ov.querySelector("#vaChoices").addEventListener("click", e=>{
+    const b = e.target.closest("[data-ch]"); if(!b) return;
+    const c = VA.choices[Number(b.dataset.ch)]; if(!c) return;
+    if(c.toggle){ c.toggle(); vaUi({}); }
+    else vaInjectAnswer(c.value);
+  });
   try{ if("wakeLock" in navigator) navigator.wakeLock.request("screen").then(l=> VA.wake = l).catch(()=>{}); }catch(e){}
-  vaUi({});
-  vaRun();
+  return ov;
 }
 function vaInjectAnswer(text){
   if(!VA.active) return;
   if(VA.paused && VA.resume){ VA.queued = text; VA.resume(); return; }
   if(VA.inject){ VA.inject(text); return; }
-  // Réponse donnée pendant que l'appli parle : on coupe la voix et on garde la réponse.
   VA.queued = text;
   if(VA.speaking){ try{ mailStopSpeaking(); }catch(e){} if(VA.speakDone) VA.speakDone(); }
 }
-function vaCancel(silent, keepHistory){
+function vaCancel(keepHistory){
   const was = VA.active;
   VA.active = false; VA.gen++;
   try{ if(VA.rec) VA.rec.abort(); }catch(e){}
-  VA.rec = null; VA.inject = null; VA.queued = null;
+  VA.rec = null; VA.inject = null; VA.queued = null; VA.choices = []; VA.render = null;
   if(VA.resume){ const r = VA.resume; VA.resume = null; r(); }
   if(VA.speaking){ try{ mailStopSpeaking(); }catch(e){} if(VA.speakDone) VA.speakDone(); }
   try{ if(VA.wake) VA.wake.release(); }catch(e){} VA.wake = null;
@@ -9800,31 +9593,514 @@ function vaCancel(silent, keepHistory){
     if(keepHistory) history.replaceState(null, "", location.href);
     else { suppressNextPopstate = true; history.back(); }
   }
+  if(was) renderMain();
 }
 function vaUi(o){
   o = o || {};
   const ov = document.getElementById("vaOverlay"); if(!ov) return;
-  const d = VA.draft || {};
   if(o.question!==undefined) ov.querySelector("#vaQuestion").textContent = o.question;
   const mic = ov.querySelector("#vaMic"), lab = ov.querySelector("#vaMicLabel");
   if(o.speaking){ mic.className = "va-mic speaking"; lab.textContent = "L'appli parle… (tu peux répondre avec les boutons)"; }
   if(o.listening===true){ mic.className = "va-mic listening"; lab.textContent = "Je t'écoute…"; }
   if(o.listening===false && !VA.paused){ mic.className = "va-mic"; lab.textContent = o.noMic ? "Micro indisponible : réponds avec les boutons ou au clavier." : "…"; }
-  if(o.paused===true){ mic.className = "va-mic paused"; lab.textContent = "En pause"; }
-  if(o.msg){ lab.textContent = o.msg; }
+  if(VA.paused){ mic.className = "va-mic paused"; lab.textContent = "En pause"; }
+  if(o.msg) lab.textContent = o.msg;
+  if(o.busy){ mic.className = "va-mic speaking"; lab.textContent = o.busy; }
   ov.querySelector("#vaResume").style.display = VA.paused ? "" : "none";
   if(o.live!==undefined) ov.querySelector("#vaLive").textContent = o.live;
   if(o.heard!==undefined) ov.querySelector("#vaLive").textContent = "« "+o.heard+" »";
-  const order = VA_STEPS.map(x=> x[0]);
-  const curIdx = VA.step==="done" ? order.length : order.indexOf(VA.step);
-  ov.querySelector("#vaSteps").innerHTML = VA_STEPS.map(([k,l],i)=> `<span class="${i<curIdx?'ok':i===curIdx?'cur':''}">${l}</span>`).join("");
-  const names = d.assign ? vaAssignNames(d) : [];
-  ov.querySelector("#vaDraft").innerHTML = `
-    <div><b>Titre</b> ${d.title ? escapeHtml(d.title) : "<i>—</i>"}</div>
-    <div><b>Description</b> ${d.desc ? escapeHtml(d.desc) : "<i>—</i>"}</div>
-    <div><b>Marqueur</b> ${d.today?"🔥 Aujourd'hui ":""}${d.urgent?"🎯 Urgent":""}${!d.today&&!d.urgent?"<i>aucun</i>":""}</div>
-    <div><b>Affectation</b> ${names.length ? escapeHtml(names.join(", ")) : "<i>moi</i>"}</div>
-    ${o.saved ? `<div style="color:#5FD9A4;margin-top:6px;">✓ Tâche enregistrée</div>` : ""}`;
+  if(VA.render) VA.render(ov);
+  ov.querySelector("#vaChoices").innerHTML = VA.choices.map((c,i)=> `<button type="button" class="btn ${c.on?'on':''} ${c.cls||''}" data-ch="${i}">${c.label}</button>`).join("");
+}
+
+/* =========================================================
+   NOTE VOCALE : dicter → « terminé » → titre clair (IA) → note
+========================================================= */
+const VA_TITLE_BREAKS = [",", ";", " parce que ", " parce qu'", " car ", " pour que ", " afin de ", " afin que ", " sinon ", " mais ", " et puis ", " puis ", " sachant que ", " vu que ", " comme ça ", " comme ca "];
+function vaSplitTitle(text){
+  const t = String(text||"").replace(/\s+/g," ").trim();
+  const words = t.split(" ");
+  if(words.length<=10) return {title:t, desc:""};
+  let cut = -1;
+  const low = " "+t.toLowerCase()+" ";
+  VA_TITLE_BREAKS.forEach(b=>{
+    let i = low.indexOf(b);
+    while(i>0){
+      const before = low.slice(1, i).trim().split(" ").length;
+      if(before>=3 && before<=14){ if(cut<0 || i-1<cut) cut = i-1; break; }
+      i = low.indexOf(b, i+1);
+    }
+  });
+  let title = cut>0 ? t.slice(0, cut).trim() : words.slice(0, 8).join(" ")+"…";
+  title = title.replace(/[,;:]+$/,"");
+  return {title, desc:t};
+}
+function vaCap(s){ s = String(s||"").trim(); return s ? s.charAt(0).toUpperCase()+s.slice(1) : s; }
+async function vaAITitle(text){
+  if(!anthropicApiKey) throw new Error("no-key");
+  const ctrl = new AbortController();
+  const to = setTimeout(()=> ctrl.abort(), 9000);
+  try{
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST", signal:ctrl.signal,
+      headers:{"Content-Type":"application/json","x-api-key":anthropicApiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+      body: JSON.stringify({model:"claude-haiku-4-5-20251001", max_tokens:60,
+        system:"Tu reçois une note dictée à voix haute par un manager (transcription brute, ponctuation approximative). Rédige le titre de tâche le plus clair possible, en français : 3 à 8 mots, qui dit l'action et son objet. Commence par un verbe à l'infinitif quand c'est une action. Garde les noms propres et les chiffres importants. Pas de point final, pas de guillemets, pas d'emoji. Réponds uniquement avec le titre.",
+        messages:[{role:"user", content:text}]})
+    });
+    if(!res.ok) throw new Error("api "+res.status);
+    const data = await res.json();
+    const out = (data.content||[]).filter(b=> b.type==="text").map(b=> b.text).join("").trim().replace(/^["«»\s]+|["«»\s.]+$/g,"");
+    if(!out) throw new Error("vide");
+    return out;
+  } finally { clearTimeout(to); }
+}
+function startVoiceNote(){
+  const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!Ctor){ alert("La dictée vocale n'est pas disponible dans ce navigateur. Utilise Chrome ou Edge (Android ou ordinateur), ou Safari sur iPhone."); return; }
+  if(DATA.workspaces.length===0){ alert("Crée d'abord un espace de travail."); return; }
+  vaOpen("Note vocale", "🎤");
+  document.getElementById("vaHelpText").innerHTML = "Dicte ta note, puis dis « terminé ». Sinon, l'appli te demande « C'est terminé ? ».<br>« annuler » : tout abandonner.";
+  VA.draft = {text:""};
+  VA.render = (ov)=>{
+    const d = VA.draft || {};
+    ov.querySelector("#vaCard").innerHTML = d.text ? `<div class="va-draft"><b>Ta note</b> ${escapeHtml(d.text)}${d.title?`<br><b>Titre</b> ${escapeHtml(d.title)}`:""}</div>` : "";
+  };
+  VA.choices = [{label:"✓ Terminé", value:"terminé", cls:"primary"}];
+  vaUi({});
+  vaNoteRun();
+}
+async function vaNoteRun(){
+  const g = VA.gen;
+  const stripEnd = s=>{ const m = /(^|\s)(c'est |c’est )?termin[ée]e?[\s.!]*$/i.test(s); return {text: s.replace(/(^|\s)(c'est |c’est )?termin[ée]e?[\s.!]*$/i,"").trim(), done: m}; };
+  try{
+    let text = "", done = false, first = true;
+    while(!done){
+      const r = await vaAsk(first ? "Je t'écoute." : "Je t'écoute, continue.", {long:true, keepText:!first});
+      first = false;
+      if(r.cmd==="passer"){ if(text) break; else continue; }
+      const s = stripEnd(r.text||"");
+      text = (text+" "+s.text).trim(); VA.draft.text = vaCap(text); vaUi({});
+      if(s.done && text) break;
+      if(!text) continue;
+      VA.choices = [{label:"Oui, c'est terminé", value:"oui", cls:"primary"},{label:"Non, je continue", value:"non"}]; vaUi({});
+      const c = await vaAsk("C'est terminé ?");
+      VA.choices = [{label:"✓ Terminé", value:"terminé", cls:"primary"}];
+      const yn = c.cmd ? null : vaYesNo(c.text);
+      if(yn==="yes" || c.cmd==="passer") break;
+      if(yn===null && !c.cmd){ const s2 = stripEnd(c.text); text = (text+" "+s2.text).trim(); VA.draft.text = vaCap(text); if(s2.done) break; }
+    }
+    vaGuard(g);
+    text = vaCap(text);
+    VA.choices = []; vaUi({busy:"Je prépare le titre…"});
+    let title, desc;
+    try{
+      title = vaCap(await vaAITitle(text));
+      desc = vaNorm(title)===vaNorm(text) ? "" : text;
+    }catch(e){
+      const sp = vaSplitTitle(text); title = vaCap(sp.title); desc = sp.desc;
+    }
+    vaGuard(g);
+    VA.draft.title = title; vaUi({});
+    snapshot();
+    const ws = currentWsId || (DATA.workspaces[0] && DATA.workspaces[0].id);
+    DATA.tasks.push({
+      id: uid("task"), workspaceId: ws, title, description: desc,
+      assignedTo: [DATA.currentUserId], note:true, today:false, urgent:false, quick:false, knowledge:false,
+      reminderDate:null, dueDate:null, recurrence:null, done:false, doneAt:null,
+      attachments:[], subtasks:[], process:null, createdAt:Date.now(), updatedAt:Date.now()
+    });
+    saveData();
+    await vaSpeak("Noté : "+title+".");
+    vaCancel();
+  }catch(e){
+    if(e!==VA_ABORT){ console.warn(e); vaCancel(); alert("La note vocale s'est arrêtée : "+(e && e.message || e)); }
+  }
+}
+
+/* =========================================================
+   TRI : tâches du jour (garder / en notes / fait) puis notes
+   (section + affectation), une par une, voix + boutons
+========================================================= */
+const TRI_SECTIONS = [
+  {k:"today", label:"🔥 Aujourd'hui", re:/aujourd/},
+  {k:"urgent", label:"🎯 Urgent", re:/urgent|urgence/},
+  {k:"quick", label:"⚡ Rapide", re:/rapide/},
+  {k:"wait", label:"👁️ En attente", re:/attente|attendre|a suivre/},
+  {k:"later", label:"🕓 Plus tard", re:/plus tard|plutard|pas prioritaire|non prioritaire|un jour/},
+  {k:"done", label:"✅ C'est fait", re:/fait|termine|fini/},
+  {k:"delete", label:"🗑️ Supprimer", re:/supprim|efface|poubelle|jette/},
+  {k:"keep", label:"📝 Garder en note", re:/garde|note|laisse/}
+];
+function triReadText(t){
+  let s = t.title||"(sans titre)";
+  const d = String(t.description||"").trim();
+  if(d && vaNorm(d)!==vaNorm(t.title)){
+    const w = d.split(/\s+/);
+    s += ". "+(w.length>35 ? w.slice(0,35).join(" ")+"…" : d);
+  }
+  return s;
+}
+function startTri(mode){
+  if(DATA.workspaces.length===0) return;
+  const mine = myVisibleTasks();
+  const todays = mode==="notes" ? [] : mine.filter(t=> t.today && !t.note);
+  const notes = mine.filter(t=> t.note);
+  const hasTeam = mode!=="notes" && teamMembers().length>0;
+  if(!todays.length && !notes.length && !hasTeam){ exToast(mode==="notes" ? "Aucune note à trier" : "Rien à trier : ni tâche du jour, ni note"); return; }
+  vaOpen(mode==="notes" ? "Trier les notes" : "Faire le tri", mode==="notes" ? "🔊" : "🧹");
+  document.getElementById("vaHelpText").innerHTML = "Réponds à la voix ou touche les boutons.<br>Section : « aujourd'hui », « urgent », « rapide », « en attente », « plus tard », « c'est fait », « supprimer », « garder en note ».<br>Affectation : « moi », un ou plusieurs noms (« Julie et Paul »), puis « valider ».<br>« passer » : note suivante · « répète » · « annuler » : arrêter le tri.";
+  triRun(todays.map(t=> t.id), notes.map(t=> t.id), mode);
+}
+async function triRun(todayIds, noteIds, mode){
+  const g = VA.gen;
+  const total = todayIds.length + noteIds.length;
+  let n = 0;
+  const get = id=> DATA.tasks.find(x=> x.id===id && !x.done);
+  const setCount = ()=>{ const el = document.getElementById("vaCount"); if(el) el.textContent = Math.min(n+1,total)+" / "+total; };
+  const card = (t, kind)=>{ VA.render = (ov)=>{ ov.querySelector("#vaCard").innerHTML = `<div class="va-draft"><div class="va-kind">${kind}</div><div style="font-size:15px;font-weight:700;">${escapeHtml(t.title||"(sans titre)")}</div>${t.description && vaNorm(t.description)!==vaNorm(t.title) ? `<div style="color:var(--text-sub);margin-top:4px;white-space:pre-wrap;">${escapeHtml(t.description)}</div>`:""}</div>`; }; };
+  try{
+    if(todayIds.length){
+      await vaSpeak(todayIds.length+(todayIds.length>1?" tâches":" tâche")+" pour aujourd'hui.");
+      for(const id of todayIds){
+        vaGuard(g); setCount();
+        const t = get(id); n++; if(!t) continue;
+        card(t, "🔥 Aujourd'hui");
+        VA.choices = [{label:"Je la garde", value:"garder", cls:"primary"},{label:"📝 En notes", value:"en notes"},{label:"✅ C'est fait", value:"c'est fait"},{label:"Passer", value:"passer"}];
+        while(true){
+          const r = await vaAsk("Tu la gardes, tu la remets en notes, ou c'est fait ?", {say: (t.title||"")+". Tu la gardes, tu la remets en notes, ou c'est fait ?"});
+          if(r.cmd==="passer") break;
+          const v = vaNorm(r.text);
+          if(/fait|termine|fini/.test(v)){ snapshot(); toggleTaskDone(t); break; }
+          if(/note/.test(v)){ snapshot(); t.today = false; t.note = true; t.updatedAt = Date.now(); saveData(); break; }
+          if(/garde|oui|aujourd|reste/.test(v)) break;
+          await vaSpeak("Je n'ai pas compris.");
+        }
+      }
+    }
+    if(noteIds.length){
+      vaGuard(g);
+      await vaSpeak(noteIds.length+(noteIds.length>1?" notes":" note")+" à trier.");
+      for(const id of noteIds){
+        vaGuard(g); setCount();
+        const t = get(id); n++; if(!t || !t.note) continue;
+        card(t, "📝 Note");
+        // 1. Section
+        VA.choices = TRI_SECTIONS.map(s=> ({label:s.label, value:s.label.replace(/^\S+\s/,"")}));
+        let sec = null, said = triReadText(t)+". Dans quelle section ?";
+        while(!sec){
+          const r = await vaAsk("Dans quelle section ?", {say:said});
+          if(r.cmd==="passer"){ sec = TRI_SECTIONS.find(s=> s.k==="keep"); break; }
+          const v = vaNorm(r.text);
+          sec = TRI_SECTIONS.find(s=> s.re.test(v)) || null;
+          if(!sec){ said = "Je n'ai pas compris. Aujourd'hui, urgent, rapide, en attente, plus tard, c'est fait, supprimer, ou garder en note ?"; }
+        }
+        vaGuard(g);
+        if(sec.k==="keep") continue;
+        if(sec.k==="done"){ snapshot(); delete t.note; t.updatedAt = Date.now(); toggleTaskDone(t); continue; }
+        if(sec.k==="delete"){
+          VA.choices = [{label:"Oui, supprimer", value:"oui", cls:"danger"},{label:"Non", value:"non"}];
+          const c = await vaAsk("Je la supprime, c'est sûr ?");
+          if(!c.cmd && vaYesNo(c.text)==="yes"){
+            snapshot(); cleanupTaskAttachments(t);
+            DATA.tasks = DATA.tasks.filter(x=> x.id!==t.id); DATA.tombstones.tasks[t.id] = Date.now(); saveData();
+          }
+          continue;
+        }
+        // 2. Affectation (plusieurs personnes possibles)
+        let sel = new Set((t.assignedTo||[]).length ? t.assignedTo : [DATA.currentUserId]);
+        const people = [DATA.collaborators.find(c=> c.id===DATA.currentUserId)].concat(DATA.collaborators.filter(c=> c.id!==DATA.currentUserId)).filter(Boolean);
+        const setChoices = ()=>{
+          VA.choices = people.map(c=> ({label:(c.id===DATA.currentUserId?"Moi":escapeHtml(c.name)), on:sel.has(c.id), toggle:()=>{ sel.has(c.id) ? sel.delete(c.id) : sel.add(c.id); }}))
+            .concat([{label:"✓ Valider", value:"valider", cls:"primary"}]);
+        };
+        const baseRender = VA.render;
+        VA.render = (ov)=>{
+          baseRender(ov);
+          const lines = Array.from(sel).map(id=> collabById(id)).filter(c=> c && c.team).map(c=>{
+            const o = String(c.objectif||"").trim();
+            return `<div class="va-obj ${o?'':'warn'}">🎯 <b>${escapeHtml(firstName(c.name))}</b> : ${o ? escapeHtml(o) : "⚠️ pas d'objectif défini"}</div>`;
+          }).join("");
+          if(lines) ov.querySelector("#vaCard").insertAdjacentHTML("beforeend", lines);
+        };
+        if(people.length>1){
+          setChoices();
+          let askSay = "À qui ? Dis moi, un ou plusieurs noms, ou valider.";
+          while(true){
+            const r = await vaAsk("À qui ?", {say:askSay});
+            if(r.cmd==="passer") break;
+            const v = vaNorm(r.text);
+            if(/^(valider|valide|je valide|c'est bon|c est bon|c'est tout|c est tout|ok|oui)$/.test(v)) break;
+            const parts = v.split(/ et |, | puis /).map(x=> x.trim()).filter(Boolean);
+            const next = new Set(); let unknown = null, ambig = null;
+            for(const p of parts){
+              if(/^(moi|moi meme|pour moi|a moi)$/.test(p)){ next.add(DATA.currentUserId); continue; }
+              const m = vaMatchCollabs(p);
+              if(m.length===1) next.add(m[0].id);
+              else if(m.length>1){ ambig = m; break; }
+              else { unknown = p; break; }
+            }
+            if(ambig){ askSay = "J'ai plusieurs personnes : "+ambig.map(c=> c.name).join(", ")+". Redis le nom complet."; continue; }
+            if(unknown){ askSay = "Je ne trouve pas "+unknown+". Redis le nom, ou touche les boutons."; continue; }
+            if(!next.size){ askSay = "Je n'ai pas compris. Dis moi, un ou plusieurs noms, ou valider."; continue; }
+            sel = next; setChoices(); vaUi({});
+            const names = Array.from(sel).map(id=> id===DATA.currentUserId ? "toi" : (collabById(id)||{}).name);
+            askSay = (names.length>1 ? names.slice(0,-1).join(", ")+" et "+names[names.length-1] : names[0])+". Je valide ?";
+            VA.choices.push({label:"Non, corriger", value:"non"});
+            const c = await vaAsk("Je valide ?", {say:askSay});
+            if(!c.cmd && vaYesNo(c.text)==="yes") break;
+            setChoices(); askSay = "À qui alors ?";
+          }
+        }
+        vaGuard(g);
+        snapshot();
+        delete t.note;
+        t.today = sec.k==="today"; t.urgent = sec.k==="urgent"; t.quick = sec.k==="quick"; t.followUp = sec.k==="wait";
+        t.assignedTo = sel.size ? Array.from(sel) : [DATA.currentUserId];
+        t.updatedAt = Date.now(); saveData();
+      }
+    }
+    vaGuard(g);
+    if(mode!=="notes") await triObjectives(g);
+    vaGuard(g);
+    VA.choices = []; VA.render = null; vaUi({question:"Tri terminé."});
+    const cardEl = document.getElementById("vaCard"); if(cardEl) cardEl.innerHTML = "";
+    await vaSpeak("Plus rien à trier. Le tri est terminé.");
+    vaCancel();
+  }catch(e){
+    if(e!==VA_ABORT){ console.warn(e); vaCancel(); alert("Le tri s'est arrêté : "+(e && e.message || e)); }
+  }
+}
+
+/* =========================================================
+   SECTION NOTES en haut de l'accueil
+========================================================= */
+function renderNotesSection(){
+  const el = document.getElementById("notesSection"); if(!el) return;
+  const notes = myVisibleTasks().filter(t=> t.note).sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
+  el.innerHTML = `<div class="notes-head">
+      <div class="task-group-label" style="margin:0;">📝 Notes${notes.length?" ("+notes.length+")":""}</div>
+      <span style="flex:1;"></span>
+      ${notes.length ? `<button class="btn small" id="btnTriNotes">🔊 Trier les notes</button>` : ""}
+      <button class="btn small" id="btnTriAll">🧹 Faire le tri</button>
+    </div>
+    <div id="notesList"></div>`;
+  const list = el.querySelector("#notesList");
+  if(!notes.length) list.innerHTML = `<div class="ex-hint" style="margin:2px 0 6px;">Aucune note. Touche 🎤 pour en dicter une.</div>`;
+  notes.forEach(t=> list.appendChild(renderTaskRow(t)));
+  const tn = el.querySelector("#btnTriNotes"); if(tn) tn.addEventListener("click", ()=> startTri("notes"));
+  el.querySelector("#btnTriAll").addEventListener("click", ()=> startTri("all"));
+}
+
+/* Marqueur « Note » dans la fiche tâche */
+document.getElementById("chipNote").addEventListener("click", e=>{
+  const t = curTask(); if(!t) return; snapshot();
+  t.note = !t.note; if(!t.note) delete t.note; t.updatedAt = Date.now(); saveData();
+  e.currentTarget.classList.toggle("on", !!t.note); renderMain();
+});
+
+/* Sauvegarde automatique avant la première utilisation de la nouvelle méthode */
+(function(){
+  try{
+    if(!localStorage.getItem("sensitache.methodV2")){
+      createBackupSnapshotNow();
+      localStorage.setItem("sensitache.methodV2", String(Date.now()));
+    }
+  }catch(e){}
+})();
+
+/* =========================================================
+   ÉQUIPE · OBJECTIF PAR PERSONNE · DÉLÉGATION SIMPLE · RELANCE
+   collaborateur : c.team (bool), c.objectif (texte)
+   tâche déléguée : t.deleg = {to, at, reformule} + t.assignedTo=[to] + t.dueDate (échéance)
+========================================================= */
+function teamMembers(){ return DATA.collaborators.filter(c=> c.id!==DATA.currentUserId && c.team); }
+function collabSetObjective(c, text){ c.objectif = String(text||"").trim(); c.updatedAt = Date.now(); saveData(); }
+function firstName(n){ return String(n||"").trim().split(/\s+/)[0]||""; }
+
+/* ----- bloc objectif sur la page d'un collaborateur ----- */
+function buildCollabObjectiveBlock(c){
+  const box = document.createElement("div");
+  box.className = "obj-block"+(c.team && !String(c.objectif||"").trim() ? " empty" : "");
+  const draw = (editing)=>{
+    const obj = String(c.objectif||"").trim();
+    if(!c.team){
+      box.className = "obj-block muted";
+      box.innerHTML = `<span>${escapeHtml(c.name)} ne fait pas partie de ton équipe.</span> <button class="btn small" data-teamadd>👥 Ajouter à mon équipe</button>`;
+      box.querySelector("[data-teamadd]").addEventListener("click", ()=>{ c.team = true; c.updatedAt = Date.now(); saveData(); draw(!obj); });
+      return;
+    }
+    box.className = "obj-block"+(!obj ? " empty" : "");
+    if(editing){
+      box.innerHTML = `<div class="obj-label">🎯 Objectif de ${escapeHtml(firstName(c.name))}</div>
+        <textarea rows="3" class="obj-input" placeholder="L'objectif que tu fixes à ${exAttr(firstName(c.name))}">${escapeHtml(obj)}</textarea>
+        <div style="display:flex;gap:6px;margin-top:6px;"><button class="btn small primary" data-save>Enregistrer</button><button class="btn small ghost" data-cancel>Annuler</button></div>`;
+      const ta = box.querySelector("textarea"); setTimeout(()=> ta.focus(), 30);
+      box.querySelector("[data-save]").addEventListener("click", ()=>{ snapshot(); collabSetObjective(c, ta.value); draw(false); renderMain(); });
+      box.querySelector("[data-cancel]").addEventListener("click", ()=> draw(false));
+      return;
+    }
+    box.innerHTML = obj
+      ? `<div class="obj-label">🎯 Objectif de ${escapeHtml(firstName(c.name))}</div><div class="obj-text">${escapeHtml(obj)}</div><button class="btn small ghost" data-edit style="margin-top:4px;">✎ Modifier</button>`
+      : `<div class="obj-label">⚠️ ${escapeHtml(firstName(c.name))} n'a pas encore d'objectif</div><button class="btn small" data-edit>🎯 Définir son objectif</button>`;
+    box.querySelector("[data-edit]").addEventListener("click", ()=> draw(true));
+  };
+  draw(false);
+  return box;
+}
+
+/* ----- délégation simple dans la fiche tâche ----- */
+function renderDelegRow(t){
+  const wrap = document.getElementById("delegRow"); if(!wrap || !t) return;
+  const others = DATA.collaborators.filter(c=> c.id!==DATA.currentUserId);
+  const d = t.deleg;
+  if(!others.length){ wrap.innerHTML = `<div class="ex-hint" style="margin:0;">Ajoute d'abord des collaborateurs (⚙️ Gérer, dans Affectation).</div>`; return; }
+  const team = others.filter(c=> c.team), rest = others.filter(c=> !c.team);
+  const opt = c=> `<option value="${exAttr(c.id)}" ${d && d.to===c.id?"selected":""}>${escapeHtml(c.name)}</option>`;
+  wrap.innerHTML = `
+    <select class="fieldselect" id="delegTo" style="margin-bottom:8px;">
+      <option value="">— Ne pas déléguer —</option>
+      ${team.length ? `<optgroup label="Mon équipe">${team.map(opt).join("")}</optgroup>` : ""}
+      ${rest.length ? `<optgroup label="${team.length?"Autres":"Collaborateurs"}">${rest.map(opt).join("")}</optgroup>` : ""}
+    </select>
+    ${d ? `
+    <label style="font-size:11px;color:var(--text-sub);display:block;margin-bottom:4px;">Échéance</label>
+    <input type="date" class="fieldinput" id="delegDue" value="${exAttr(t.dueDate||"")}" style="margin-bottom:8px;">
+    <button class="btn chip small ${d.reformule?'on knowledge':''}" id="delegReform" style="width:100%;justify-content:center;">${d.reformule ? "✓ "+escapeHtml(firstName((collabById(d.to)||{}).name))+" a reformulé" : "↻ Faire reformuler : pas encore fait"}</button>
+    ` : ""}`;
+  wrap.querySelector("#delegTo").addEventListener("change", e=>{
+    snapshot();
+    const v = e.target.value;
+    if(v){
+      t.deleg = {to:v, at:(t.deleg && t.deleg.at) || Date.now(), reformule: !!(t.deleg && t.deleg.to===v && t.deleg.reformule)};
+      t.assignedTo = [v];
+    } else {
+      delete t.deleg;
+      t.assignedTo = [DATA.currentUserId];
+    }
+    t.updatedAt = Date.now(); saveData();
+    renderDelegRow(t); renderAssignChips(t); renderMain();
+  });
+  const due = wrap.querySelector("#delegDue");
+  if(due) due.addEventListener("change", e=>{
+    t.dueDate = e.target.value || null; t.updatedAt = Date.now(); saveData();
+    const di = document.getElementById("dueDateInput"); if(di) di.value = t.dueDate||"";
+    renderMain();
+  });
+  const rf = wrap.querySelector("#delegReform");
+  if(rf) rf.addEventListener("click", ()=>{
+    t.deleg.reformule = !t.deleg.reformule; t.updatedAt = Date.now(); saveData();
+    renderDelegRow(t); renderMain();
+  });
+}
+function delegBadge(t){
+  if(!t.deleg) return "";
+  return t.deleg.reformule
+    ? `<span class="badge" style="width:auto;padding:0 6px;font-size:10.5px;background:rgba(31,169,113,.18);color:#5FD9A4;" title="Déléguée · reformulée">🤲 reformulé ✓</span>`
+    : `<span class="badge" style="width:auto;padding:0 6px;font-size:10.5px;background:rgba(232,129,58,.18);color:#F0A46B;" title="Déléguée · pas encore reformulée">🤲 à faire reformuler</span>`;
+}
+function delegatedTasks(){ return DATA.tasks.filter(t=> t.deleg && !t.done && !t.isDraft); }
+
+/* ----- ligne compacte (Relance, Délégations) ----- */
+function delegLine(t, showWho){
+  const c = collabById(t.deleg.to);
+  const today = todayStr();
+  const late = t.dueDate && t.dueDate < today;
+  const soon = t.dueDate && !late && t.dueDate <= addDays(today, 2);
+  const ws = t.workspaceId!==currentWsId ? (DATA.workspaces.find(w=> w.id===t.workspaceId)||{}).name : "";
+  const row = document.createElement("div");
+  row.className = "task-row deleg-row";
+  row.style.borderLeft = "4px solid "+(late ? "var(--danger)" : soon ? "var(--urgent)" : "var(--border-soft)");
+  row.innerHTML = `
+    ${showWho && c ? `<span class="avatar" style="background:${c.color}" title="${exAttr(c.name)}">${escapeHtml(c.name.slice(0,2).toUpperCase())}</span>` : ""}
+    <div class="task-title">${showWho && c ? `<span style="color:var(--text-sub);">${escapeHtml(firstName(c.name))} · </span>` : ""}${escapeHtml(t.title||"(sans titre)")}${ws ? ` <span style="font-size:11px;color:var(--text-sub);">(${escapeHtml(ws)})</span>` : ""}</div>
+    <div class="badges">${delegBadge(t)}${t.dueDate ? `<span class="badge" style="width:auto;padding:0 6px;font-size:11px;background:${late?'rgba(224,85,95,.2)':'rgba(255,255,255,.08)'};color:${late?'#F0838C':'var(--text-sub)'};">${late?"⚠ ":""}${exFrDate(t.dueDate)}</span>` : ""}</div>`;
+  row.addEventListener("click", ()=> openTaskAnywhere(t));
+  return row;
+}
+
+/* ----- section Relance (accueil) ----- */
+function renderRelanceSection(){
+  const el = document.getElementById("relanceSection"); if(!el) return;
+  const list = delegatedTasks().filter(t=> t.dueDate).sort((a,b)=> a.dueDate.localeCompare(b.dueDate));
+  if(!list.length){ el.innerHTML = ""; el.style.display = "none"; return; }
+  el.style.display = "";
+  const late = list.filter(t=> t.dueDate < todayStr()).length;
+  el.innerHTML = `<div class="notes-head"><div class="task-group-label" style="margin:0;">🔔 Relance (${list.length})${late?` <span style="color:var(--danger);text-transform:none;letter-spacing:0;">· ${late} en retard</span>`:""}</div></div><div id="relanceList"></div>`;
+  const wrap = el.querySelector("#relanceList");
+  list.forEach(t=> wrap.appendChild(delegLine(t, true)));
+}
+
+/* ----- section Délégations (onglet Collaboration) ----- */
+function renderDelegationsSection(el){
+  const all = delegatedTasks();
+  const box = document.createElement("div");
+  box.className = "ex-sec"; box.style.marginTop = "18px";
+  if(!all.length){
+    box.innerHTML = `<h3>🤲 Délégations</h3><div class="ex-hint">Aucune tâche déléguée. Dans une tâche : « 🤲 Déléguer », choisis la personne et l'échéance.</div>`;
+    el.appendChild(box); return;
+  }
+  box.innerHTML = `<h3>🤲 Délégations (${all.length})</h3>`;
+  const byWho = {};
+  all.forEach(t=> (byWho[t.deleg.to] = byWho[t.deleg.to] || []).push(t));
+  Object.keys(byWho).map(id=> collabById(id)).filter(Boolean).sort((a,b)=> a.name.localeCompare(b.name)).forEach(c=>{
+    const list = byWho[c.id].sort((a,b)=> String(a.dueDate||"9999").localeCompare(String(b.dueDate||"9999")));
+    const h = document.createElement("div");
+    h.className = "collab-head"; h.style.margin = "10px 0 6px";
+    const notRef = list.filter(t=> !t.deleg.reformule).length;
+    h.innerHTML = `<span class="avatar" style="background:${c.color}">${escapeHtml(c.name.slice(0,2).toUpperCase())}</span><span>${escapeHtml(c.name)} <span style="color:var(--text-sub);font-weight:400;">(${list.length})</span></span>${notRef?`<span class="ex-status">${notRef} à faire reformuler</span>`:""}`;
+    box.appendChild(h);
+    list.forEach(t=> box.appendChild(delegLine(t, false)));
+  });
+  el.appendChild(box);
+}
+
+/* ----- tri : revoir les objectifs de l'équipe ----- */
+async function triObjectives(g){
+  const team = teamMembers().slice().sort((a,b)=> (String(a.objectif||"").trim()?1:0)-(String(b.objectif||"").trim()?1:0) || a.name.localeCompare(b.name));
+  if(!team.length) return;
+  const empty = team.filter(c=> !String(c.objectif||"").trim()).length;
+  await vaSpeak("Les objectifs de ton équipe."+(empty ? " "+empty+(empty>1?" personnes n'ont":" personne n'a")+" pas d'objectif." : ""));
+  for(const c of team){
+    vaGuard(g);
+    const obj = String(c.objectif||"").trim();
+    VA.render = (ov)=>{ const o = String(c.objectif||"").trim(); ov.querySelector("#vaCard").innerHTML = `<div class="va-draft ${o?'':'va-warn'}"><div class="va-kind">🎯 Objectif · ${escapeHtml(c.name)}</div><div style="font-size:15px;${o?'':'color:#F0A46B;'}">${o ? escapeHtml(o) : "⚠️ Aucun objectif défini"}</div></div>`; };
+    let modify = false;
+    if(!obj){
+      VA.choices = [{label:"🎯 Le dicter maintenant", value:"oui", cls:"primary"},{label:"Plus tard", value:"non"}];
+      const r = await vaAsk("Tu veux le dicter maintenant ?", {say: c.name+" n'a pas d'objectif. Tu veux le dicter maintenant ?"});
+      modify = !r.cmd && vaYesNo(r.text)==="yes";
+    } else {
+      VA.choices = [{label:"Je le garde", value:"garder", cls:"primary"},{label:"✎ Je le modifie", value:"modifier"},{label:"Passer", value:"passer"}];
+      while(true){
+        const r = await vaAsk("Tu le gardes ou tu le modifies ?", {say:"Objectif de "+c.name+" : "+obj+". Tu le gardes ou tu le modifies ?"});
+        if(r.cmd==="passer") break;
+        const v = vaNorm(r.text);
+        if(/modif|change|nouveau|refai/.test(v)){ modify = true; break; }
+        if(/garde|oui|bon|ok|valide/.test(v)) break;
+        await vaSpeak("Je n'ai pas compris.");
+      }
+    }
+    if(!modify) continue;
+    VA.choices = [{label:"✓ Terminé", value:"terminé", cls:"primary"}];
+    let text = "";
+    while(true){
+      const r = await vaAsk("Dicte l'objectif, puis dis terminé.", {long:true, keepText:!!text});
+      if(r.cmd==="passer") break;
+      const s = String(r.text||"").replace(/(^|\s)(c'est |c’est )?termin[ée]e?[\s.!]*$/i,"").trim();
+      const done = /(^|\s)(c'est |c’est )?termin[ée]e?[\s.!]*$/i.test(r.text||"");
+      text = (text+" "+s).trim();
+      if(done && text) break;
+      if(text){
+        VA.choices = [{label:"Oui, c'est terminé", value:"oui", cls:"primary"},{label:"Non, je continue", value:"non"}];
+        const c2 = await vaAsk("C'est terminé ?");
+        VA.choices = [{label:"✓ Terminé", value:"terminé", cls:"primary"}];
+        if(c2.cmd==="passer" || vaYesNo(c2.text)==="yes") break;
+      }
+    }
+    vaGuard(g);
+    if(text){ snapshot(); collabSetObjective(c, vaCap(text)); vaUi({}); await vaSpeak("Objectif enregistré."); }
+  }
 }
 
 })();
