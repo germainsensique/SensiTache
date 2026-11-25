@@ -10035,11 +10035,12 @@ function delegLine(t, showWho){
 /* ----- section Relance (accueil) ----- */
 function renderRelanceSection(){
   const el = document.getElementById("relanceSection"); if(!el) return;
-  const list = delegatedTasks().filter(t=> t.dueDate).sort((a,b)=> a.dueDate.localeCompare(b.dueDate));
+  // Relance : uniquement les tâches déléguées dont la date butoir est dépassée.
+  const today = todayStr();
+  const list = delegatedTasks().filter(t=> t.dueDate && t.dueDate < today).sort((a,b)=> a.dueDate.localeCompare(b.dueDate));
   if(!list.length){ el.innerHTML = ""; el.style.display = "none"; return; }
   el.style.display = "";
-  const late = list.filter(t=> t.dueDate < todayStr()).length;
-  el.innerHTML = `<div class="notes-head"><div class="task-group-label" style="margin:0;">🔔 Relance (${list.length})${late?` <span style="color:var(--danger);text-transform:none;letter-spacing:0;">· ${late} en retard</span>`:""}</div></div><div id="relanceList"></div>`;
+  el.innerHTML = `<div class="notes-head"><div class="task-group-label" style="margin:0;">🔔 Relance (${list.length}) <span style="color:var(--text-sub);text-transform:none;letter-spacing:0;font-weight:400;">· date butoir dépassée</span></div></div><div id="relanceList"></div>`;
   const wrap = el.querySelector("#relanceList");
   list.forEach(t=> wrap.appendChild(delegLine(t, true)));
 }
