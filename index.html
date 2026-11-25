@@ -9401,7 +9401,8 @@ const VA_ABORT = {abort:true};
 const VA_CMDS = {
   annuler:["annuler","annule","annulez","annulation","stop","arrete","arreter","laisse tomber","on arrete"],
   repete:["repete","repeter","repetes","tu peux repeter","pardon","comment"],
-  passer:["passer","passe","suivant","suivante","je passe","on passe","saute"]
+  passer:["passer","passe","suivant","suivante","je passe","on passe","saute"],
+  description:["description","la description","lis la description","lire la description","lis description","lis moi la description","lis-moi la description","lecture de la description","c'est quoi la description","et la description"]
 };
 const VA_YES = ["oui","ouais","ouai","ouaip","yes","d'accord","d accord","ok","okay","oki","exact","exactement","c'est ca","c est ca","oui c'est ca","oui c est ca","bien sur","tout a fait","valide","je valide","valider","vas y","oui merci","affirmatif","parfait","c'est bon","c est bon","termine","c'est termine","c est termine","fini","c'est fini","c est fini"];
 const VA_NO = ["non","nan","non merci","pas encore","negatif","non pas encore","attends","attend"];
@@ -9732,6 +9733,12 @@ const TRI_SECTIONS = [
   {k:"delete", label:"🗑️ Supprimer", re:/supprim|efface|poubelle|jette/},
   {k:"keep", label:"📝 Garder en note", re:/garde|note|laisse/}
 ];
+function triDesc(t){
+  const d = String(t.description||"").trim();
+  return d && vaNorm(d)!==vaNorm(t.title) ? d : "";
+}
+function triDescChoice(t){ return triDesc(t) ? [{label:"📄 Lire la description", value:"lis la description"}] : []; }
+function triTitleSay(t){ return (t.title||"(sans titre)")+(triDesc(t) ? ". Il y a une description" : ""); }
 function triReadText(t){
   let s = t.title||"(sans titre)";
   const d = String(t.description||"").trim();
@@ -9749,7 +9756,7 @@ function startTri(mode){
   const hasTeam = mode!=="notes" && teamMembers().length>0;
   if(!todays.length && !notes.length && !hasTeam){ exToast(mode==="notes" ? "Aucune note à trier" : "Rien à trier : ni tâche du jour, ni note"); return; }
   vaOpen(mode==="notes" ? "Trier les notes" : "Faire le tri", mode==="notes" ? "🔊" : "🧹");
-  document.getElementById("vaHelpText").innerHTML = "Réponds à la voix ou touche les boutons.<br>Section : « aujourd'hui », « urgent », « rapide », « en attente », « plus tard », « c'est fait », « supprimer », « garder en note ».<br>Affectation : « moi », un ou plusieurs noms (« Julie et Paul »), puis « valider ».<br>« passer » : note suivante · « répète » · « annuler » : arrêter le tri.";
+  document.getElementById("vaHelpText").innerHTML = "Réponds à la voix ou touche les boutons.<br>Section : « aujourd'hui », « urgent », « rapide », « en attente », « plus tard », « c'est fait », « supprimer », « garder en note ».<br>Affectation : « moi », un ou plusieurs noms (« Julie et Paul »), puis « valider ».<br>« description » : lire la description · « passer » : note suivante · « répète » · « annuler » : arrêter le tri.";
   triRun(todays.map(t=> t.id), notes.map(t=> t.id), mode);
 }
 async function triRun(todayIds, noteIds, mode){
@@ -9766,9 +9773,12 @@ async function triRun(todayIds, noteIds, mode){
         vaGuard(g); setCount();
         const t = get(id); n++; if(!t) continue;
         card(t, "🔥 Aujourd'hui");
-        VA.choices = [{label:"Je la garde", value:"garder", cls:"primary"},{label:"📝 En notes", value:"en notes"},{label:"✅ C'est fait", value:"c'est fait"},{label:"Passer", value:"passer"}];
+        VA.choices = [{label:"Je la garde", value:"garder", cls:"primary"},{label:"📝 En notes", value:"en notes"},{label:"✅ C'est fait", value:"c'est fait"},{label:"Passer", value:"passer"}].concat(triDescChoice(t));
+        let todaySay = triTitleSay(t)+". Tu la gardes, tu la remets en notes, ou c'est fait ?";
         while(true){
-          const r = await vaAsk("Tu la gardes, tu la remets en notes, ou c'est fait ?", {say: (t.title||"")+". Tu la gardes, tu la remets en notes, ou c'est fait ?"});
+          const r = await vaAsk("Tu la gardes, tu la remets en notes, ou c'est fait ?", {say: todaySay});
+          todaySay = "Tu la gardes, tu la remets en notes, ou c'est fait ?";
+          if(r.cmd==="description"){ await vaSpeak(triDesc(t) || "Il n'y a pas de description."); continue; }
           if(r.cmd==="passer") break;
           const v = vaNorm(r.text);
           if(/fait|termine|fini/.test(v)){ snapshot(); toggleTaskDone(t); break; }
@@ -9786,10 +9796,12 @@ async function triRun(todayIds, noteIds, mode){
         const t = get(id); n++; if(!t || !t.note) continue;
         card(t, "📝 Note");
         // 1. Section
-        VA.choices = TRI_SECTIONS.map(s=> ({label:s.label, value:s.label.replace(/^\S+\s/,"")}));
-        let sec = null, said = triReadText(t)+". Dans quelle section ?";
+        VA.choices = TRI_SECTIONS.map(s=> ({label:s.label, value:s.label.replace(/^\S+\s/,"")})).concat(triDescChoice(t));
+        let sec = null, said = triTitleSay(t)+". Dans quelle section ?";
         while(!sec){
           const r = await vaAsk("Dans quelle section ?", {say:said});
+          said = "Dans quelle section ?";
+          if(r.cmd==="description"){ await vaSpeak(triDesc(t) || "Il n'y a pas de description."); continue; }
           if(r.cmd==="passer"){ sec = TRI_SECTIONS.find(s=> s.k==="keep"); break; }
           const v = vaNorm(r.text);
           sec = TRI_SECTIONS.find(s=> s.re.test(v)) || null;
@@ -9812,7 +9824,7 @@ async function triRun(todayIds, noteIds, mode){
         const people = [DATA.collaborators.find(c=> c.id===DATA.currentUserId)].concat(DATA.collaborators.filter(c=> c.id!==DATA.currentUserId)).filter(Boolean);
         const setChoices = ()=>{
           VA.choices = people.map(c=> ({label:(c.id===DATA.currentUserId?"Moi":escapeHtml(c.name)), on:sel.has(c.id), toggle:()=>{ sel.has(c.id) ? sel.delete(c.id) : sel.add(c.id); }}))
-            .concat([{label:"✓ Valider", value:"valider", cls:"primary"}]);
+            .concat([{label:"✓ Valider", value:"valider", cls:"primary"}]).concat(triDescChoice(t));
         };
         const baseRender = VA.render;
         VA.render = (ov)=>{
@@ -9828,6 +9840,7 @@ async function triRun(todayIds, noteIds, mode){
           let askSay = "À qui ? Dis moi, un ou plusieurs noms, ou valider.";
           while(true){
             const r = await vaAsk("À qui ?", {say:askSay});
+            if(r.cmd==="description"){ await vaSpeak(triDesc(t) || "Il n'y a pas de description."); askSay = "À qui ?"; continue; }
             if(r.cmd==="passer") break;
             const v = vaNorm(r.text);
             if(/^(valider|valide|je valide|c'est bon|c est bon|c'est tout|c est tout|ok|oui)$/.test(v)) break;
